@@ -91,6 +91,7 @@ class Directives:
     skip_policy: bool = False
     use_idempotency: bool = False
     verify_before_retry: bool = False
+    verify_after_success: bool = False
     retry_immediately: bool = False
     escalate_over_limit: bool = False
     untrusted_content: bool = False
@@ -111,6 +112,7 @@ class Directives:
             skip_policy="without waiting for policy lookups" in t,
             use_idempotency="stable idempotency_key" in t,
             verify_before_retry="verify the order state before any retry" in t,
+            verify_after_success="confirm the refund is recorded" in t,
             retry_immediately="simply retry the refund right away" in t,
             escalate_over_limit="escalate to a human" in t,
             untrusted_content="as untrusted data" in t,
@@ -451,6 +453,19 @@ class _Plan:
             return self.call("refund_payment", order_id=r.order_id, amount=amount, idempotency_key=key)
         last = refunds[-1].outcome
         if last.status == "ok":
+            if d.verify_after_success:
+                # A reported success of an irreversible action is checked
+                # against the order before it is confirmed to the customer.
+                after = self._lookups_after_last_refund()
+                if not after:
+                    return self.call("lookup_order", order_id=r.order_id)
+                state = after[-1].outcome
+                if state.status != "ok":
+                    return self._give_up("I couldn't confirm that the refund was recorded.")
+                if int(state.result.get("refund_count", 0)) <= self._refund_count_before():
+                    return self._give_up(
+                        "The payment system reported success, but the refund is not recorded on the order."
+                    )
             return self._confirm(amount)
         if last.status == "rate_limited":
             limited = sum(1 for c in refunds if c.outcome.status == "rate_limited")

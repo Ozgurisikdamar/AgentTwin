@@ -44,8 +44,21 @@ WORKDIR /app
 USER 10001:10001
 
 # The demo agent, its tools and the traffic generator (demo/support-refund-agent).
+# The assurance assets (tool twin + scenarios) are registered by `seed`.
 FROM runtime AS support-refund-agent
 COPY demo/support-refund-agent/manifests /app/manifests
-ENV DEMO_AGENT_MANIFEST_DIR=/app/manifests
+COPY demo/support-refund-agent/assurance /app/assurance
+ENV DEMO_AGENT_MANIFEST_DIR=/app/manifests DEMO_ASSURANCE_DIR=/app/assurance
 ENTRYPOINT ["support-refund-agent"]
 CMD ["--help"]
+
+# The simulation service (PACKAGE=agenttwin-simulation). One image, two roles:
+# `serve` (API + twin endpoint) and `worker` (runs the simulations).
+FROM runtime AS simulation-service
+COPY packages/contracts /app/schemas/contracts
+COPY packages/scenario-schema /app/schemas/scenario-schema
+COPY services/simulation-service/migrations /app/services/simulation-service/migrations
+ENV AGENTTWIN_SCHEMA_DIR=/app/schemas
+HEALTHCHECK --interval=5s --timeout=5s --start-period=10s --retries=24 CMD ["simulation-service", "healthcheck"]
+ENTRYPOINT ["simulation-service"]
+CMD ["serve"]

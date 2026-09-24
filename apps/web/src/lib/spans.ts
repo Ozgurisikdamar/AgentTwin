@@ -132,19 +132,32 @@ export function labelPlacement(left: number, width: number, reservePct = 15): La
   return "inside";
 }
 
-/** Tool calls that repeat an earlier call with identical arguments. */
+/** Tool results after which repeating the same call is a retry. */
+const FAILED_RESULTS = new Set(["error", "timeout", "rate_limited", "denied", "invalid"]);
+
+/**
+ * Tool calls that retry an earlier one: the SDK reported an attempt above 1,
+ * or the previous call of the same tool had identical arguments and failed.
+ * Repeating a call that succeeded - a re-read to confirm an action - is a new
+ * call. The rule is the trace service's, so this list and the trace's retry
+ * count agree.
+ */
 export function retriedToolCalls(spans: readonly Span[]): Span[] {
-  const seen = new Set<string>();
+  const previous = new Map<string, { result: string; argsHash: string }>();
   const out: Span[] = [];
   const tools = spans
     .filter((s) => s.kind === "tool")
     .sort((a, b) => time(a.started_at) - time(b.started_at));
   for (const s of tools) {
     const a = s.attributes ?? {};
-    const key = `${a.tool_name ?? s.name}|${a.tool_args_hash ?? ""}`;
-    const isRetry = (a.attempt ?? 1) > 1 || (a.tool_args_hash ? seen.has(key) : false);
-    if (isRetry) out.push(s);
-    seen.add(key);
+    const name = a.tool_name || s.name;
+    const result = a.tool_result_status || (s.status === "ERROR" ? "error" : "ok");
+    const argsHash = a.tool_args_hash ?? "";
+    const last = previous.get(name);
+    const repeatsFailure =
+      last !== undefined && FAILED_RESULTS.has(last.result) && last.argsHash === argsHash;
+    if ((a.attempt ?? 1) > 1 || repeatsFailure) out.push(s);
+    previous.set(name, { result, argsHash });
   }
   return out;
 }

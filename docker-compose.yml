@@ -23,6 +23,24 @@ x-demo-build: &demo-build
     # The Anthropic adapter is included so DEMO_AGENT_MODEL=anthropic works.
     EXTRAS: anthropic
 
+x-simulation-build: &simulation-build
+  context: .
+  dockerfile: infra/docker/python.Dockerfile
+  target: simulation-service
+  args:
+    PACKAGE: agenttwin-simulation
+
+x-simulation-env: &simulation-env
+  <<: *service-env
+  CONTROL_PLANE_URL: http://control-plane:8080
+  TRACE_SERVICE_URL: http://trace-service:8081
+  # Agents under test reach the tool twin here, with a per-case token.
+  SIMULATION_TWIN_PUBLIC_URL: http://simulation-service:8084/twin/v1
+  # Which agents this deployment can simulate (operator configuration only).
+  SIMULATION_AGENT_ENDPOINTS: '{"support-refund-agent": {"url": "http://demo-agent:8090", "token_env": "DEMO_AGENT_TOKEN"}}'
+  DEMO_AGENT_TOKEN: ${DEMO_AGENT_TOKEN}
+  SIMULATION_WORKER_CONCURRENCY: ${SIMULATION_WORKER_CONCURRENCY:-2}
+
 x-demo-env: &demo-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DEMO_TOOLS_URL: http://demo-tools:8091
@@ -119,6 +137,7 @@ services:
       AGENTTWIN_API_KEY_PEPPER: ${AGENTTWIN_API_KEY_PEPPER}
       AGENTTWIN_DEMO_API_KEY: ${AGENTTWIN_DEMO_API_KEY}
       TRACE_SERVICE_URL: http://trace-service:8081
+      SIMULATION_SERVICE_URL: http://simulation-service:8084
     ports: ["127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}:8080"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -136,6 +155,31 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       rabbitmq: {condition: service_healthy}
+    <<: *hardening
+
+  simulation-service:
+    build: *simulation-build
+    image: agenttwin/simulation-service:${AGENTTWIN_VERSION:-dev}
+    command: ["serve"]
+    environment:
+      <<: *simulation-env
+      PORT: "8084"
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    <<: *hardening
+
+  # Executes simulation runs; separate from the API so a stuck simulation
+  # never blocks it (same image, `worker` role).
+  simulation-worker:
+    build: *simulation-build
+    image: agenttwin/simulation-service:${AGENTTWIN_VERSION:-dev}
+    command: ["worker"]
+    environment:
+      <<: *simulation-env
+      PORT: "8085"
+    depends_on:
+      simulation-service: {condition: service_healthy}
     <<: *hardening
 
   web:
@@ -196,13 +240,16 @@ services:
       retries: 30
     <<: *hardening
 
-  # `make seed` — registers the demo agent manifests and sends a batch of
-  # verified production traffic. Idempotent for manifests.
+  # `make seed` — registers the demo agent manifests, the tool twin and the
+  # scenarios, sends a batch of verified production traffic and simulates the
+  # scenario suite for the given versions. Idempotent for manifests, twins
+  # and scenarios.
   seed:
     build: *demo-build
     image: agenttwin/demo:${AGENTTWIN_VERSION:-dev}
     profiles: [seed]
-    command: ["seed", "--count", "${SEED_TRAFFIC_COUNT:-40}"]
+    command:
+      ["seed", "--count", "${SEED_TRAFFIC_COUNT:-40}", "--simulate", "${SEED_SIMULATE_VERSIONS-1.2.4,1.3.0}"]
     environment:
       <<: *demo-env
       DEMO_AGENT_URL: http://demo-agent:8090
@@ -210,6 +257,8 @@ services:
       control-plane: {condition: service_healthy}
       trace-service: {condition: service_healthy}
       demo-agent: {condition: service_healthy}
+      simulation-service: {condition: service_healthy}
+      simulation-worker: {condition: service_healthy}
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]

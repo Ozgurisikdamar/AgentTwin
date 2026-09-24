@@ -91,7 +91,40 @@ describe("labelPlacement", () => {
 });
 
 describe("retriedToolCalls", () => {
-  it("finds repeated identical tool calls", () => {
+  it("finds calls that repeat a failed call", () => {
     expect(retriedToolCalls(candidateSpans()).map((s) => s.span_id)).toEqual(["t3"]);
+  });
+
+  const tool = (id: string, atMs: number, name: string, args: string, result: string, attempt?: number) =>
+    span(id, "root", "tool", atMs, 10, {
+      name: `execute_tool ${name}`,
+      status: result === "ok" ? "OK" : "ERROR",
+      attributes: {
+        tool_name: name,
+        tool_args_hash: args,
+        tool_result_status: result,
+        ...(attempt === undefined ? {} : { attempt }),
+      },
+    });
+
+  it("does not count a re-read after a success as a retry", () => {
+    const spans = [
+      tool("a", 1, "lookup_order", "h-o", "ok", 1),
+      tool("b", 2, "refund_payment", "h-r", "ok", 1),
+      tool("c", 3, "lookup_order", "h-o", "ok", 1),
+    ];
+    expect(retriedToolCalls(spans)).toEqual([]);
+  });
+
+  it("counts retries of a failure, whatever the SDK reported", () => {
+    const spans = [
+      tool("a", 1, "refund_payment", "h-r", "rate_limited", 1),
+      tool("b", 2, "refund_payment", "h-r", "rate_limited", 2),
+      // An SDK that does not number attempts: the repeated failure still counts.
+      tool("c", 3, "refund_payment", "h-r", "ok"),
+      // Different arguments after a failure: a new call.
+      tool("d", 4, "refund_payment", "h-other", "ok", 1),
+    ];
+    expect(retriedToolCalls(spans).map((s) => s.span_id)).toEqual(["b", "c"]);
   });
 });

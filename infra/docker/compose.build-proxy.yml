@@ -21,6 +21,8 @@ services:
   demo-tools: {build: *proxy-build}
   demo-agent: {build: *proxy-build}
   seed: {build: *proxy-build}
+  simulation-service: {build: *proxy-build}
+  simulation-worker: {build: *proxy-build}
 
 secrets:
   ca_bundle:

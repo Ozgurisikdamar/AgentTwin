@@ -7,6 +7,7 @@ simulations, or the runtime gateway when containment is enabled).
 
 from __future__ import annotations
 
+import http.client
 import json
 import socket
 import urllib.error
@@ -108,8 +109,11 @@ class ToolClient:
             req = urllib.request.Request(url, headers=dict(self.headers), method="GET")  # noqa: S310
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:  # noqa: S310
-                    docs: list[dict[str, Any]] = json.loads(resp.read()).get("documents", [])
-            except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+                    found = json.loads(resp.read()).get("documents", [])
+                docs: list[dict[str, Any]] = [d for d in found if isinstance(d, dict)]
+            except (urllib.error.URLError, TimeoutError, OSError, ValueError, AttributeError, TypeError):
+                docs = []
+            except http.client.HTTPException:  # a cut-off or garbled response
                 docs = []
             span.set_documents(docs)
             return docs
@@ -124,14 +128,13 @@ class ToolClient:
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:  # noqa: S310
-                body = json.loads(resp.read() or b"{}")
-                return ToolOutcome(status="ok", result=body.get("result"), http_status=resp.status)
+                raw, http_status = resp.read(), resp.status
         except urllib.error.HTTPError as err:
             code, message = "HTTP_ERROR", str(err.reason)
             try:
                 detail = json.loads(err.read() or b"{}").get("error", {})
                 code, message = detail.get("code", code), detail.get("message", message)
-            except (ValueError, AttributeError, OSError):
+            except (ValueError, AttributeError, OSError, http.client.HTTPException):
                 pass
             retry_after = None
             if err.headers and err.headers.get("Retry-After"):
@@ -158,7 +161,32 @@ class ToolClient:
             return ToolOutcome(
                 status="error", error_code="UNREACHABLE", message="The tool could not be reached."
             )
+        except http.client.RemoteDisconnected:
+            # The request was sent: the tool may have acted before the drop.
+            return ToolOutcome(
+                status="error",
+                error_code="CONNECTION_DROPPED",
+                message="The tool closed the connection without answering.",
+            )
+        except http.client.HTTPException:
+            return ToolOutcome(
+                status="error",
+                error_code="BROKEN_RESPONSE",
+                message="The tool's response was cut off or garbled.",
+            )
         except (ConnectionError, OSError):
             return ToolOutcome(
                 status="error", error_code="UNREACHABLE", message="The tool could not be reached."
             )
+        try:
+            body = json.loads(raw or b"{}")
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return ToolOutcome(
+                status="error",
+                error_code="MALFORMED_RESPONSE",
+                message="The tool answered with a body that is not a JSON object.",
+                http_status=http_status,
+            )
+        return ToolOutcome(status="ok", result=body.get("result"), http_status=http_status)

@@ -5,7 +5,8 @@ support-refund-agent serve-agent   the agent adapter HTTP server
 support-refund-agent run TEXT      one conversation; prints the result and trace id
 support-refund-agent traffic       production-like traffic (optionally verified)
 support-refund-agent seed          load the demo workspace: register the agent
-                                   manifests, then send verified production traffic
+                                   manifests, the tool twin and the scenarios, run
+                                   simulations and send verified production traffic
 """
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ import os
 import signal
 import sys
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from agenttwin import AgentTwin, APIError, Client, Config
@@ -161,9 +163,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_traffic(args: argparse.Namespace) -> int:
-    versions = _parse_versions(args.versions)
+def _traffic(args: argparse.Namespace, cfg: Config, *, verify_outcomes: bool) -> list[dict[str, Any]]:
+    """Runs ``args.count`` conversations, over HTTP against a deployed agent
+    (``--agent-url``) or in process."""
     telemetry = None
+    run: Callable[[RunRequest], dict[str, Any]]
     if args.agent_url:
         agent_url = args.agent_url
 
@@ -184,15 +188,21 @@ def cmd_traffic(args: argparse.Namespace) -> int:
         run,
         tools_url=args.tools_url,
         tools_admin_token=os.environ.get("DEMO_TOOLS_ADMIN_TOKEN"),
-        versions=versions,
+        versions=_parse_versions(args.versions),
         seed=args.seed,
-        telemetry_config=Config.from_env(),
-        verify_outcomes=args.verify_outcomes,
+        telemetry_config=cfg,
+        verify_outcomes=verify_outcomes,
         flush=flush,
     )
-    records = gen.run(args.count, delay_s=args.delay)
-    if telemetry:
-        telemetry.shutdown()
+    try:
+        return gen.run(args.count, delay_s=getattr(args, "delay", 0.0))
+    finally:
+        if telemetry is not None:
+            telemetry.shutdown()
+
+
+def cmd_traffic(args: argparse.Namespace) -> int:
+    records = _traffic(args, Config.from_env(), verify_outcomes=args.verify_outcomes)
     summary: dict[str, int] = {}
     for r in records:
         key = f"{r['version']}:{r['kind']}:{r.get('business_outcome')}"
@@ -205,15 +215,83 @@ def cmd_traffic(args: argparse.Namespace) -> int:
     return 0 if len(records) == args.count else 1
 
 
+def default_assurance_dir() -> Path:
+    """The demo's tool twin and scenarios (registered by ``seed``)."""
+    env = os.environ.get("DEMO_ASSURANCE_DIR")
+    if env:
+        return Path(env)
+    return Path(__file__).resolve().parents[2] / "assurance"
+
+
+def _register_assurance(client: Client, project_id: str, directory: Path) -> dict[str, Any]:
+    """Registers the tool twin, then every scenario (a scenario names its
+    twin, so the twin goes first). Unchanged content is a no-op on the
+    server; changed content becomes a new version."""
+    scenario_files = sorted((directory / "scenarios").glob("*.yaml"))
+    if not scenario_files:
+        raise FileNotFoundError(f"no scenarios in {directory / 'scenarios'}")
+    res = client.register_twin(project_id, (directory / "twin.yaml").read_text(encoding="utf-8"))
+    twin = res.get("twin") or {}
+    twin_summary = {
+        "name": twin.get("name"),
+        "version": twin.get("version"),
+        "created": bool(res.get("created")),
+    }
+    logging.info(
+        "tool twin %s v%s %s",
+        twin_summary["name"],
+        twin_summary["version"],
+        "registered" if twin_summary["created"] else "unchanged",
+    )
+    saved: list[str] = []
+    unchanged: list[str] = []
+    for path in scenario_files:
+        res = client.save_scenario(project_id, path.read_text(encoding="utf-8"))
+        name = str((res.get("scenario") or {}).get("name") or path.stem)
+        (saved if res.get("created") else unchanged).append(name)
+    logging.info("scenarios: %d saved, %d unchanged", len(saved), len(unchanged))
+    return {"twin": twin_summary, "scenarios": {"saved": saved, "unchanged": unchanged}}
+
+
+def _simulation_summary(version: str, detail: Mapping[str, Any]) -> dict[str, Any]:
+    run = detail.get("run") or {}
+    cases = detail.get("cases") or []
+    return {
+        "version": version,
+        "run_id": run.get("id"),
+        "status": run.get("status"),
+        "cases": run.get("case_count"),
+        **{k: run.get(k) for k in ("passed", "failed", "errored", "critical_failures")},
+        "failed_scenarios": sorted(str(c.get("scenario_name")) for c in cases if c.get("status") == "FAILED"),
+        "errored_scenarios": sorted(
+            str(c.get("scenario_name")) for c in cases if c.get("status") == "ERRORED"
+        ),
+    }
+
+
+def _healthy(simulation: Mapping[str, Any]) -> bool:
+    """A run the demo can show: it finished and every case was evaluated.
+    Failed cases are expected (the eager candidate has regressions); errored
+    ones mean the stack is misconfigured (the agent could not be reached)."""
+    return simulation.get("status") == "COMPLETED" and not simulation.get("errored")
+
+
 def cmd_seed(args: argparse.Namespace) -> int:
-    """Loads the demo workspace. Idempotent for manifests; every run adds
-    another batch of production traffic."""
+    """Loads the demo workspace. Idempotent for manifests, the tool twin and
+    the scenarios; every run adds another batch of production traffic and
+    another set of simulation runs."""
     cfg = Config.from_env(service_name="support-refund-agent")
+    store = ManifestStore()
+    simulate = _parse_list(args.simulate)
+    unknown = [v for v in simulate if v not in store.versions]
+    if unknown:
+        logging.error("--simulate: unknown agent version(s) %s; known: %s", unknown, store.versions)
+        return 2
+    started: list[tuple[str, str]] = []
     try:
         client = Client.from_config(cfg, timeout_s=30)
         client.wait_ready(timeout_s=args.wait)
         project_id = client.project_id(args.project)
-        store = ManifestStore()
         registered = []
         for version in store.versions:
             path = store.path(version)
@@ -225,48 +303,51 @@ def cmd_seed(args: argparse.Namespace) -> int:
                 version,
                 "registered" if res.get("created") else "already registered",
             )
+        assurance = _register_assurance(client, project_id, args.assurance_dir)
+        # Started before the traffic so that the worker runs them meanwhile.
+        for version in simulate:
+            res = client.start_simulation(project_id, store.get(version).name, version, seed=args.seed)
+            run_id = str(res["run"]["id"])
+            started.append((version, run_id))
+            logging.info(
+                "simulation of %s queued: %s (%d cases)", version, run_id, len(res.get("cases") or [])
+            )
     except APIError as err:
         logging.error("seed failed: %s", err)
+        return 1
+    except OSError as err:
+        logging.error("seed failed: cannot read the assurance assets: %s", err)
         return 1
 
     records: list[dict[str, Any]] = []
     if args.count > 0:
-        versions = _parse_versions(args.versions)
-        telemetry = None
-        if args.agent_url:
-            agent_url = args.agent_url
+        records = _traffic(args, cfg, verify_outcomes=True)
 
-            def run(req: RunRequest) -> dict[str, Any]:
-                return _http_run(agent_url, req)
-        else:
-            telemetry = _telemetry()
-            agent = _agent(telemetry, args.tools_url)
-
-            def run(req: RunRequest) -> dict[str, Any]:
-                return agent.run(req).to_json()
-
-        def flush() -> None:
-            if telemetry is not None:
-                telemetry.flush()
-
-        gen = TrafficGenerator(
-            run,
-            tools_url=args.tools_url,
-            tools_admin_token=os.environ.get("DEMO_TOOLS_ADMIN_TOKEN"),
-            versions=versions,
-            seed=args.seed,
-            telemetry_config=cfg,
-            verify_outcomes=True,
-            flush=flush,
-        )
-        records = gen.run(args.count)
-        if telemetry:
-            telemetry.shutdown()
+    simulations: list[dict[str, Any]] = []
+    for version, run_id in started:
+        try:
+            detail = client.wait_for_simulation(run_id, timeout_s=args.simulation_timeout)
+        except APIError as err:
+            logging.error("simulation %s of %s: %s", run_id, version, err)
+            simulations.append({"version": version, "run_id": run_id, "status": None, "error": str(err)})
+            continue
+        simulations.append(_simulation_summary(version, detail))
+    for sim in simulations:
+        if not _healthy(sim):
+            logging.error(
+                "simulation %s of %s is not healthy: status %s, errored %s",
+                sim["run_id"],
+                sim["version"],
+                sim.get("status"),
+                sim.get("errored_scenarios") or sim.get("error"),
+            )
 
     verified = [r["verified_outcome"] for r in records if r.get("verified_outcome")]
     summary = {
         "project_id": project_id,
         "manifests": registered,
+        **assurance,
+        "simulations": simulations,
         "conversations": len(records),
         "verified_outcomes": len(verified),
         "verified_outcomes_reported": sum(1 for v in verified if v.get("reported")),
@@ -281,7 +362,18 @@ def cmd_seed(args: argparse.Namespace) -> int:
     ui = os.environ.get("AGENTTWIN_UI_URL")
     if ui:
         print(f"\nOpen {ui.rstrip('/')}/traces to explore the demo traces.")
-    return 0 if len(records) == args.count else 1
+    ok = len(records) == args.count and all(_healthy(s) for s in simulations)
+    return 0 if ok else 1
+
+
+def _parse_list(spec: str | None) -> list[str]:
+    """``a, b,,a`` -> ``[a, b]`` (order kept, empties and repeats dropped)."""
+    out: list[str] = []
+    for part in (spec or "").split(","):
+        item = part.strip()
+        if item and item not in out:
+            out.append(item)
+    return out
 
 
 def _parse_versions(spec: str) -> dict[str, float]:
@@ -340,7 +432,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--delay", type=float, default=0.0)
     s.set_defaults(fn=cmd_traffic)
 
-    s = sub.add_parser("seed", help="load the demo workspace (manifests + verified traffic)")
+    s = sub.add_parser("seed", help="load the demo workspace (agent, twin, scenarios, runs, traffic)")
     s.add_argument("--project", default=os.environ.get("AGENTTWIN_PROJECT", "support"))
     s.add_argument("--count", type=int, default=40)
     s.add_argument("--versions", default="1.2.4=0.8,1.3.0=0.2")
@@ -348,6 +440,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--tools-url", default=tools_url)
     s.add_argument("--agent-url", default=os.environ.get("DEMO_AGENT_URL"))
     s.add_argument("--wait", type=float, default=180.0, help="seconds to wait for the control plane")
+    s.add_argument(
+        "--assurance-dir",
+        type=Path,
+        default=default_assurance_dir(),
+        help="the tool twin (twin.yaml) and scenarios/*.yaml to register",
+    )
+    s.add_argument(
+        "--simulate",
+        default="",
+        metavar="VERSIONS",
+        help="comma-separated agent versions to simulate against every scenario",
+    )
+    s.add_argument(
+        "--simulation-timeout",
+        type=float,
+        default=600.0,
+        help="seconds to wait for each simulation run to finish",
+    )
     s.set_defaults(fn=cmd_seed)
 
     args = p.parse_args(argv)

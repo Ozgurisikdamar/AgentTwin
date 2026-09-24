@@ -67,8 +67,9 @@ def scenario_yaml(name: str) -> str:
 class FakeControlPlane:
     """``GET /internal/v1/agent-versions`` of the control plane."""
 
-    def __init__(self, tokens: TokenService) -> None:
+    def __init__(self, tokens: TokenService, versions: tuple[str, ...] = VERSIONS) -> None:
         self.tokens = tokens
+        self.versions = versions
         self.calls: list[dict[str, str]] = []
         self.fail: int | None = None  # answer this status to every call
 
@@ -80,12 +81,12 @@ class FakeControlPlane:
             return httpx.Response(self.fail, json={"error": {"code": "UNAVAILABLE"}})
         if request.url.path != "/internal/v1/agent-versions" or not p.can_access_project(q["project_id"]):
             return httpx.Response(404, json={"error": {"code": "NOT_FOUND"}})
-        if q["project_id"] != PROJECT or q["agent"] != AGENT or q["version"] not in VERSIONS:
+        if q["project_id"] != PROJECT or q["agent"] != AGENT or q["version"] not in self.versions:
             return httpx.Response(404, json={"error": {"code": "NOT_FOUND"}})
         return httpx.Response(
             200,
             json={
-                "id": f"0190f3b4-0000-7000-8000-0000000{VERSIONS.index(q['version']):05d}",
+                "id": f"0190f3b4-0000-7000-8000-0000000{self.versions.index(q['version']):05d}",
                 "agent_name": AGENT,
                 "project_id": PROJECT,
                 "version": q["version"],
@@ -185,9 +186,12 @@ async def serve_app(app: Any, sock: socket.socket | None = None) -> AsyncIterato
 
 
 @contextmanager
-def demo_agent(tool_timeout_s: float = 2.0) -> Iterator[tuple[AgentServer, InMemorySpanExporter]]:
+def demo_agent(
+    tool_timeout_s: float = 2.0, manifest_dir: Path | None = None
+) -> Iterator[tuple[AgentServer, InMemorySpanExporter]]:
     """The real demo agent behind its HTTP adapter (ADR-0011), in a thread,
-    with its telemetry exported in memory."""
+    with its telemetry exported in memory. ``manifest_dir`` replaces the
+    versions it can run (default: the demo's manifests)."""
     exporter = InMemorySpanExporter()
     telemetry = AgentTwin(
         Config(service_name="support-refund-agent", schedule_delay_ms=20, content_mode="redacted"),
@@ -195,7 +199,7 @@ def demo_agent(tool_timeout_s: float = 2.0) -> Iterator[tuple[AgentServer, InMem
     )
     agent = Agent(
         telemetry,
-        ManifestStore(),
+        ManifestStore(manifest_dir),
         tools_base_url="http://127.0.0.1:9/unused",
         model_factory=scripted_model_factory(INTERNAL_API_KEY),
         tool_timeout_s=tool_timeout_s,
@@ -246,6 +250,12 @@ class Stack:
         assert resp.status_code == status, (resp.status_code, resp.text)
         return resp.json()
 
+    async def register_suite(self) -> list[str]:
+        """The twin and every scenario of the demo's assurance suite."""
+        names = sorted(p.stem for p in (ASSURANCE / "scenarios").glob("*.yaml"))
+        await self.register_demo(*names)
+        return names
+
     async def register_demo(self, *scenarios: str) -> None:
         await self.ok("POST", "/api/v1/twins", {"project_id": PROJECT, "yaml": twin_yaml()}, status=201)
         for name in scenarios:
@@ -274,7 +284,10 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
         pool = await connect(url, schema=SCHEMA, max_size=12)
         await Migrator(pool, SCHEMA, load_migrations(MIGRATIONS)).up()
         tokens = TokenService(SECRET)
-        with demo_agent(float(overrides.pop("agent_tool_timeout_s", 2.0))) as (agent_server, exporter):
+        versions = tuple(overrides.pop("agent_versions", VERSIONS))
+        with demo_agent(
+            float(overrides.pop("agent_tool_timeout_s", 2.0)), overrides.pop("manifest_dir", None)
+        ) as (agent_server, exporter):
             sock = free_socket()
             port = sock.getsockname()[1]
             settings: dict[str, Any] = {
@@ -292,7 +305,7 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
             cfg = SimulationConfig(**settings)
             store = Store(pool)
             registry = default_registry()
-            cp, ts = FakeControlPlane(tokens), FakeTraceService(tokens)
+            cp, ts = FakeControlPlane(tokens, versions), FakeTraceService(tokens)
             control = ControlPlaneClient(cfg.control_plane_url, tokens, transport=httpx.MockTransport(cp))
             traces = TraceServiceClient(cfg.trace_service_url, tokens, transport=httpx.MockTransport(ts))
             agents = AgentClient()

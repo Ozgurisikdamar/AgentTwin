@@ -13,10 +13,12 @@ test.describe("Phase 1 acceptance: a demo agent run is visible in the browser", 
     const order = await createOrder(140);
     const run = await runDemoAgent(`Hi! One item in ${order} arrived broken. Can I get a refund of $40?`);
     expect(run.trace_id).toMatch(/^[0-9a-f]{32}$/);
+    // 1.2.4 re-reads the order after the refund to confirm it was recorded.
     expect(run.tool_calls.map((c) => c.name)).toEqual([
       "lookup_order",
       "get_refund_policy",
       "refund_payment",
+      "lookup_order",
       "send_email",
     ]);
 
@@ -31,20 +33,22 @@ test.describe("Phase 1 acceptance: a demo agent run is visible in the browser", 
     await expect(page.getByRole("heading", { level: 1 })).toContainText("support-refund-agent");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("v1.2.4");
 
-    // Waterfall: the agent run, model calls and the four tool calls.
+    // Waterfall: the agent run, model calls and the five tool calls.
     const waterfall = page.getByTestId("waterfall");
     await expect(waterfall.getByTestId("waterfall-row").first()).toBeVisible();
     // Accessible row labels carry the risk tier of mutating tools.
-    const tools: [string, string][] = [
-      ["lookup_order", ""],
-      ["get_refund_policy", ""],
-      ["refund_payment", ", write irreversible risk"],
-      ["send_email", ", write reversible risk"],
+    const tools: [string, string, number][] = [
+      ["lookup_order", "", 2],
+      ["get_refund_policy", "", 1],
+      ["refund_payment", ", write irreversible risk", 1],
+      ["send_email", ", write reversible risk", 1],
     ];
-    for (const [tool, risk] of tools) {
-      await expect(
-        waterfall.getByRole("button", { name: new RegExp(`^Tool call execute_tool ${tool}${risk}, ok`) }),
-      ).toBeVisible();
+    for (const [tool, risk, count] of tools) {
+      const rows = waterfall.getByRole("button", {
+        name: new RegExp(`^Tool call execute_tool ${tool}${risk}, ok`),
+      });
+      await expect(rows).toHaveCount(count);
+      await expect(rows.first()).toBeVisible();
     }
     // Duration labels stay inside the timeline column (the root bar spans the trace).
     await expect(waterfall.getByTestId("waterfall-row").first().locator("[data-placement]")).toHaveAttribute(
@@ -65,7 +69,13 @@ test.describe("Phase 1 acceptance: a demo agent run is visible in the browser", 
     const outcome = page.getByTestId("outcome-card");
     await expect(outcome).toContainText("Success");
     const summary = page.getByTestId("summary-card");
-    await expect(summary).toContainText("lookup_order>get_refund_policy>refund_payment>send_email");
+    await expect(summary).toContainText(
+      "lookup_order>get_refund_policy>refund_payment>lookup_order>send_email",
+    );
+    // Re-reading the order to confirm the refund is a new call, not a retry.
+    await expect(summary.locator("dt", { hasText: /^Retries$/ }).locator("+ dd")).toHaveText("0");
+    await expect(summary.getByText("retry", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Retries (0)" })).toBeVisible();
     // The scripted planner reports deterministic token estimates for every call.
     await expect(summary).not.toContainText("0 in · 0 out");
     await expect(page.getByText("production environment")).toBeVisible();

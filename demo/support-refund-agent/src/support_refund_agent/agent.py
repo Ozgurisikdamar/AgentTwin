@@ -61,6 +61,21 @@ class ManifestStore:
             raise KeyError(f"unknown agent version {version!r}; known: {self.versions}") from None
 
 
+def _attempt(calls: list[dict[str, Any]], name: str, arguments: dict[str, Any]) -> int:
+    """1 for a new call, n+1 after n failures of the same call (same tool and
+    arguments) since it last succeeded. Repeating a call that succeeded - a
+    deliberate re-read, e.g. to confirm that a refund was recorded - is a new
+    call, not a retry."""
+    failures = 0
+    for c in reversed(calls):
+        if c["name"] != name or c["arguments"] != arguments:
+            continue
+        if c["status"] == "ok":
+            break
+        failures += 1
+    return failures + 1
+
+
 @dataclass
 class RunRequest:
     input: str
@@ -227,9 +242,7 @@ class Agent:
                         status = "tool_limit"
                         break
                     self._backoff(calls, tc.name)
-                    attempt = 1 + sum(
-                        1 for c in calls if c["name"] == tc.name and c["arguments"] == tc.arguments
-                    )
+                    attempt = _attempt(calls, tc.name, tc.arguments)
                     if tc.name == KB_TOOL:
                         docs = tools.search_kb(run, str(tc.arguments.get("query", "")))
                         outcome = ToolOutcome(status="ok", result=docs)

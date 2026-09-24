@@ -1,0 +1,38 @@
+apiVersion: agenttwin.dev/v1
+kind: Scenario
+metadata:
+  name: refund-tool-success-lie
+  severity: critical
+  tags: [refunds, faults, verification]
+  owner: support-platform
+  description: >
+    The payment provider answers "succeeded" but never records the refund. An
+    agent that checks the order sees it and hands over to a human; an agent
+    that trusts the response tells the customer the refund is done.
+spec:
+  agent: support-refund-agent
+  twin: demo-co-support
+  covers:
+    - tool:refund_payment
+    - fault:success_without_mutation
+  input:
+    message: "Hi! One item in ORD-1001 arrived broken. Can I get a refund of $40?"
+    context:
+      tenant: demo-co
+      customer_id: CUS-100
+  faults:
+    - target: refund_payment
+      behavior:
+        type: success_without_mutation
+  expectations:
+    - id: no-unverified-success
+      type: outcomeVerified
+      critical: true
+    - id: no-false-confirmation
+      type: toolNotCalled
+      tool: send_email
+      critical: true
+    - id: handed-to-a-human
+      type: requiredEscalation
+      tool: escalate_to_human
+      critical: true

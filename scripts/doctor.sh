@@ -130,8 +130,9 @@ if is_running postgres && $COMPOSE exec -T postgres pg_isready -q -U "${POSTGRES
     "SELECT default_version FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | tr -d '[:space:]')
   [ -n "$vec" ] && ok "pgvector $vec available" || fail "pgvector extension is not available (use the pgvector/pgvector image)"
   schemas=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
-    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','trace')" 2>/dev/null | tr -d '[:space:]')
-  [ "$schemas" = "control,trace" ] && ok "service schemas: control, trace" || fail "service schemas missing (found: ${schemas:-none})"
+    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
+  [ "$schemas" = "control,simulation,trace" ] && ok "service schemas: control, simulation, trace" ||
+    fail "service schemas missing (found: ${schemas:-none})"
 else
   fail "postgres is not ready ($COMPOSE logs postgres)"
 fi
@@ -164,14 +165,17 @@ export_errors=$($COMPOSE logs --no-color --since 15m otel-collector 2>/dev/null 
 
 # ------------------------------------------------------------------ migrations
 section "Migrations"
-for svc in control-plane trace-service; do
+# service -> its binary inside the image (Go services: /app/service)
+for entry in control-plane:/app/service trace-service:/app/service simulation-service:simulation-service; do
+  svc=${entry%%:*}
+  bin=${entry#*:}
   if ! is_running "$svc"; then
     fail "$svc is not running"
     continue
   fi
-  out=$($COMPOSE exec -T "$svc" /app/service migrate status 2>&1 | grep '"migration status"' | tail -1)
-  if grep -q '"pending":0' <<<"$out"; then
-    ok "$svc: all $(sed -E 's/.*"known":([0-9]+).*/\1/' <<<"$out") migrations applied"
+  out=$($COMPOSE exec -T "$svc" "$bin" migrate status 2>&1 | grep '"migration status"' | tail -1)
+  if grep -Eq '"pending": ?0[,}]' <<<"$out"; then
+    ok "$svc: all $(sed -E 's/.*"known": ?([0-9]+).*/\1/' <<<"$out") migrations applied"
   else
     fail "$svc: pending migrations or status failed: ${out:-no output}"
   fi
@@ -190,6 +194,9 @@ probe() { # name url expected
 }
 probe "control plane ready" "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/health/ready" 200
 if $COMPOSE exec -T trace-service /app/service healthcheck >/dev/null 2>&1; then ok "trace service ready"; else fail "trace service is not ready"; fi
+for svc in simulation-service simulation-worker; do
+  if $COMPOSE exec -T "$svc" simulation-service healthcheck >/dev/null 2>&1; then ok "$svc ready"; else fail "$svc is not ready ($COMPOSE logs $svc)"; fi
+done
 probe "web" "http://127.0.0.1:${WEB_HOST_PORT:-3000}/healthz" 200
 probe "demo agent" "http://127.0.0.1:${DEMO_AGENT_HOST_PORT:-8090}/healthz" 200
 probe "demo tools" "http://127.0.0.1:${DEMO_TOOLS_HOST_PORT:-8091}/healthz" 200
@@ -202,6 +209,10 @@ if [ -n "${AGENTTWIN_DEMO_API_KEY:-}" ]; then
   traces=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
     "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/traces?limit=1" 2>/dev/null)
   if grep -q '"trace_id"' <<<"$traces"; then ok "demo project has traces"; else warn "no demo traces yet - run 'make seed'"; fi
+  scenarios=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
+    "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/scenarios?limit=200" 2>/dev/null)
+  count=$(grep -o '"id": \?"' <<<"$scenarios" | wc -l | tr -d ' ')
+  if [ "${count:-0}" -gt 0 ]; then ok "demo project has $count scenarios"; else warn "no demo scenarios yet - run 'make seed'"; fi
 fi
 
 printf '\n%d failed, %d warnings\n' "$fails" "$warns"

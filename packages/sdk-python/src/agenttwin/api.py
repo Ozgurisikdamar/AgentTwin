@@ -2,8 +2,9 @@
 
 Authenticates with a project API key (``X-AgentTwin-Api-Key``). Covers what
 an agent codebase or its CI needs: finding the project, registering agent
-manifests and recording outcomes. Errors carry the API's machine-readable
-code (``APIError.code``) and never include the key.
+manifests, tool twins and scenarios, running simulations and recording
+outcomes. Errors carry the API's machine-readable code (``APIError.code``)
+and never include the key.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -22,6 +23,7 @@ from agenttwin.config import Config
 __all__ = ["APIError", "Client"]
 
 _MAX_RESPONSE_BYTES = 32 << 20
+_FINAL_RUN_STATUSES = frozenset({"COMPLETED", "FAILED", "CANCELLED"})
 
 
 @dataclass
@@ -159,6 +161,78 @@ class Client:
             query=query or None,
         )
         return result
+
+    def register_twin(self, project_id: str, twin: str) -> dict[str, Any]:
+        """Registers a tool-twin definition (YAML or JSON text). Identical
+        content is a no-op (``created`` is false); changed content becomes a
+        new version of the twin."""
+        result: dict[str, Any] = self.request(
+            "POST", "/api/v1/twins", json_body={"project_id": project_id, "yaml": twin}
+        )
+        return result
+
+    def validate_scenario(self, project_id: str, scenario: str) -> dict[str, Any]:
+        """Checks a scenario (YAML or JSON text) against its schema and the
+        twin it names without saving it: ``{valid, problems, warnings, ...}``."""
+        result: dict[str, Any] = self.request(
+            "POST", "/api/v1/scenarios/validate", json_body={"project_id": project_id, "yaml": scenario}
+        )
+        return result
+
+    def save_scenario(self, project_id: str, scenario: str) -> dict[str, Any]:
+        """Creates a scenario or a new version of it; identical content is a
+        no-op. An invalid scenario raises ``SCENARIO_INVALID`` with the
+        problems in ``APIError.details``."""
+        result: dict[str, Any] = self.request(
+            "POST", "/api/v1/scenarios", json_body={"project_id": project_id, "yaml": scenario}
+        )
+        return result
+
+    def start_simulation(
+        self,
+        project_id: str,
+        agent: str,
+        agent_version: str,
+        *,
+        scenarios: Sequence[str] | None = None,
+        tags: Sequence[str] | None = None,
+        seed: int | None = None,
+        release_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Queues a simulation run of an agent version against its scenarios
+        (all of them unless ``scenarios`` or ``tags`` narrow the selection)."""
+        body: dict[str, Any] = {"project_id": project_id, "agent": agent, "agent_version": agent_version}
+        if scenarios is not None:
+            body["scenarios"] = list(scenarios)
+        if tags is not None:
+            body["tags"] = list(tags)
+        if seed is not None:
+            body["seed"] = seed
+        if release_id is not None:
+            body["release_id"] = release_id
+        result: dict[str, Any] = self.request("POST", "/api/v1/simulations", json_body=body)
+        return result
+
+    def simulation(self, run_id: str) -> dict[str, Any]:
+        """A simulation run with its cases and state transitions."""
+        result: dict[str, Any] = self.request(
+            "GET", f"/api/v1/simulations/{urllib.parse.quote(run_id, safe='')}"
+        )
+        return result
+
+    def wait_for_simulation(
+        self, run_id: str, *, timeout_s: float = 600.0, interval_s: float = 2.0
+    ) -> dict[str, Any]:
+        """Polls until the run is COMPLETED, FAILED or CANCELLED."""
+        deadline = time.monotonic() + timeout_s
+        while True:
+            detail = self.simulation(run_id)
+            status = str((detail.get("run") or {}).get("status"))
+            if status in _FINAL_RUN_STATUSES:
+                return detail
+            if time.monotonic() >= deadline:
+                raise APIError(0, "TIMEOUT", f"simulation {run_id} is still {status} after {timeout_s:.0f}s")
+            time.sleep(interval_s)
 
     def record_outcome(self, trace_id: str, outcome: Mapping[str, Any]) -> dict[str, Any]:
         result: dict[str, Any] = self.request(

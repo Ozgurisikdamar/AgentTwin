@@ -99,10 +99,12 @@ async def test_safe_and_unsafe_versions_under_timeout_after_mutation() -> None:
         assert case["scenario"]["faults"][0]["behavior"]["type"] == "timeout_after_mutation"
         happy = await case_detail(s, run_id, HAPPY)
         assert happy["case"]["status"] == "PASSED"
+        # Without a fault the refund's success is still checked on the order.
         assert [c["tool"] for c in tool_steps(happy)] == [
             "lookup_order",
             "get_refund_policy",
             "refund_payment",
+            "lookup_order",
             "send_email",
         ]
 

@@ -20,6 +20,7 @@ class Stub:
     def __init__(self) -> None:
         self.requests: list[dict[str, Any]] = []
         self.ready_after = 0  # number of 503s before /health/ready answers 200
+        self.polls = 0
 
     def handle(self, h: BaseHTTPRequestHandler) -> tuple[int, Any]:
         length = int(h.headers.get("Content-Length") or 0)
@@ -47,6 +48,26 @@ class Stub:
             return 201, {"created": True, "version": {"version": "1.0.0"}}
         if h.command == "POST" and h.path.endswith("/outcome"):
             return 200, {"status": json.loads(body)["status"], "recorded": True}
+        if h.command == "POST" and h.path in ("/api/v1/twins", "/api/v1/scenarios"):
+            doc = json.loads(body)
+            if "kind: Broken" in doc["yaml"]:
+                return 400, {
+                    "error": {
+                        "code": "SCENARIO_INVALID",
+                        "message": "invalid",
+                        "details": {"problems": ["x"]},
+                    }
+                }
+            return 201, {"created": True, "project": doc["project_id"]}
+        if h.command == "POST" and h.path == "/api/v1/scenarios/validate":
+            return 200, {"valid": True, "problems": [], "warnings": []}
+        if h.command == "POST" and h.path == "/api/v1/simulations":
+            return 202, {"run": {"id": "run-1", "status": "QUEUED"}, "request": json.loads(body)}
+        if h.command == "GET" and h.path == "/api/v1/simulations/run-1":
+            self.polls += 1
+            return 200, {"run": {"id": "run-1", "status": "COMPLETED" if self.polls >= 3 else "RUNNING"}}
+        if h.command == "GET" and h.path == "/api/v1/simulations/stuck":
+            return 200, {"run": {"id": "stuck", "status": "RUNNING"}}
         return 404, {"error": {"code": "NOT_FOUND", "message": "Not found."}}
 
 
@@ -170,3 +191,30 @@ def test_report_outcome_round_trip_and_validation(stub: tuple[Stub, str]) -> Non
     with pytest.raises(OutcomeReportError) as e:
         report_outcome(trace_id, "SUCCESS", config=bad)
     assert isinstance(e.value, APIError) and e.value.status == 401
+
+
+def test_twins_scenarios_and_simulations(stub: tuple[Stub, str]) -> None:
+    state, url = stub
+    client = Client(url, KEY)
+    assert client.register_twin(PROJECT, "kind: TwinDefinition") == {"created": True, "project": PROJECT}
+    assert json.loads(state.requests[-1]["body"]) == {"project_id": PROJECT, "yaml": "kind: TwinDefinition"}
+    assert client.validate_scenario(PROJECT, "kind: Scenario")["valid"] is True
+    assert client.save_scenario(PROJECT, "kind: Scenario")["created"] is True
+    with pytest.raises(APIError) as e:
+        client.save_scenario(PROJECT, "kind: Broken")
+    assert (e.value.status, e.value.code, e.value.details) == (400, "SCENARIO_INVALID", {"problems": ["x"]})
+
+    started = client.start_simulation(PROJECT, "agent", "1.2.4", tags=["smoke"], seed=7, release_id="rel-1")
+    assert started["request"] == {
+        "project_id": PROJECT,
+        "agent": "agent",
+        "agent_version": "1.2.4",
+        "tags": ["smoke"],
+        "seed": 7,
+        "release_id": "rel-1",
+    }
+    done = client.wait_for_simulation("run-1", timeout_s=10, interval_s=0.01)
+    assert done["run"]["status"] == "COMPLETED" and state.polls == 3
+    with pytest.raises(APIError) as e:
+        client.wait_for_simulation("stuck", timeout_s=0.05, interval_s=0.01)
+    assert e.value.code == "TIMEOUT"

@@ -86,7 +86,8 @@ class JSONFormatter(logging.Formatter):
             entry["span_id"] = format(ctx.span_id, "016x")
         if record.exc_info:
             entry["error_stack"] = "".join(traceback.format_exception(*record.exc_info))[-8000:]
-        return json.dumps(entry, default=str, ensure_ascii=False)
+        # Compact separators: the same line format as the Go services' slog.
+        return json.dumps(entry, default=str, ensure_ascii=False, separators=(",", ":"))
 
 
 def _drop_deliberate_aborts(record: logging.LogRecord) -> bool:

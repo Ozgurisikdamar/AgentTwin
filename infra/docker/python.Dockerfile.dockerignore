@@ -5,6 +5,8 @@
 !.python-version
 !packages/sdk-python
 !packages/core-py
+!packages/contracts
+!packages/scenario-schema
 !services/evaluation-service
 !services/simulation-service
 !demo

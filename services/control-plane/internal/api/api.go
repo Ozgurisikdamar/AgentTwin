@@ -12,6 +12,7 @@ import (
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/ids"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/app"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/auth"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/domain"
@@ -446,6 +447,7 @@ func (s *Server) InternalRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /internal/v1/api-keys/verify", h(s.internalVerifyKey))
 	mux.HandleFunc("GET /internal/v1/projects/{id}", h(s.internalProject))
 	mux.HandleFunc("GET /internal/v1/agent-versions/{id}", h(s.internalAgentVersion))
+	mux.HandleFunc("GET /internal/v1/agent-versions", h(s.internalAgentVersionByName))
 }
 
 // internalVerifyKey lets trace-service and runtime-gateway authenticate API
@@ -511,6 +513,34 @@ func (s *Server) internalProject(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) internalAgentVersion(w http.ResponseWriter, r *http.Request) error {
 	p := principal(r)
 	v, err := s.App.Store.GetAgentVersionByID(r.Context(), s.App.Store.Pool, p.OrgID, r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return httpx.ErrNotFound
+		}
+		return err
+	}
+	tools, err := s.App.Store.ListVersionTools(r.Context(), v.ID)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusOK, app.VersionDetail{AgentVersion: v, Tools: tools})
+	return nil
+}
+
+// internalAgentVersionByName resolves ?project_id=&agent=&version= to a
+// version with its tools (the simulation service validates a run request
+// and pins the manifest under test with it).
+func (s *Server) internalAgentVersionByName(w http.ResponseWriter, r *http.Request) error {
+	p := principal(r)
+	q := r.URL.Query()
+	projectID, agent, version := q.Get("project_id"), q.Get("agent"), q.Get("version")
+	if !ids.Valid(projectID) || agent == "" || version == "" || len(agent) > 200 || len(version) > 100 {
+		return httpx.Invalid("INVALID_QUERY", "project_id (UUID), agent and version are required.", nil)
+	}
+	if !p.CanAccessProject(projectID) {
+		return httpx.ErrNotFound
+	}
+	v, err := s.App.Store.GetAgentVersionByName(r.Context(), s.App.Store.Pool, p.OrgID, projectID, agent, version)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return httpx.ErrNotFound

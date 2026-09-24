@@ -491,6 +491,44 @@ func TestInternalAPIRequiresServiceToken(t *testing.T) {
 	}
 }
 
+func TestInternalAgentVersionLookupByName(t *testing.T) {
+	h := newHarness(t, nil)
+	owner := h.login("owner@demo.agenttwin.dev")
+	if r := h.registerManifest(owner, h.s.Demo.ProjectID, readManifest(t, "1.2.4")); r.Status != 201 && r.Status != 200 {
+		t.Fatalf("register: %d %s", r.Status, r.Raw)
+	}
+	mint := func(p authn.Principal) map[string]string {
+		tok, err := h.tokens.Mint(p, "control-plane", "rid-12345678")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return bearer(tok)
+	}
+	svc := mint(authn.Principal{OrgID: h.s.Demo.OrganizationID, Actor: "service:simulation-service", Role: authn.RoleService,
+		ProjectIDs: []string{h.s.Demo.ProjectID}})
+	path := "/internal/v1/agent-versions?project_id=" + h.s.Demo.ProjectID + "&agent=support-refund-agent&version="
+	r := h.request("GET", path+"1.2.4", nil, svc)
+	if r.Status != 200 || r.Body["version"] != "1.2.4" || r.Body["agent_name"] != "support-refund-agent" {
+		t.Fatalf("lookup: %d %s", r.Status, r.Raw)
+	}
+	tools, _ := r.Body["tools"].([]any)
+	if len(tools) != 7 {
+		t.Fatalf("tools = %d, want 7: %s", len(tools), r.Raw)
+	}
+	if r := h.request("GET", path+"9.9.9", nil, svc); r.Status != 404 {
+		t.Fatalf("unknown version = %d", r.Status)
+	}
+	// A token for another project cannot resolve this project's versions.
+	other := mint(authn.Principal{OrgID: h.s.Demo.OrganizationID, Actor: "service:simulation-service", Role: authn.RoleService,
+		ProjectIDs: []string{"0190f3b4-0000-7000-8000-00000000abcd"}})
+	if r := h.request("GET", path+"1.2.4", nil, other); r.Status != 404 {
+		t.Fatalf("other project = %d", r.Status)
+	}
+	if r := h.request("GET", "/internal/v1/agent-versions?agent=x&version=1", nil, svc); r.Status != 400 {
+		t.Fatalf("missing project_id = %d", r.Status)
+	}
+}
+
 func TestProxyForwardsWithInternalTokenAndStripsClientCredentials(t *testing.T) {
 	var got struct {
 		sync.Mutex

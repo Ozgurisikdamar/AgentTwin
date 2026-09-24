@@ -254,6 +254,13 @@ func (s *Store) GetAgentVersion(ctx context.Context, q db.Querier, orgID, agentI
 	return scanVersion(q.QueryRow(ctx, `SELECT `+versionCols+versionFrom+`WHERE a.organization_id = $1 AND v.agent_id = $2 AND v.version = $3`, orgID, agentID, version))
 }
 
+// GetAgentVersionByName returns a version by project, agent name and version
+// string (simulation runs name the agent version under test).
+func (s *Store) GetAgentVersionByName(ctx context.Context, q db.Querier, orgID, projectID, agent, version string) (AgentVersion, error) {
+	return scanVersion(q.QueryRow(ctx, `SELECT `+versionCols+versionFrom+`WHERE a.organization_id = $1 AND a.project_id = $2 AND a.name = $3 AND v.version = $4`,
+		orgID, projectID, agent, version))
+}
+
 // GetAgentVersionByID returns a version by id.
 func (s *Store) GetAgentVersionByID(ctx context.Context, q db.Querier, orgID, id string) (AgentVersion, error) {
 	return scanVersion(q.QueryRow(ctx, `SELECT `+versionCols+versionFrom+`WHERE a.organization_id = $1 AND v.id = $2`, orgID, id))

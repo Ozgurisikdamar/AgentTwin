@@ -1,0 +1,860 @@
+{
+  "agent.version_registered.v1": {
+    "enums": {},
+    "required": {
+      "/": [
+        "agent_id",
+        "agent_name",
+        "manifest_hash",
+        "tools",
+        "version",
+        "version_id"
+      ],
+      "/tools/[]": [
+        "name",
+        "risk"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/agent_id": [
+        "string"
+      ],
+      "/agent_name": [
+        "string"
+      ],
+      "/dependencies": [
+        "array"
+      ],
+      "/dependencies/[]": [
+        "object"
+      ],
+      "/manifest_hash": [
+        "string"
+      ],
+      "/model": [
+        "object"
+      ],
+      "/model/name": [
+        "string"
+      ],
+      "/model/provider": [
+        "string"
+      ],
+      "/prompt_hash": [
+        "null",
+        "string"
+      ],
+      "/retrieval_sources": [
+        "array"
+      ],
+      "/retrieval_sources/[]": [
+        "string"
+      ],
+      "/tools": [
+        "array"
+      ],
+      "/tools/[]": [
+        "object"
+      ],
+      "/tools/[]/name": [
+        "string"
+      ],
+      "/tools/[]/risk": [
+        "string"
+      ],
+      "/version": [
+        "string"
+      ],
+      "/version_id": [
+        "string"
+      ]
+    }
+  },
+  "audit.recorded.v1": {
+    "enums": {},
+    "required": {
+      "/": [
+        "action",
+        "actor",
+        "resource_id",
+        "resource_type",
+        "timestamp"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/action": [
+        "string"
+      ],
+      "/actor": [
+        "string"
+      ],
+      "/after_hash": [
+        "null",
+        "string"
+      ],
+      "/before_hash": [
+        "null",
+        "string"
+      ],
+      "/metadata": [
+        "object"
+      ],
+      "/reason": [
+        "null",
+        "string"
+      ],
+      "/request_id": [
+        "null",
+        "string"
+      ],
+      "/resource_id": [
+        "string"
+      ],
+      "/resource_type": [
+        "string"
+      ],
+      "/timestamp": [
+        "string"
+      ]
+    }
+  },
+  "envelope.v1": {
+    "enums": {},
+    "required": {
+      "/": [
+        "correlation_id",
+        "id",
+        "occurred_at",
+        "organization_id",
+        "payload",
+        "type"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/causation_id": [
+        "null",
+        "string"
+      ],
+      "/correlation_id": [
+        "string"
+      ],
+      "/id": [
+        "string"
+      ],
+      "/occurred_at": [
+        "string"
+      ],
+      "/organization_id": [
+        "string"
+      ],
+      "/payload": [
+        "object"
+      ],
+      "/producer": [
+        "string"
+      ],
+      "/project_id": [
+        "null",
+        "string"
+      ],
+      "/type": [
+        "string"
+      ]
+    }
+  },
+  "evaluation.run_completed.v1": {
+    "enums": {
+      "/status": [
+        "\"CANCELLED\"",
+        "\"COMPLETED\"",
+        "\"FAILED\""
+      ]
+    },
+    "required": {
+      "/": [
+        "eval_run_id",
+        "status"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/error": [
+        "null",
+        "string"
+      ],
+      "/eval_run_id": [
+        "string"
+      ],
+      "/release_evaluation_id": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "evaluation.run_requested.v1": {
+    "enums": {},
+    "required": {
+      "/": [
+        "baseline",
+        "candidate",
+        "release_evaluation_id",
+        "suite"
+      ],
+      "/baseline": [
+        "agent",
+        "manifest_hash",
+        "version",
+        "version_id"
+      ],
+      "/candidate": [
+        "agent",
+        "manifest_hash",
+        "version",
+        "version_id"
+      ],
+      "/suite/[]": [
+        "reasons",
+        "scenario_name",
+        "scenario_version_id"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/baseline": [
+        "object"
+      ],
+      "/baseline/agent": [
+        "string"
+      ],
+      "/baseline/endpoint": [
+        "null",
+        "string"
+      ],
+      "/baseline/manifest_hash": [
+        "string"
+      ],
+      "/baseline/model": [
+        "object"
+      ],
+      "/baseline/prompt_hash": [
+        "null",
+        "string"
+      ],
+      "/baseline/tools": [
+        "array"
+      ],
+      "/baseline/version": [
+        "string"
+      ],
+      "/baseline/version_id": [
+        "string"
+      ],
+      "/budget": [
+        "object"
+      ],
+      "/budget/max_gate_cost_usd": [
+        "number"
+      ],
+      "/candidate": [
+        "object"
+      ],
+      "/candidate/agent": [
+        "string"
+      ],
+      "/candidate/endpoint": [
+        "null",
+        "string"
+      ],
+      "/candidate/manifest_hash": [
+        "string"
+      ],
+      "/candidate/model": [
+        "object"
+      ],
+      "/candidate/prompt_hash": [
+        "null",
+        "string"
+      ],
+      "/candidate/tools": [
+        "array"
+      ],
+      "/candidate/version": [
+        "string"
+      ],
+      "/candidate/version_id": [
+        "string"
+      ],
+      "/judge_policy": [
+        "object"
+      ],
+      "/release_evaluation_id": [
+        "string"
+      ],
+      "/release_id": [
+        "string"
+      ],
+      "/suite": [
+        "array"
+      ],
+      "/suite/[]": [
+        "object"
+      ],
+      "/suite/[]/known_regression": [
+        "boolean"
+      ],
+      "/suite/[]/mandatory": [
+        "boolean"
+      ],
+      "/suite/[]/reasons": [
+        "array"
+      ],
+      "/suite/[]/reasons/[]": [
+        "object"
+      ],
+      "/suite/[]/scenario_name": [
+        "string"
+      ],
+      "/suite/[]/scenario_version_id": [
+        "string"
+      ],
+      "/suite/[]/severity": [
+        "string"
+      ]
+    }
+  },
+  "policy.activated.v1": {
+    "enums": {},
+    "required": {
+      "/": [
+        "name",
+        "policy_id",
+        "policy_version_id",
+        "spec_hash",
+        "target_tool"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/activated_by": [
+        "string"
+      ],
+      "/name": [
+        "string"
+      ],
+      "/policy_id": [
+        "string"
+      ],
+      "/policy_version_id": [
+        "string"
+      ],
+      "/spec_hash": [
+        "string"
+      ],
+      "/target_tool": [
+        "string"
+      ],
+      "/version": [
+        "integer"
+      ]
+    }
+  },
+  "policy.violation_detected.v1": {
+    "enums": {
+      "/decision": [
+        "\"deny\"",
+        "\"require_approval\""
+      ]
+    },
+    "required": {
+      "/": [
+        "decision",
+        "decision_id",
+        "rule",
+        "tool"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/agent": [
+        "null",
+        "string"
+      ],
+      "/agent_version": [
+        "null",
+        "string"
+      ],
+      "/category": [
+        "null",
+        "string"
+      ],
+      "/decision_id": [
+        "string"
+      ],
+      "/environment": [
+        "null",
+        "string"
+      ],
+      "/policy_version_id": [
+        "null",
+        "string"
+      ],
+      "/reason": [
+        "null",
+        "string"
+      ],
+      "/rule": [
+        "string"
+      ],
+      "/tool": [
+        "string"
+      ],
+      "/trace_id": [
+        "null",
+        "string"
+      ]
+    }
+  },
+  "scenario.upserted.v1": {
+    "enums": {
+      "/severity": [
+        "\"critical\"",
+        "\"high\"",
+        "\"low\"",
+        "\"medium\""
+      ]
+    },
+    "required": {
+      "/": [
+        "covers",
+        "name",
+        "scenario_id",
+        "scenario_version_id",
+        "severity"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/agent": [
+        "null",
+        "string"
+      ],
+      "/covers": [
+        "array"
+      ],
+      "/covers/[]": [
+        "string"
+      ],
+      "/name": [
+        "string"
+      ],
+      "/scenario_id": [
+        "string"
+      ],
+      "/scenario_version_id": [
+        "string"
+      ],
+      "/spec_hash": [
+        "string"
+      ],
+      "/tags": [
+        "array"
+      ],
+      "/tags/[]": [
+        "string"
+      ]
+    }
+  },
+  "simulation.run_completed.v1": {
+    "enums": {
+      "/side": [
+        "\"BASELINE\"",
+        "\"CANDIDATE\"",
+        "\"SINGLE\"",
+        "null"
+      ],
+      "/status": [
+        "\"CANCELLED\"",
+        "\"COMPLETED\"",
+        "\"FAILED\""
+      ]
+    },
+    "required": {
+      "/": [
+        "run_id",
+        "status"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/case_count": [
+        "integer"
+      ],
+      "/error": [
+        "null",
+        "string"
+      ],
+      "/eval_run_id": [
+        "null",
+        "string"
+      ],
+      "/run_id": [
+        "string"
+      ]
+    }
+  },
+  "simulation.run_requested.v1": {
+    "enums": {
+      "/side": [
+        "\"BASELINE\"",
+        "\"CANDIDATE\"",
+        "\"SINGLE\"",
+        "null"
+      ]
+    },
+    "required": {
+      "/": [
+        "run_id"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/eval_run_id": [
+        "null",
+        "string"
+      ],
+      "/run_id": [
+        "string"
+      ]
+    }
+  },
+  "tool.catalog_imported.v1": {
+    "enums": {
+      "/source": [
+        "\"MANUAL\"",
+        "\"MCP\"",
+        "\"OPENAPI\""
+      ]
+    },
+    "required": {
+      "/": [
+        "source",
+        "source_name",
+        "tools"
+      ],
+      "/tools/[]": [
+        "name",
+        "risk"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/service": [
+        "null",
+        "string"
+      ],
+      "/source_name": [
+        "string"
+      ],
+      "/tools": [
+        "array"
+      ],
+      "/tools/[]": [
+        "object"
+      ],
+      "/tools/[]/method": [
+        "null",
+        "string"
+      ],
+      "/tools/[]/mutating": [
+        "boolean"
+      ],
+      "/tools/[]/name": [
+        "string"
+      ],
+      "/tools/[]/path": [
+        "null",
+        "string"
+      ],
+      "/tools/[]/risk": [
+        "string"
+      ]
+    }
+  },
+  "trace.flagged.v1": {
+    "enums": {
+      "/kind": [
+        "\"incident\"",
+        "\"manual\"",
+        "\"negative_feedback\""
+      ]
+    },
+    "required": {
+      "/": [
+        "flagged_by",
+        "reason",
+        "trace_id"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/flagged_by": [
+        "string"
+      ],
+      "/reason": [
+        "string"
+      ],
+      "/trace_id": [
+        "string"
+      ]
+    }
+  },
+  "trace.ingested.v1": {
+    "enums": {
+      "/source": [
+        "\"eval\"",
+        "\"production\"",
+        "\"replay\"",
+        "\"simulation\"",
+        "\"test\""
+      ]
+    },
+    "required": {
+      "/": [
+        "agent",
+        "environment",
+        "signals",
+        "summary",
+        "trace_id"
+      ],
+      "/observed_tools/[]": [
+        "name"
+      ],
+      "/summary": [
+        "errors",
+        "tools",
+        "violations"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/agent": [
+        "string"
+      ],
+      "/agent_version": [
+        "null",
+        "string"
+      ],
+      "/commit_sha": [
+        "null",
+        "string"
+      ],
+      "/environment": [
+        "string"
+      ],
+      "/observed_tools": [
+        "array"
+      ],
+      "/observed_tools/[]": [
+        "object"
+      ],
+      "/observed_tools/[]/count": [
+        "integer"
+      ],
+      "/observed_tools/[]/http_host": [
+        "null",
+        "string"
+      ],
+      "/observed_tools/[]/name": [
+        "string"
+      ],
+      "/observed_tools/[]/risk": [
+        "null",
+        "string"
+      ],
+      "/release_id": [
+        "null",
+        "string"
+      ],
+      "/scenario_id": [
+        "null",
+        "string"
+      ],
+      "/signals": [
+        "array"
+      ],
+      "/signals/[]": [
+        "string"
+      ],
+      "/simulation_run_id": [
+        "null",
+        "string"
+      ],
+      "/started_at": [
+        "string"
+      ],
+      "/summary": [
+        "object"
+      ],
+      "/summary/agent": [
+        "string"
+      ],
+      "/summary/agent_version": [
+        "string"
+      ],
+      "/summary/cost_known": [
+        "boolean"
+      ],
+      "/summary/cost_usd": [
+        "number"
+      ],
+      "/summary/duration_ms": [
+        "number"
+      ],
+      "/summary/error_type": [
+        "string"
+      ],
+      "/summary/errors": [
+        "array"
+      ],
+      "/summary/errors/[]": [
+        "string"
+      ],
+      "/summary/failing_tool": [
+        "string"
+      ],
+      "/summary/final_state_diff": [
+        "object"
+      ],
+      "/summary/last_successful_step": [
+        "string"
+      ],
+      "/summary/model": [
+        "null",
+        "string"
+      ],
+      "/summary/outcome": [
+        "null",
+        "string"
+      ],
+      "/summary/outcome_verified": [
+        "boolean",
+        "null"
+      ],
+      "/summary/policy_decisions": [
+        "array"
+      ],
+      "/summary/policy_decisions/[]": [
+        "string"
+      ],
+      "/summary/prompt_hash": [
+        "null",
+        "string"
+      ],
+      "/summary/retry_count": [
+        "integer"
+      ],
+      "/summary/step_count": [
+        "integer"
+      ],
+      "/summary/tool_sequence_sketch": [
+        "string"
+      ],
+      "/summary/tools": [
+        "array"
+      ],
+      "/summary/tools/[]": [
+        "string"
+      ],
+      "/summary/violations": [
+        "array"
+      ],
+      "/summary/violations/[]": [
+        "string"
+      ],
+      "/trace_id": [
+        "string"
+      ]
+    }
+  },
+  "trace.outcome_recorded.v1": {
+    "enums": {
+      "/source": [
+        "\"api\"",
+        "\"span\""
+      ],
+      "/status": [
+        "\"FAILURE\"",
+        "\"PARTIAL\"",
+        "\"SUCCESS\"",
+        "\"UNKNOWN\""
+      ],
+      "/verification_source": [
+        "\"external_callback\"",
+        "\"human_review\"",
+        "\"semantic_judge\"",
+        "\"state_assertion\"",
+        "\"tool_result\"",
+        "\"tool_twin_state\"",
+        "\"unavailable\""
+      ]
+    },
+    "required": {
+      "/": [
+        "status",
+        "trace_id",
+        "verification_source",
+        "verified"
+      ]
+    },
+    "types": {
+      "/": [
+        "object"
+      ],
+      "/business_outcome": [
+        "null",
+        "string"
+      ],
+      "/contradiction": [
+        "boolean"
+      ],
+      "/recorded_by": [
+        "string"
+      ],
+      "/trace_id": [
+        "string"
+      ],
+      "/verified": [
+        "boolean"
+      ]
+    }
+  }
+}

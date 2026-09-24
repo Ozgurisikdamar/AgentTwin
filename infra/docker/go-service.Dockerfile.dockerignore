@@ -1,0 +1,15 @@
+# Allowlist: only what `go build` needs.
+*
+!go.mod
+!go.sum
+!packages/gokit
+!packages/contracts
+!packages/scenario-schema
+!packages/cli
+!services
+services/evaluation-service
+services/simulation-service
+**/*_test.go
+**/testdata
+**/*.md
+**/node_modules

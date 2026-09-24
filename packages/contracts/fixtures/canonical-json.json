@@ -5,6 +5,12 @@
     {"name": "integral float is written as integer", "input": {"amount": 100.0, "neg": -5.0}, "canonical": "{\"amount\":100,\"neg\":-5}"},
     {"name": "fractional float shortest repr", "input": {"x": 0.1, "y": 1.5, "z": 2.25}, "canonical": "{\"x\":0.1,\"y\":1.5,\"z\":2.25}"},
     {"name": "booleans and empty containers", "input": {"t": true, "f": false, "e": {}, "l": []}, "canonical": "{\"e\":{},\"f\":false,\"l\":[],\"t\":true}"},
-    {"name": "control characters escaped", "input": {"s": "a\nb\t\"q\""}, "canonical": "{\"s\":\"a\\nb\\t\\\"q\\\"\"}"}
+    {"name": "control characters escaped", "input": {"s": "a\nb\t\"q\""}, "canonical": "{\"s\":\"a\\nb\\t\\\"q\\\"\"}"},
+    {"name": "non-integral numbers use Go's shortest 'g' form", "input": {"a": 1234567.5, "b": 123456.5, "c": -0.5}, "canonical": "{\"a\":1.2345675e+06,\"b\":123456.5,\"c\":-0.5}"},
+    {"name": "small magnitudes switch to exponent below 1e-4", "input": {"c": 0.00001, "i": 0.001, "l": -2.5e-5, "j": 1e-7}, "canonical": "{\"c\":1e-05,\"i\":0.001,\"j\":1e-07,\"l\":-2.5e-05}"},
+    {"name": "large magnitudes", "input": {"d": 1e21, "f": 1e20, "k": 1.5e300, "m": 100.0}, "canonical": "{\"d\":1e+21,\"f\":100000000000000000000,\"k\":1.5e+300,\"m\":100}"},
+    {"name": "integers beyond int64 are encoded as floats", "input": {"g": 12345678901234567890123, "max": 9223372036854775807}, "canonical": "{\"g\":1.2345678901234568e+22,\"max\":9223372036854775807}"},
+    {"name": "line and paragraph separators are escaped", "input": {"h": "a\u2028b\u2029c", "del": "x\u007fy"}, "canonical": "{\"del\":\"x\u007fy\",\"h\":\"a\\u2028b\\u2029c\"}"},
+    {"name": "integral floats above 2^53 keep shortest digits", "input": {"big": 5.944963824391085e+20, "neg_zero": -0.0, "exact": 9007199254740993.0}, "canonical": "{\"big\":594496382439108500000,\"exact\":9007199254740992,\"neg_zero\":0}"}
   ]
 }

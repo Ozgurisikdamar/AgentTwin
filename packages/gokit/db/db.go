@@ -138,11 +138,13 @@ func Checker(pool *pgxpool.Pool) func(ctx context.Context) error {
 	return func(ctx context.Context) error { return pool.Ping(ctx) }
 }
 
-// MarkProcessed records that consumer handled eventID inside tx. It returns
-// false when the event was already processed — the caller must then skip its
-// side effects. This is what makes at-least-once delivery safe.
-func MarkProcessed(ctx context.Context, tx pgx.Tx, table, consumer, eventID string) (bool, error) {
-	tag, err := tx.Exec(ctx, "INSERT INTO "+pgx.Identifier{table}.Sanitize()+" (consumer, event_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", consumer, eventID)
+// MarkProcessed records in <schema>.processed_event that consumer handled
+// eventID inside tx. It returns false when the event was already processed —
+// the caller must then skip its side effects. This is what makes at-least-once
+// delivery safe.
+func MarkProcessed(ctx context.Context, tx pgx.Tx, schema, consumer, eventID string) (bool, error) {
+	table := pgx.Identifier{schema, "processed_event"}.Sanitize()
+	tag, err := tx.Exec(ctx, "INSERT INTO "+table+" (consumer, event_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", consumer, eventID)
 	if err != nil {
 		return false, fmt.Errorf("mark processed: %w", err)
 	}

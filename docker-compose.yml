@@ -10,6 +10,33 @@ x-service-env: &service-env
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   MIGRATE_ON_START: "true"
 
+x-go-build: &go-build
+  context: .
+  dockerfile: infra/docker/go-service.Dockerfile
+
+x-demo-build: &demo-build
+  context: .
+  dockerfile: infra/docker/python.Dockerfile
+  target: support-refund-agent
+  args:
+    PACKAGE: support-refund-agent
+    # The Anthropic adapter is included so DEMO_AGENT_MODEL=anthropic works.
+    EXTRAS: anthropic
+
+x-demo-env: &demo-env
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DEMO_TOOLS_URL: http://demo-tools:8091
+  DEMO_TOOLS_ADMIN_TOKEN: ${DEMO_TOOLS_ADMIN_TOKEN}
+  DEMO_AGENT_TOKEN: ${DEMO_AGENT_TOKEN}
+  AGENTTWIN_API_KEY: ${AGENTTWIN_DEMO_API_KEY}
+  AGENTTWIN_API_URL: http://control-plane:8080
+  AGENTTWIN_OTLP_ENDPOINT: http://otel-collector:4318
+  AGENTTWIN_ENVIRONMENT: production
+  # The demo project allows redacted content (ADR-0008); the SDK redacts on
+  # the client first, the trace service enforces the project policy again.
+  AGENTTWIN_CONTENT_MODE: ${DEMO_AGENT_CONTENT_MODE:-redacted}
+  AGENTTWIN_UI_URL: http://localhost:${WEB_HOST_PORT:-3000}
+
 x-hardening: &hardening
   read_only: true
   security_opt: ["no-new-privileges:true"]
@@ -76,6 +103,117 @@ services:
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports: ["127.0.0.1:${GRAFANA_HOST_PORT:-3001}:3000"]
     restart: unless-stopped
+
+  # ---------------------------------------------------------------- AgentTwin
+  control-plane:
+    build:
+      <<: *go-build
+      args: {SERVICE: control-plane, VERSION: "${AGENTTWIN_VERSION:-dev}"}
+    image: agenttwin/control-plane:${AGENTTWIN_VERSION:-dev}
+    environment:
+      <<: *service-env
+      AUTH_MODE: ${AUTH_MODE:-dev}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      AGENTTWIN_SESSION_SECRET: ${AGENTTWIN_SESSION_SECRET}
+      AGENTTWIN_API_KEY_PEPPER: ${AGENTTWIN_API_KEY_PEPPER}
+      AGENTTWIN_DEMO_API_KEY: ${AGENTTWIN_DEMO_API_KEY}
+      TRACE_SERVICE_URL: http://trace-service:8081
+    ports: ["127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}:8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    <<: *hardening
+
+  trace-service:
+    build:
+      <<: *go-build
+      args: {SERVICE: trace-service, VERSION: "${AGENTTWIN_VERSION:-dev}"}
+    image: agenttwin/trace-service:${AGENTTWIN_VERSION:-dev}
+    environment:
+      <<: *service-env
+      CONTROL_PLANE_URL: http://control-plane:8080
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    <<: *hardening
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: agenttwin/web:${AGENTTWIN_VERSION:-dev}
+    environment:
+      CONTROL_PLANE_URL: http://control-plane:8080
+      # Set to true when TLS terminates at a proxy that does not send
+      # X-Forwarded-Proto; the session cookie is then marked Secure.
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
+    ports: ["127.0.0.1:${WEB_HOST_PORT:-3000}:3000"]
+    depends_on:
+      control-plane: {condition: service_healthy}
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    tmpfs: ["/tmp:size=64m", "/app/apps/web/.next/cache:size=64m,uid=1000,gid=1000"]
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- demo (Demo Co)
+  demo-tools:
+    build: *demo-build
+    image: agenttwin/demo:${AGENTTWIN_VERSION:-dev}
+    command: ["serve-tools", "--port", "8091"]
+    ports: ["127.0.0.1:${DEMO_TOOLS_HOST_PORT:-8091}:8091"]
+    environment:
+      <<: *demo-env
+      # Production is not perfect: a small share of refunds time out after
+      # the payment was applied (spec §52 "timeout after mutation").
+      DEMO_TOOLS_FAULTS: ${DEMO_TOOLS_FAULTS:-refund_payment:timeout_after_mutation:0.08}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 4s
+      retries: 30
+    <<: *hardening
+
+  demo-agent:
+    build: *demo-build
+    image: agenttwin/demo:${AGENTTWIN_VERSION:-dev}
+    command: ["serve-agent", "--port", "8090"]
+    ports: ["127.0.0.1:${DEMO_AGENT_HOST_PORT:-8090}:8090"]
+    environment:
+      <<: *demo-env
+      DEMO_AGENT_MODEL: ${DEMO_AGENT_MODEL:-scripted}
+      DEMO_AGENT_ANTHROPIC_MODEL: ${DEMO_AGENT_ANTHROPIC_MODEL:-claude-sonnet-5}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEMO_AGENT_URL: http://127.0.0.1:8090
+    depends_on:
+      demo-tools: {condition: service_healthy}
+      otel-collector: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 4s
+      retries: 30
+    <<: *hardening
+
+  # `make seed` — registers the demo agent manifests and sends a batch of
+  # verified production traffic. Idempotent for manifests.
+  seed:
+    build: *demo-build
+    image: agenttwin/demo:${AGENTTWIN_VERSION:-dev}
+    profiles: [seed]
+    command: ["seed", "--count", "${SEED_TRAFFIC_COUNT:-40}"]
+    environment:
+      <<: *demo-env
+      DEMO_AGENT_URL: http://demo-agent:8090
+    depends_on:
+      control-plane: {condition: service_healthy}
+      trace-service: {condition: service_healthy}
+      demo-agent: {condition: service_healthy}
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    tmpfs: ["/tmp:size=16m"]
 
 volumes:
   pgdata:

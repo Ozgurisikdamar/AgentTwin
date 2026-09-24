@@ -124,8 +124,13 @@ process.
 ### 3.1 Public API (UI and CLI)
 
 1. The browser never holds a bearer token. The Next.js server stores the session
-   token in an `HttpOnly; SameSite=Lax` cookie and proxies `/api/v1/*` to the
-   control-plane (BFF pattern).
+   token in an `HttpOnly; SameSite=Lax` cookie (`Secure` behind HTTPS) and
+   proxies `/api/v1/*` to the control-plane (BFF pattern). The BFF rejects
+   cross-site writes (`Sec-Fetch-Site`, falling back to `Origin` vs `Host`),
+   refuses path traversal, caps request bodies at 16 MiB, clears the cookie when
+   the control-plane answers 401, and never forwards cookies upstream. Pages are
+   served with a per-request nonce Content-Security-Policy (`script-src 'self'
+   'nonce-…' 'strict-dynamic'`, `frame-ancestors 'none'`).
 2. The control-plane authenticates (dev session JWT, OIDC token, or project API
    key), resolves the principal `{organization, role, project scope}` and applies
    RBAC.
@@ -143,8 +148,36 @@ The SDK sends the project API key in the `x-agenttwin-api-key` header. The
 collector keeps it as request metadata (`include_metadata`), batches **per key**
 (`batch.metadata_keys`) so tenants are never merged into one export, and the
 `headers_setter` extension re-attaches it on export. trace-service verifies the
-key with the control-plane (cached 60 s) — tenancy is derived from the verified
-key, never from span attributes supplied by the agent.
+key with the control-plane (`/internal/v1/api-keys/verify`, internal JWT) and
+caches the answer for 30 s (`API_KEY_CACHE_TTL`; rejections for 10 s, transient
+lookup failures not at all), so a revoked key stops working within 30 s.
+Tenancy and content policy are derived from the verified key, never from span
+attributes supplied by the agent.
+
+#### Trace lifecycle
+
+1. **Ingest** (`POST /v1/traces`): OTLP/JSON or protobuf, gzip allowed, bounded
+   body and decompressed size, bounded concurrency (`INGEST_MAX_CONCURRENT`,
+   excess → 503 so the collector retries). Spans are normalized (GenAI semantic
+   conventions + `agenttwin.*` attributes), hostile values are truncated and
+   out-of-vocabulary enums normalized, content is filtered again by the
+   project's content mode, and spans are upserted idempotently (a collector
+   retry never duplicates a span). The trace row is marked `dirty`.
+2. **Finalize** (background, every replica): a dirty trace is finalized once its
+   root span arrived and no span came for `TRACE_SETTLE_DURATION` (2 s), or after
+   `TRACE_INCOMPLETE_AFTER` (2 min) without a root (`incomplete` signal). The
+   finalizer claims rows with `FOR UPDATE SKIP LOCKED`, computes the
+   deterministic summary (tool sequence, errors, retries, cost, last good step,
+   failing tool, signals), records the span-reported outcome and writes
+   `trace.ingested.v1` (and `trace.outcome_recorded.v1`) to the outbox in the
+   same transaction. A trace that keeps failing is retried at most 10 times and
+   never blocks other traces; new spans reset its budget.
+3. **Outcomes** reported later through the API (`POST
+   /api/v1/traces/{id}/outcome`) take precedence over the agent's self-report
+   and flag contradictions (claimed success, verified failure).
+4. **Query**: explorer list with keyset pagination and filters, facets (value
+   counts over the most recent 10,000 traces), detail, and stats — all scoped by
+   organization and project in SQL.
 
 ### 3.3 Release evaluation (asynchronous)
 
@@ -225,8 +258,10 @@ are written through a **transactional outbox**.
 
 * **Content capture is off by default.** SDKs redact client-side before export
   (`drop`, `mask`, `hash` modes; email, phone, JWT, API-key, card, custom regex,
-  JSON-path rules). The trace-service truncates oversized attributes and records
-  that it did.
+  JSON-path rules). The trace-service enforces the project's content mode again
+  (it never stores more than the project allows, whatever the SDK sent),
+  truncates oversized attributes and records that it did. Content is stored
+  apart from span metadata with its own, shorter retention.
 * **Hashing.** SHA-256 of canonical JSON identifies prompts, manifests, tool
   schemas, scenario versions, policies, evaluator configs and release evidence.
 * **Immutability.** Gate decisions and their evidence snapshots are append-only

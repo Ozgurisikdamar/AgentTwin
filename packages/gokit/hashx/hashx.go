@@ -1,9 +1,10 @@
 // Package hashx computes stable content identities (SHA-256 over canonical JSON).
 //
 // Canonical form: object keys sorted by UTF-8 code units, no insignificant
-// whitespace, no HTML escaping, integers without exponent, other numbers in the
-// shortest round-trip representation. The Python implementation
-// (agenttwin_core.hashing) follows the same rules and both are tested against
+// whitespace, no HTML escaping, integral numbers below 1e21 without fraction or
+// exponent, -0 and 0.0 written as 0, other numbers in the shortest round-trip
+// representation, non-finite numbers rejected. The Python SDK
+// (agenttwin.hashing) follows the same rules; both are tested against
 // packages/contracts/fixtures/canonical-json.json.
 package hashx
 
@@ -100,6 +101,11 @@ func canonicalNumber(n json.Number) (string, error) {
 	}
 	if math.IsInf(f, 0) || math.IsNaN(f) {
 		return "", fmt.Errorf("canonical json: non-finite number %q", n)
+	}
+	if f == 0 {
+		// -0 and 0.0 denote the same value as 0; a single form keeps the
+		// encoding a fixed point (canonical(canonical(x)) == canonical(x)).
+		return "0", nil
 	}
 	if f == math.Trunc(f) && math.Abs(f) < 1e21 {
 		return strconv.FormatFloat(f, 'f', -1, 64), nil

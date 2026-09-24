@@ -7,8 +7,12 @@ COMPOSE        ?= docker compose
 GO             ?= go
 UV             ?= uv
 PNPM           ?= pnpm
-GO_PACKAGES    := ./packages/... ./services/control-plane/... ./services/trace-service/... ./services/graph-service/... ./services/runtime-gateway/...
-PY_PROJECTS    := packages/core-py packages/sdk-python services/evaluation-service services/simulation-service demo/support-refund-agent
+GO_PACKAGES    := ./packages/... ./services/...
+# Loads .env into a recipe's shell (for targets that talk to the running stack).
+LOAD_ENV       := set -a; . ./.env; set +a
+DEMO_INPUT     ?= Hi! One item in {order} arrived broken. Can I get a refund of $$40?
+# The version Demo Co runs in production (1.3.x are release candidates).
+DEMO_VERSION   ?= 1.2.4
 
 .PHONY: help
 help: ## Show targets
@@ -24,12 +28,13 @@ dev: env ## Build and start the complete local stack, seed the demo workspace
 	$(COMPOSE) up --build -d
 	./scripts/wait-healthy.sh
 	$(MAKE) seed
-	@echo ""
-	@echo "AgentTwin is running:"
-	@echo "  Web UI         http://localhost:$${WEB_HOST_PORT:-3000}   (demo login: owner@demo.agenttwin.dev)"
-	@echo "  Control plane  http://localhost:$${CONTROL_PLANE_HOST_PORT:-8080}/api/v1"
-	@echo "  Grafana        http://localhost:$${GRAFANA_HOST_PORT:-3001}"
-	@echo "  RabbitMQ UI    http://localhost:$${RABBITMQ_UI_HOST_PORT:-15672}"
+	@$(LOAD_ENV); echo ""; \
+	echo "AgentTwin is running:"; \
+	echo "  Web UI         http://localhost:$${WEB_HOST_PORT:-3000}   (demo login: owner@demo.agenttwin.dev)"; \
+	echo "  Control plane  http://localhost:$${CONTROL_PLANE_HOST_PORT:-8080}/api/v1"; \
+	echo "  Grafana        http://localhost:$${GRAFANA_HOST_PORT:-3001}"; \
+	echo "  RabbitMQ UI    http://localhost:$${RABBITMQ_UI_HOST_PORT:-15672}"; \
+	echo "  One more run:  make demo"
 
 .PHONY: down
 down: ## Stop the local stack (keeps data)
@@ -41,8 +46,12 @@ reset: ## Destroy local data and start fresh
 	$(MAKE) dev
 
 .PHONY: seed
-seed: env ## Load the demo workspace (idempotent)
-	$(COMPOSE) run --rm --no-deps seed
+seed: env ## Load the demo workspace: agent manifests + verified traffic (idempotent)
+	$(COMPOSE) run --rm seed
+
+.PHONY: demo
+demo: env ## Run one refund conversation through the demo agent and print its trace link
+	$(COMPOSE) exec -T demo-agent support-refund-agent run '$(DEMO_INPUT)' --version $(DEMO_VERSION) --new-order 140 --agent-url http://127.0.0.1:8090
 
 .PHONY: logs
 logs: ## Tail service logs
@@ -56,8 +65,8 @@ doctor: env ## Verify Docker, ports, env, DB, RabbitMQ, OTel, migrations, servic
 .PHONY: fmt
 fmt: ## Format all code
 	gofmt -w packages services
-	cd $(CURDIR) && $(UV) run ruff format .
-	cd apps/web && $(PNPM) exec prettier --write . >/dev/null 2>&1 || true
+	$(UV) run ruff format .
+	$(PNPM) -r --if-present run format
 
 .PHONY: lint
 lint: lint-go lint-py lint-web ## Run all linters and type checkers
@@ -76,6 +85,7 @@ lint-py:
 
 .PHONY: lint-web
 lint-web:
+	$(PNPM) -r --if-present run format:check
 	$(PNPM) -r --if-present run lint
 	$(PNPM) -r --if-present run typecheck
 
@@ -101,12 +111,8 @@ fuzz: ## Run Go fuzz targets for 20s each
 	./scripts/fuzz.sh 20s
 
 .PHONY: e2e
-e2e: ## Playwright end-to-end tests against the running stack (make dev first)
-	cd apps/web && $(PNPM) exec playwright test
-
-.PHONY: load
-load: ## k6 load tests against the running stack
-	./scripts/load-test.sh
+e2e: env ## Playwright end-to-end tests against the running stack (make dev first)
+	$(LOAD_ENV); cd apps/web && $(PNPM) exec playwright test
 
 .PHONY: contracts-check
 contracts-check: ## Detect breaking changes in event schemas
@@ -116,7 +122,3 @@ contracts-check: ## Detect breaking changes in event schemas
 build: ## Build all Go binaries and container images
 	$(GO) build ./...
 	$(COMPOSE) build
-
-.PHONY: cli
-cli: ## Build the agenttwin CLI into ./bin
-	$(GO) build -o bin/agenttwin ./packages/cli/cmd/agenttwin

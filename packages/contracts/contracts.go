@@ -6,7 +6,7 @@ import "embed"
 
 // Events holds events/*.schema.json.
 //
-//go:embed events/*.json
+//go:embed events/*.schema.json
 var Events embed.FS
 
 // Fixtures holds shared cross-language test fixtures.

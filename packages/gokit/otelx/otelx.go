@@ -21,6 +21,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/buildinfo"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
 )
 
@@ -80,6 +81,11 @@ func Setup(ctx context.Context, cfg Config) (*Telemetry, error) {
 		}, []string{"outcome"}),
 	}
 	reg.MustRegister(t.HTTPRequests, t.HTTPDuration, t.EventsHandled, t.EventDuration, t.OutboxBacklog, t.OutboxFailed, t.DBDuration)
+	buildInfo := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "agenttwin_build_info", Help: "Version of the running binary (value is always 1).",
+	}, []string{"service", "version", "revision"})
+	buildInfo.WithLabelValues(cfg.Service, buildinfo.Version, buildinfo.Revision()).Set(1)
+	reg.MustRegister(buildInfo)
 
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	t.shutdown = func(context.Context) error { return nil }
@@ -91,6 +97,7 @@ func Setup(ctx context.Context, cfg Config) (*Telemetry, error) {
 		res, _ := resource.Merge(resource.Default(), resource.NewWithAttributes(semconv.SchemaURL,
 			semconv.ServiceName(cfg.Service),
 			semconv.ServiceNamespace("agenttwin"),
+			semconv.ServiceVersion(buildinfo.Version),
 			attribute.String("agenttwin.internal", "true"),
 		))
 		ratio := cfg.SampleRatio

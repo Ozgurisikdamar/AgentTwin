@@ -1,0 +1,20 @@
+# Default build-context filter. Images with a Dockerfile-specific ignore file
+# (<name>.Dockerfile.dockerignore) use an allowlist instead.
+.git
+.artifacts
+.env
+.env.*
+!.env.example
+bin
+**/node_modules
+**/.next
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.hypothesis
+**/playwright-report
+**/test-results
+**/coverage

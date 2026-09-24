@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -143,6 +144,28 @@ func (s *statusRecorder) Flush() {
 // Observer receives per-request measurements (metrics).
 type Observer func(r *http.Request, route string, status int, dur time.Duration)
 
+type routeKey struct{}
+
+// routeHolder carries the matched route pattern back to AccessLog. Nested
+// muxes set Pattern on a shallow copy of the request, so reading r.Pattern
+// in an outer middleware would always see the outer pattern.
+type routeHolder struct{ route string }
+
+// SetRoute records the pattern matched by the innermost mux for metrics and
+// logs. Handle calls it automatically.
+func SetRoute(r *http.Request) {
+	if r.Pattern != "" {
+		SetRouteName(r, r.Pattern)
+	}
+}
+
+// SetRouteName records an explicit, low-cardinality route label.
+func SetRouteName(r *http.Request, name string) {
+	if h, ok := r.Context().Value(routeKey{}).(*routeHolder); ok {
+		h.route = name
+	}
+}
+
 // AccessLog logs one line per request (path only, never query strings, which
 // may carry tokens) and notifies observers.
 func AccessLog(log *slog.Logger, observers ...Observer) Middleware {
@@ -150,12 +173,17 @@ func AccessLog(log *slog.Logger, observers ...Observer) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w}
+			holder := &routeHolder{}
+			r = r.WithContext(context.WithValue(r.Context(), routeKey{}, holder))
 			next.ServeHTTP(rec, r)
 			if rec.status == 0 {
 				rec.status = http.StatusOK
 			}
 			dur := time.Since(start)
-			route := r.Pattern
+			route := holder.route
+			if route == "" {
+				route = r.Pattern
+			}
 			if route == "" {
 				route = "unmatched"
 			}

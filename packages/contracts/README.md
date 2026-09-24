@@ -18,6 +18,22 @@ Versioned, language-neutral contracts shared by Go, Python and TypeScript code.
   `make contracts-check` fails when a required field disappears from a published
   schema compared with the committed baseline (`events/.baseline.json`).
 
+## Canonical JSON and content hashes
+
+Prompts, manifests, tool schemas, arguments and evidence are identified by the
+SHA-256 of their canonical JSON form. Go (`packages/gokit/hashx`) and Python
+(`agenttwin.hashing`) produce byte-identical output and are both tested against
+`fixtures/canonical-json.json`:
+
+* object keys sorted by UTF-8 code units, no insignificant whitespace, no HTML
+  escaping, strings as UTF-8;
+* integral numbers below 1e21 without fraction or exponent (`1.0` → `1`),
+  `-0` and `0.0` → `0`, other numbers in the shortest round-trip form;
+* NaN and infinities are rejected.
+
+The encoding is a fixed point: canonicalizing canonical JSON returns the same
+bytes (Go fuzz targets and Python Hypothesis tests).
+
 ## Event catalog
 
 Exchange: `agenttwin.events` (topic, durable). Routing key = event type.

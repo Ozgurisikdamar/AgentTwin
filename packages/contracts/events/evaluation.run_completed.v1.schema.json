@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "evaluation.run_completed.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["eval_run_id", "status"],
+  "properties": {
+    "eval_run_id": {"type": "string", "format": "uuid"},
+    "release_evaluation_id": {"type": ["string", "null"]},
+    "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED"]},
+    "error": {"type": ["string", "null"]}
+  }
+}

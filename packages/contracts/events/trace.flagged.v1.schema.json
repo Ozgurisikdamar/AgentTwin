@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "trace.flagged.v1 payload (manual incident / negative feedback flag)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["trace_id", "reason", "flagged_by"],
+  "properties": {
+    "trace_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "reason": {"type": "string", "maxLength": 2000},
+    "kind": {"enum": ["incident", "negative_feedback", "manual"]},
+    "flagged_by": {"type": "string"}
+  }
+}

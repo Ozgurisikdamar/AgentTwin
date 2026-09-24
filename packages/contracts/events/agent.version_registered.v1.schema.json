@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agent.version_registered.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["agent_id", "agent_name", "version_id", "version", "manifest_hash", "tools"],
+  "properties": {
+    "agent_id": {"type": "string", "format": "uuid"},
+    "agent_name": {"type": "string"},
+    "version_id": {"type": "string", "format": "uuid"},
+    "version": {"type": "string"},
+    "manifest_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "prompt_hash": {"type": ["string", "null"]},
+    "model": {"type": "object", "properties": {"provider": {"type": "string"}, "name": {"type": "string"}}},
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "risk"],
+        "properties": {"name": {"type": "string"}, "risk": {"type": "string"}}
+      }
+    },
+    "retrieval_sources": {"type": "array", "items": {"type": "string"}},
+    "dependencies": {"type": "array", "items": {"type": "object"}}
+  }
+}

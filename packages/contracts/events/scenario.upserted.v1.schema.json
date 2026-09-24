@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "scenario.upserted.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["scenario_id", "scenario_version_id", "name", "severity", "covers"],
+  "properties": {
+    "scenario_id": {"type": "string", "format": "uuid"},
+    "scenario_version_id": {"type": "string", "format": "uuid"},
+    "name": {"type": "string"},
+    "agent": {"type": ["string", "null"]},
+    "severity": {"enum": ["critical", "high", "medium", "low"]},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "covers": {"type": "array", "items": {"type": "string"}},
+    "spec_hash": {"type": "string"}
+  }
+}

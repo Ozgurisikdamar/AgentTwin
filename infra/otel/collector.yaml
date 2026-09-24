@@ -1,0 +1,110 @@
+# OpenTelemetry Collector for AgentTwin (ADR-0003).
+#
+# Two pipelines:
+#   1. Customer agent traces (from SDKs, carrying x-agenttwin-api-key) are
+#      batched PER API KEY and exported as OTLP/HTTP JSON to trace-service,
+#      which authenticates the key and derives the tenant from it.
+#   2. AgentTwin's own service traces (service.namespace=agenttwin) are turned
+#      into RED metrics by the spanmetrics connector and exposed to Prometheus.
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  headers_setter:
+    headers:
+      - action: upsert
+        key: x-agenttwin-api-key
+        from_context: x-agenttwin-api-key
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        include_metadata: true
+        max_recv_msg_size_mib: 16
+      http:
+        endpoint: 0.0.0.0:4318
+        include_metadata: true
+        max_request_body_size: 16777216
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 20
+  # Never merge different tenants into one export request.
+  batch/agent:
+    send_batch_size: 512
+    timeout: 1s
+    metadata_keys: [x-agenttwin-api-key]
+    metadata_cardinality_limit: 1000
+  batch/internal:
+    send_batch_size: 512
+    timeout: 2s
+  filter/agent_only:
+    error_mode: ignore
+    traces:
+      span:
+        - 'resource.attributes["service.namespace"] == "agenttwin"'
+  filter/internal_only:
+    error_mode: ignore
+    traces:
+      span:
+        - 'resource.attributes["service.namespace"] != "agenttwin"'
+
+connectors:
+  spanmetrics:
+    namespace: agenttwin_internal
+    histogram:
+      explicit:
+        buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2500ms, 5s]
+    dimensions:
+      - name: http.route
+      - name: http.response.status_code
+
+exporters:
+  otlphttp/trace_service:
+    endpoint: http://trace-service:8081
+    encoding: json
+    compression: none
+    timeout: 10s
+    auth:
+      authenticator: headers_setter
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 120s
+    sending_queue:
+      enabled: true
+      queue_size: 5000
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check, headers_setter]
+  telemetry:
+    metrics:
+      level: normal
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+  pipelines:
+    traces/agent:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/agent_only, batch/agent]
+      exporters: [otlphttp/trace_service]
+    traces/internal:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/internal_only, batch/internal]
+      exporters: [spanmetrics]
+    metrics/internal:
+      receivers: [spanmetrics]
+      exporters: [prometheus]

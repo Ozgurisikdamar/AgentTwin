@@ -1,0 +1,13 @@
+{
+  "name": "@agenttwin/schemas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AgentTwin document schemas (agent manifest, scenario, policy, twin).",
+  "exports": {
+    "./agent-manifest.v1.schema.json": "./schemas/agent-manifest.v1.schema.json",
+    "./scenario.v1.schema.json": "./schemas/scenario.v1.schema.json",
+    "./policy.v1.schema.json": "./schemas/policy.v1.schema.json",
+    "./twin.v1.schema.json": "./schemas/twin.v1.schema.json"
+  },
+  "files": ["schemas"]
+}

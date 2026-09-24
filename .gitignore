@@ -1,0 +1,46 @@
+# env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# go
+/bin/
+*.test
+*.out
+coverage*.html
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+*.egg-info/
+.coverage
+htmlcov/
+
+# node
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+playwright-report/
+test-results/
+blob-report/
+
+# runtime data
+/data/
+/var/
+artifacts-local/
+.artifacts/
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

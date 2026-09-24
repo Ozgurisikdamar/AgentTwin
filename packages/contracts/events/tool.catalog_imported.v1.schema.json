@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tool.catalog_imported.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["source", "source_name", "tools"],
+  "properties": {
+    "source": {"enum": ["OPENAPI", "MCP", "MANUAL"]},
+    "source_name": {"type": "string"},
+    "service": {"type": ["string", "null"]},
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "risk"],
+        "properties": {
+          "name": {"type": "string"},
+          "risk": {"type": "string"},
+          "method": {"type": ["string", "null"]},
+          "path": {"type": ["string", "null"]},
+          "mutating": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

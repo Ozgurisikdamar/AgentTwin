@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "simulation.run_completed.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["run_id", "status"],
+  "properties": {
+    "run_id": {"type": "string", "format": "uuid"},
+    "eval_run_id": {"type": ["string", "null"]},
+    "side": {"enum": ["BASELINE", "CANDIDATE", "SINGLE", null]},
+    "status": {"enum": ["COMPLETED", "FAILED", "CANCELLED"]},
+    "case_count": {"type": "integer"},
+    "error": {"type": ["string", "null"]}
+  }
+}

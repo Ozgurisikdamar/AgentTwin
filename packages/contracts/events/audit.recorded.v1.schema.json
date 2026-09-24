@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "audit.recorded.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["actor", "action", "resource_type", "resource_id", "timestamp"],
+  "properties": {
+    "actor": {"type": "string", "maxLength": 200},
+    "action": {"type": "string", "pattern": "^[a-z_]+\\.[a-z_]+$"},
+    "resource_type": {"type": "string"},
+    "resource_id": {"type": "string"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "request_id": {"type": ["string", "null"]},
+    "before_hash": {"type": ["string", "null"]},
+    "after_hash": {"type": ["string", "null"]},
+    "reason": {"type": ["string", "null"], "maxLength": 4000},
+    "metadata": {"type": "object"}
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "evaluation.run_requested.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["release_evaluation_id", "baseline", "candidate", "suite"],
+  "properties": {
+    "release_evaluation_id": {"type": "string", "format": "uuid"},
+    "release_id": {"type": "string", "format": "uuid"},
+    "baseline": {"$ref": "#/$defs/agentRef"},
+    "candidate": {"$ref": "#/$defs/agentRef"},
+    "suite": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario_version_id", "scenario_name", "reasons"],
+        "properties": {
+          "scenario_version_id": {"type": "string", "format": "uuid"},
+          "scenario_name": {"type": "string"},
+          "severity": {"type": "string"},
+          "mandatory": {"type": "boolean"},
+          "known_regression": {"type": "boolean"},
+          "reasons": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    },
+    "budget": {"type": "object", "properties": {"max_gate_cost_usd": {"type": "number"}}},
+    "judge_policy": {"type": "object"}
+  },
+  "$defs": {
+    "agentRef": {
+      "type": "object",
+      "required": ["agent", "version", "version_id", "manifest_hash"],
+      "properties": {
+        "agent": {"type": "string"},
+        "version": {"type": "string"},
+        "version_id": {"type": "string", "format": "uuid"},
+        "manifest_hash": {"type": "string"},
+        "prompt_hash": {"type": ["string", "null"]},
+        "endpoint": {"type": ["string", "null"]},
+        "model": {"type": "object"},
+        "tools": {"type": "array"}
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "policy.activated.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["policy_id", "policy_version_id", "name", "target_tool", "spec_hash"],
+  "properties": {
+    "policy_id": {"type": "string", "format": "uuid"},
+    "policy_version_id": {"type": "string", "format": "uuid"},
+    "name": {"type": "string"},
+    "version": {"type": "integer"},
+    "target_tool": {"type": "string"},
+    "spec_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "activated_by": {"type": "string"}
+  }
+}

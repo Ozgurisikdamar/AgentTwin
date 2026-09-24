@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "trace.ingested.v1 payload (root span received; deterministic structured summary)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["trace_id", "agent", "environment", "summary", "signals"],
+  "properties": {
+    "trace_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "agent": {"type": "string"},
+    "agent_version": {"type": ["string", "null"]},
+    "environment": {"type": "string"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "signals": {"type": "array", "items": {"type": "string"}},
+    "summary": {
+      "type": "object",
+      "required": ["tools", "errors", "violations"],
+      "properties": {
+        "outcome": {"type": ["string", "null"]},
+        "tools": {"type": "array", "items": {"type": "string"}},
+        "errors": {"type": "array", "items": {"type": "string"}},
+        "violations": {"type": "array", "items": {"type": "string"}},
+        "step_count": {"type": "integer"},
+        "retry_count": {"type": "integer"},
+        "cost_usd": {"type": "number"},
+        "duration_ms": {"type": "number"},
+        "model": {"type": ["string", "null"]},
+        "prompt_hash": {"type": ["string", "null"]}
+      }
+    },
+    "observed_tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {"name": {"type": "string"}, "risk": {"type": ["string", "null"]}, "http_host": {"type": ["string", "null"]}, "count": {"type": "integer"}}
+      }
+    }
+  }
+}

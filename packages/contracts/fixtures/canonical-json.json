@@ -1,0 +1,10 @@
+{
+  "cases": [
+    {"name": "key ordering", "input": {"b": 1, "a": {"d": [3, 2, 1], "c": null}}, "canonical": "{\"a\":{\"c\":null,\"d\":[3,2,1]},\"b\":1}"},
+    {"name": "unicode and html are not escaped", "input": {"s": "ş<>&é"}, "canonical": "{\"s\":\"ş<>&é\"}"},
+    {"name": "integral float is written as integer", "input": {"amount": 100.0, "neg": -5.0}, "canonical": "{\"amount\":100,\"neg\":-5}"},
+    {"name": "fractional float shortest repr", "input": {"x": 0.1, "y": 1.5, "z": 2.25}, "canonical": "{\"x\":0.1,\"y\":1.5,\"z\":2.25}"},
+    {"name": "booleans and empty containers", "input": {"t": true, "f": false, "e": {}, "l": []}, "canonical": "{\"e\":{},\"f\":false,\"l\":[],\"t\":true}"},
+    {"name": "control characters escaped", "input": {"s": "a\nb\t\"q\""}, "canonical": "{\"s\":\"a\\nb\\t\\\"q\\\"\"}"}
+  ]
+}

@@ -4,6 +4,7 @@
 members = [
   "packages/sdk-python",
   "packages/core-py",
+  "services/simulation-service",
   "demo/support-refund-agent",
 ]
 
@@ -52,6 +53,7 @@ warn_unreachable = true
 files = [
   "packages/sdk-python/src",
   "packages/core-py/src",
+  "services/simulation-service/src",
   "demo/support-refund-agent/src",
   "scripts/contracts_check.py",
 ]
@@ -69,6 +71,7 @@ addopts = "--import-mode=importlib -ra --strict-markers"
 testpaths = [
   "packages/sdk-python/tests",
   "packages/core-py/tests",
+  "services/simulation-service/tests",
   "demo/support-refund-agent/tests",
   "scripts/tests",
 ]

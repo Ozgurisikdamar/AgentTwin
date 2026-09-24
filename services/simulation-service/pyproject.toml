@@ -1,0 +1,19 @@
+[project]
+name = "agenttwin-simulation"
+version = "0.1.0"
+description = "AgentTwin simulation service: scenarios, stateful tool twins, fault injection and simulation runs."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+  "agenttwin-core",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agenttwin_simulation"]
+
+[tool.uv.sources]
+agenttwin-core = { workspace = true }

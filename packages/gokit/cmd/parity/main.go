@@ -1,11 +1,15 @@
-// Command parity exposes gokit's canonical JSON and redaction so the Python
-// and TypeScript SDKs can run differential tests against the Go reference
-// implementation on randomly generated inputs.
+// Command parity exposes gokit's canonical JSON, redaction, internal tokens
+// and RBAC matrix so the Python and TypeScript code can run differential tests
+// against the Go reference implementation.
 //
 // stdin:  JSON array of requests
 //
 //	{"op": "canonical", "value": <any JSON>}
 //	{"op": "redact", "mode": "all"|"secrets", "strategy": "mask"|"hash", "input": "..."}
+//	{"op": "mint", "secret": "...", "audience": "...", "principal": {...}, "request_id": "..."}
+//	{"op": "verify", "secret": "...", "audience": "...", "input": "<token>"}
+//	{"op": "rbac"}   -> output is JSON {"roles": {role: [perm...]}, "scopes": {scope: [perm...]}}
+//	{"op": "declare_topology", "input": "<amqp url>"}  -> declares the event topology with gokit
 //
 // stdout: JSON array of {"output": "...", "error": "..."} in the same order.
 package main
@@ -17,16 +21,24 @@ import (
 	"io"
 	"os"
 
+	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/events"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/hashx"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/redact"
 )
 
 type request struct {
-	Op       string          `json:"op"`
-	Value    json.RawMessage `json:"value"`
-	Mode     string          `json:"mode"`
-	Strategy string          `json:"strategy"`
-	Input    string          `json:"input"`
+	Op        string           `json:"op"`
+	Value     json.RawMessage  `json:"value"`
+	Mode      string           `json:"mode"`
+	Strategy  string           `json:"strategy"`
+	Input     string           `json:"input"`
+	Secret    string           `json:"secret"`
+	Audience  string           `json:"audience"`
+	RequestID string           `json:"request_id"`
+	Principal *authn.Principal `json:"principal"`
 }
 
 type response struct {
@@ -78,6 +90,51 @@ func handle(r request) response {
 		}
 		s, _ := red.String(r.Input)
 		return response{Output: s}
+	case "mint":
+		ts, err := authn.NewTokenService(r.Secret)
+		if err != nil {
+			return response{Error: err.Error()}
+		}
+		if r.Principal == nil {
+			return response{Error: "principal required"}
+		}
+		tok, err := ts.Mint(*r.Principal, r.Audience, r.RequestID)
+		if err != nil {
+			return response{Error: err.Error()}
+		}
+		return response{Output: tok}
+	case "verify":
+		ts, err := authn.NewTokenService(r.Secret)
+		if err != nil {
+			return response{Error: err.Error()}
+		}
+		p, rid, err := ts.Verify(r.Input, r.Audience)
+		if err != nil {
+			return response{Error: err.Error()}
+		}
+		b, _ := json.Marshal(map[string]any{"principal": p, "request_id": rid})
+		return response{Output: string(b)}
+	case "declare_topology":
+		topo, err := events.LoadTopology()
+		if err != nil {
+			return response{Error: err.Error()}
+		}
+		conn, err := amqp.Dial(r.Input)
+		if err != nil {
+			return response{Error: err.Error()}
+		}
+		defer func() { _ = conn.Close() }()
+		ch, err := conn.Channel()
+		if err != nil {
+			return response{Error: err.Error()}
+		}
+		if err := events.DeclareTopology(ch, topo); err != nil {
+			return response{Error: err.Error()}
+		}
+		return response{Output: "ok"}
+	case "rbac":
+		b, _ := json.Marshal(authn.Matrix())
+		return response{Output: string(b)}
 	default:
 		return response{Error: "unknown op " + r.Op}
 	}

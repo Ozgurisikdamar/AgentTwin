@@ -145,3 +145,17 @@ func FromContext(ctx context.Context) (Principal, bool) {
 	p, ok := ctx.Value(principalKey{}).(Principal)
 	return p, ok
 }
+
+// Matrix returns the role and scope permission tables (for differential tests
+// against the Python implementation; see packages/gokit/cmd/parity).
+func Matrix() map[string]map[string][]Permission {
+	roles := map[string][]Permission{}
+	for r, perms := range rolePermissions {
+		roles[string(r)] = slices.Sorted(slices.Values(perms))
+	}
+	scopes := map[string][]Permission{}
+	for s, perms := range scopePermissions {
+		scopes[string(s)] = slices.Sorted(slices.Values(perms))
+	}
+	return map[string]map[string][]Permission{"roles": roles, "scopes": scopes}
+}

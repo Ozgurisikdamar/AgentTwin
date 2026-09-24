@@ -3,6 +3,7 @@
 [tool.uv.workspace]
 members = [
   "packages/sdk-python",
+  "packages/core-py",
   "demo/support-refund-agent",
 ]
 
@@ -11,6 +12,7 @@ required-version = ">=0.8"
 
 [tool.uv.sources]
 agenttwin = { workspace = true }
+agenttwin-core = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -19,6 +21,8 @@ dev = [
   "ruff>=0.16,<0.17",
   "mypy>=2.3,<3",
   "types-PyYAML>=6.0.12",
+  "types-jsonschema>=4.26",
+  "types-regex>=2026.9",
 ]
 
 [tool.ruff]
@@ -34,7 +38,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agenttwin", "support_refund_agent", "sdk_testutil", "demo_testutil"]
+known-first-party = ["agenttwin", "agenttwin_core", "agenttwin_simulation", "support_refund_agent", "sdk_testutil", "demo_testutil"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106", "S107", "S310", "PLR2004", "T20"]
@@ -45,7 +49,12 @@ known-first-party = ["agenttwin", "support_refund_agent", "sdk_testutil", "demo_
 python_version = "3.12"
 strict = true
 warn_unreachable = true
-files = ["packages/sdk-python/src", "demo/support-refund-agent/src", "scripts/contracts_check.py"]
+files = [
+  "packages/sdk-python/src",
+  "packages/core-py/src",
+  "demo/support-refund-agent/src",
+  "scripts/contracts_check.py",
+]
 
 [[tool.mypy.overrides]]
 module = ["opentelemetry.*"]
@@ -57,7 +66,12 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib -ra --strict-markers"
-testpaths = ["packages/sdk-python/tests", "demo/support-refund-agent/tests", "scripts/tests"]
+testpaths = [
+  "packages/sdk-python/tests",
+  "packages/core-py/tests",
+  "demo/support-refund-agent/tests",
+  "scripts/tests",
+]
 markers = [
   "integration: needs PostgreSQL/RabbitMQ or a running stack",
 ]

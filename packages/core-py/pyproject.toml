@@ -1,0 +1,33 @@
+[project]
+name = "agenttwin-core"
+version = "0.1.0"
+description = "Shared runtime of AgentTwin's Python services: configuration, logging, PostgreSQL, events, internal auth, HTTP conventions and deterministic evaluators."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+  "agenttwin",
+  "fastapi>=0.141,<1",
+  "uvicorn>=0.53,<1",
+  "psycopg[binary]>=3.3,<4",
+  "psycopg-pool>=3.3,<4",
+  "aio-pika>=10,<11",
+  "PyJWT>=2.15,<3",
+  "jsonschema>=4.26,<5",
+  "referencing>=0.37,<1",
+  "prometheus-client>=0.26,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.13,<3",
+  "pyyaml>=6.0.2,<7",
+  "regex>=2026.9",
+  "opentelemetry-instrumentation-fastapi>=0.65b0,<1",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agenttwin_core"]
+
+[tool.uv.sources]
+agenttwin = { workspace = true }

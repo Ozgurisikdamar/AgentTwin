@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS processed_event;
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS simulation_step;
+DROP TABLE IF EXISTS simulation_case;
+DROP TABLE IF EXISTS simulation_run_transition;
+DROP TABLE IF EXISTS simulation_run;
+DROP TABLE IF EXISTS scenario_version;
+DROP TABLE IF EXISTS scenario;
+DROP TABLE IF EXISTS twin_definition;

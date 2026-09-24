@@ -32,6 +32,7 @@ __all__ = [
     "default_registry",
     "evaluate_all",
     "expectation_problems",
+    "skip_all",
 ]
 
 EVALUATOR_PREFIX = "expectation."
@@ -124,6 +125,23 @@ async def evaluate_all(
     return results
 
 
+def skip_all(specs: Sequence[Mapping[str, Any]], reason: str) -> list[EvaluationResult]:
+    """One SKIPPED result per expectation, for a case whose agent never ran:
+    judging the untouched state would pass or fail expectations on evidence
+    that does not exist. A skipped critical expectation keeps the case from
+    passing (see ``case_verdict``)."""
+    return [
+        EvaluationResult(
+            status="SKIPPED",
+            reason=reason,
+            evaluator="skipped",
+            evaluator_version="0",
+            expectation=_meta(spec, i),
+        )
+        for i, spec in enumerate(specs)
+    ]
+
+
 CaseStatus = Literal["PASSED", "FAILED", "ERRORED"]
 
 
@@ -144,7 +162,9 @@ class CaseVerdict:
 def case_verdict(results: Sequence[EvaluationResult]) -> CaseVerdict:
     """FAILED if any expectation failed; otherwise ERRORED if one could not be
     evaluated (including a SKIPPED critical expectation: mandatory critical
-    evaluation that did not complete is never a pass); otherwise PASSED."""
+    evaluation that did not complete is never a pass, and neither is a case
+    where every expectation was skipped: nothing was verified); otherwise
+    PASSED."""
     counts = {"PASS": 0, "FAIL": 0, "ERROR": 0, "SKIPPED": 0}
     for r in results:
         counts[r.status] += 1
@@ -169,6 +189,9 @@ def case_verdict(results: Sequence[EvaluationResult]) -> CaseVerdict:
             reason = f"A critical expectation was skipped: {skipped_critical[0].reason}"
     elif not results:
         status, reason = "ERRORED", "The scenario has no expectations."
+    elif not evaluated:
+        status = "ERRORED"
+        reason = f"No expectation could be evaluated: {results[0].reason}"
     else:
         status = "PASSED"
         reason = f"All {counts['PASS']} evaluated expectation(s) passed."

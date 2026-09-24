@@ -8,6 +8,9 @@ dependencies = [
   "agenttwin-core",
 ]
 
+[project.scripts]
+simulation-service = "agenttwin_simulation.main:main"
+
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"

@@ -20,6 +20,7 @@ from agenttwin_core.evaluators import (
     default_registry,
     evaluate_all,
     expectation_problems,
+    skip_all,
 )
 from agenttwin_core.evaluators.expectations import BUILTIN_VERSIONS, builtin_checks
 from agenttwin_core.schemas import document_validator
@@ -493,7 +494,29 @@ def test_case_verdict() -> None:
     skipped = case_verdict([_r("PASS"), _r("SKIPPED", critical=True)])
     assert skipped.status == "ERRORED" and "critical expectation was skipped" in skipped.reason
     assert case_verdict([]).status == "ERRORED"
-    assert case_verdict([_r("SKIPPED")]).score is None
+    # Nothing was verified: skipped everywhere is not a pass either.
+    nothing = case_verdict([_r("SKIPPED"), _r("SKIPPED")])
+    assert (nothing.status, nothing.score, nothing.skipped) == ("ERRORED", None, 2)
+    assert nothing.reason == "No expectation could be evaluated: skipped reason"
+
+
+def test_skip_all_keeps_the_expectations_identity() -> None:
+    specs = [
+        {"id": "refunded", "type": "state", "path": "orders.ORD-1.n", "equals": 1, "critical": True},
+        {"type": "toolCalled", "tool": "send_email"},
+    ]
+    results = skip_all(specs, "The agent did not run.")
+    assert [(r.status, r.reason, dict(r.expectation)) for r in results] == [
+        ("SKIPPED", "The agent did not run.", {"id": "refunded", "type": "state", "critical": True}),
+        ("SKIPPED", "The agent did not run.", {"id": "e2", "type": "toolCalled", "critical": False}),
+    ]
+    # The ids match the ones evaluate_all gives the same expectations.
+    evaluated = asyncio.run(evaluate_all(REG, specs, EvaluationContext()))
+    assert [r.expectation["id"] for r in evaluated] == [r.expectation["id"] for r in results]
+    # Next to the error about the run the case errors; its expectations do
+    # not turn into failures or passes on evidence that does not exist.
+    verdict = case_verdict([_r("ERROR", critical=True, label="AGENT_UNREACHABLE"), *results])
+    assert (verdict.status, verdict.failed, verdict.skipped, verdict.labels) == ("ERRORED", 0, 2, ())
 
 
 def test_expectation_problems_at_registration() -> None:

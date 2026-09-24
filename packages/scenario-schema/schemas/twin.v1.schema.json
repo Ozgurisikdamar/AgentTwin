@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenttwin.dev/schemas/twin.v1.schema.json",
+  "title": "AgentTwin TwinDefinition v1 (declarative stateful tool twin)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "agenttwin.dev/v1"},
+    "kind": {"const": "TwinDefinition"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
+        "description": {"type": "string", "maxLength": 2000},
+        "source": {"enum": ["declarative", "openapi", "mcp", "recorded", "custom"]}
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tools"],
+      "properties": {
+        "secrets": {"type": "array", "items": {"type": "string", "minLength": 4}, "description": "Planted secret values that must never appear in agent output or tool arguments."},
+        "tenantKey": {"type": "string", "description": "Entity field holding the owning tenant (cross-tenant detection)."},
+        "tools": {
+          "type": "object",
+          "maxProperties": 500,
+          "additionalProperties": {"$ref": "#/$defs/tool"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {"type": "string"},
+        "exists": {"type": "boolean"},
+        "equals": {},
+        "notEquals": {},
+        "in": {"type": "array"},
+        "gte": {},
+        "lte": {},
+        "gt": {},
+        "lt": {},
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "code"],
+          "properties": {"status": {"type": "integer"}, "code": {"type": "string"}, "message": {"type": "string"}}
+        }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "path"],
+      "properties": {
+        "op": {"enum": ["set", "increment", "append", "delete", "merge"]},
+        "path": {"type": "string"},
+        "value": {},
+        "by": {"type": "number"}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handler"],
+      "properties": {
+        "description": {"type": "string", "maxLength": 4000},
+        "risk": {"enum": ["READ", "WRITE_REVERSIBLE", "WRITE_IRREVERSIBLE", "EXECUTE", "ADMIN"]},
+        "inputSchema": {"type": "object"},
+        "outputSchema": {"type": "object"},
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"argument": {"type": "string"}, "header": {"type": "string"}}
+        },
+        "effectKey": {"type": "string", "description": "Template identifying the logical side effect (duplicate detection), e.g. 'refund:{order_id}'."},
+        "tenantPath": {"type": "string", "description": "Template path of the entity whose tenant is checked, e.g. 'customers.{customer_id}'."},
+        "handler": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {"enum": ["read", "mutate", "static", "echo", "recorded", "custom"]},
+            "path": {"type": "string"},
+            "notFound": {"type": "object"},
+            "preconditions": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+            "effects": {"type": "array", "items": {"$ref": "#/$defs/effect"}},
+            "response": {"type": "object"},
+            "fixtures": {"type": "array", "items": {"type": "object"}},
+            "adapter": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

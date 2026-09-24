@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenttwin.dev/schemas/scenario.v1.schema.json",
+  "title": "AgentTwin Scenario v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "agenttwin.dev/v1"},
+    "kind": {"const": "Scenario"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "severity"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,98}$"},
+        "severity": {"enum": ["critical", "high", "medium", "low"]},
+        "tags": {"type": "array", "maxItems": 50, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_:.-]{0,62}$"}},
+        "description": {"type": "string", "maxLength": 4000},
+        "owner": {"type": "string", "maxLength": 200},
+        "source": {"enum": ["manual", "production_regression", "generated", "policy_derived", "imported", "production_replay"]},
+        "sourceTraceId": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+        "generated": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "by": {"type": "string"},
+            "evidence": {"type": "array", "items": {"type": "string", "maxLength": 1000}},
+            "reviewed": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "expectations"],
+      "properties": {
+        "agent": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
+        "twin": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["message"],
+          "properties": {
+            "message": {"type": "string", "minLength": 1, "maxLength": 20000},
+            "context": {"type": "object", "maxProperties": 50},
+            "documents": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "content"],
+                "properties": {
+                  "id": {"type": "string", "maxLength": 200},
+                  "content": {"type": "string", "maxLength": 50000},
+                  "trusted": {"type": "boolean", "default": false}
+                }
+              }
+            }
+          }
+        },
+        "state": {"type": "object", "description": "Initial tool-twin state (isolated per run)."},
+        "allowedTools": {"type": "array", "maxItems": 200, "uniqueItems": true, "items": {"type": "string"}},
+        "covers": {"type": "array", "maxItems": 200, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z_]+:[A-Za-z0-9_.:/-]+$"}},
+        "faults": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/fault"}},
+        "expectations": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/expectation"}},
+        "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+        "simulationMode": {"enum": ["strict", "approximate"], "default": "strict"},
+        "timeoutSeconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600}
+      }
+    }
+  },
+  "$defs": {
+    "fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "behavior"],
+      "properties": {
+        "target": {"type": "string", "minLength": 1, "maxLength": 100},
+        "when": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "callNumber": {"type": "integer", "minimum": 1},
+            "callNumbers": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+            "everyCall": {"type": "boolean"},
+            "firstN": {"type": "integer", "minimum": 1},
+            "argsMatch": {"type": "object"},
+            "probability": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "behavior": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": {"enum": [
+              "timeout_before_mutation", "timeout_after_mutation",
+              "http_429", "http_500", "http_503",
+              "malformed_json", "semantic_bad_response", "delay",
+              "dropped_connection", "partial_response", "stale_response",
+              "duplicate_response", "auth_denied", "rate_limit",
+              "transient_unavailable", "permanent_unavailable",
+              "inconsistent_state", "success_without_mutation",
+              "message_duplication", "non_retryable_error"
+            ]},
+            "delayMs": {"type": "integer", "minimum": 0, "maximum": 600000},
+            "retryAfterSeconds": {"type": "number", "minimum": 0},
+            "body": {},
+            "message": {"type": "string", "maxLength": 1000}
+          }
+        }
+      }
+    },
+    "comparator": {
+      "type": "object",
+      "properties": {
+        "equals": {},
+        "notEquals": {},
+        "in": {"type": "array"},
+        "exists": {"type": "boolean"},
+        "gte": {"type": "number"},
+        "lte": {"type": "number"},
+        "gt": {"type": "number"},
+        "lt": {"type": "number"},
+        "matches": {"type": "string", "maxLength": 1000}
+      }
+    },
+    "expectationBase": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string", "maxLength": 100},
+        "critical": {"type": "boolean"},
+        "description": {"type": "string", "maxLength": 1000},
+        "category": {"type": "string", "maxLength": 64}
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": [
+          "state", "stateUnchanged", "finalOutcome", "outcomeVerified",
+          "toolCalled", "toolNotCalled", "maxToolCalls", "toolArgs", "toolStatus",
+          "order", "maxRetries", "maxSteps", "maxLatencyMs", "maxCostUsd",
+          "requiredEscalation", "noPolicyViolation", "noIrreversibleAction",
+          "approvalRequired", "noDuplicateSideEffect",
+          "outputContains", "outputNotContains", "outputRegex", "outputJsonSchema", "outputJsonPath",
+          "noSecretDisclosure", "noCrossTenantAccess", "semantic"
+        ]},
+        "id": {"type": "string", "maxLength": 100},
+        "critical": {"type": "boolean"},
+        "description": {"type": "string", "maxLength": 1000},
+        "category": {"type": "string", "maxLength": 64},
+        "path": {"type": "string", "maxLength": 500},
+        "tool": {"type": "string", "maxLength": 100},
+        "value": {},
+        "equals": {},
+        "notEquals": {},
+        "in": {"type": "array"},
+        "exists": {"type": "boolean"},
+        "gte": {"type": "number"},
+        "lte": {"type": "number"},
+        "gt": {"type": "number"},
+        "lt": {"type": "number"},
+        "matches": {"type": "string", "maxLength": 1000},
+        "min": {"type": "integer", "minimum": 0},
+        "call": {"type": "integer", "minimum": 1},
+        "status": {"type": "integer", "minimum": 100, "maximum": 599},
+        "mustCall": {"type": "array", "items": {"type": "string"}},
+        "before": {"type": "array", "items": {"type": "string"}},
+        "pattern": {"type": "string", "maxLength": 1000},
+        "schema": {"type": "object"},
+        "secrets": {"type": "array", "items": {"type": "string", "minLength": 4}},
+        "rubric": {"type": "string", "maxLength": 4000},
+        "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+        "judge": {"type": "string", "maxLength": 100}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {"if": {"properties": {"type": {"enum": ["state", "stateUnchanged", "outputJsonPath"]}}}, "then": {"required": ["path"]}},
+        {"if": {"properties": {"type": {"enum": ["toolCalled", "toolNotCalled", "toolArgs", "toolStatus", "approvalRequired"]}}}, "then": {"required": ["tool"]}},
+        {"if": {"properties": {"type": {"enum": ["maxToolCalls", "maxRetries", "maxSteps", "maxLatencyMs", "maxCostUsd"]}}}, "then": {"required": ["value"], "properties": {"value": {"type": "number", "minimum": 0}}}},
+        {"if": {"properties": {"type": {"const": "toolArgs"}}}, "then": {"required": ["path"]}},
+        {"if": {"properties": {"type": {"const": "toolStatus"}}}, "then": {"required": ["status"]}},
+        {"if": {"properties": {"type": {"const": "order"}}}, "then": {"required": ["mustCall", "before"]}},
+        {"if": {"properties": {"type": {"const": "finalOutcome"}}}, "then": {"required": ["equals"], "properties": {"equals": {"enum": ["SUCCESS", "PARTIAL", "FAILURE", "ESCALATED", "REFUSED", "UNKNOWN"]}}}},
+        {"if": {"properties": {"type": {"enum": ["outputContains", "outputNotContains"]}}}, "then": {"required": ["value"], "properties": {"value": {"type": "string"}}}},
+        {"if": {"properties": {"type": {"const": "outputRegex"}}}, "then": {"required": ["pattern"]}},
+        {"if": {"properties": {"type": {"const": "outputJsonSchema"}}}, "then": {"required": ["schema"]}},
+        {"if": {"properties": {"type": {"const": "semantic"}}}, "then": {"required": ["rubric"]}}
+      ]
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "policy.violation_detected.v1 payload (runtime deny / approval required)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["decision_id", "tool", "decision", "rule"],
+  "properties": {
+    "decision_id": {"type": "string", "format": "uuid"},
+    "trace_id": {"type": ["string", "null"]},
+    "agent": {"type": ["string", "null"]},
+    "agent_version": {"type": ["string", "null"]},
+    "environment": {"type": ["string", "null"]},
+    "tool": {"type": "string"},
+    "decision": {"enum": ["deny", "require_approval"]},
+    "rule": {"type": "string"},
+    "category": {"type": ["string", "null"]},
+    "policy_version_id": {"type": ["string", "null"]},
+    "reason": {"type": ["string", "null"]}
+  }
+}

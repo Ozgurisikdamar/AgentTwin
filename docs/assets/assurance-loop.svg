@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="760" viewBox="0 0 1600 760">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#0A0E17"/>
+    <stop offset="1" stop-color="#101827"/>
+  </linearGradient>
+  <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#2DD4BF"/>
+    <stop offset=".5" stop-color="#38BDF8"/>
+    <stop offset="1" stop-color="#818CF8"/>
+  </linearGradient>
+  <style>
+    .title{font:700 38px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+    .subtitle{font:400 18px Inter,Segoe UI,Arial,sans-serif;fill:#94A3B8}
+    .num{font:800 16px Inter,Segoe UI,Arial,sans-serif;fill:#07111E}
+    .ct{font:700 20px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+    .cs{font:400 15px Inter,Segoe UI,Arial,sans-serif;fill:#AAB8CA}
+    .center1{font:800 29px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+    .center2{font:600 16px Inter,Segoe UI,Arial,sans-serif;fill:#7DD3FC;letter-spacing:1.5px}
+  </style>
+</defs>
+<rect width="1600" height="760" rx="28" fill="url(#bg)"/>
+<text x="800" y="58" text-anchor="middle" class="title">The AgentTwin assurance loop</text>
+<text x="800" y="91" text-anchor="middle" class="subtitle">Production evidence continuously becomes stronger pre-production protection.</text>
+
+<!-- ring -->
+<circle cx="800" cy="410" r="236" fill="none" stroke="#17263A" stroke-width="72"/>
+<circle cx="800" cy="410" r="236" fill="none" stroke="url(#ring)" stroke-width="4" stroke-dasharray="8 10"/>
+
+<!-- center -->
+<circle cx="800" cy="410" r="112" fill="#0D1827" stroke="#263D56" stroke-width="2"/>
+<text x="800" y="399" text-anchor="middle" class="center2">CLOSED LOOP</text>
+<text x="800" y="438" text-anchor="middle" class="center1">Evidence → Action</text>
+
+<!-- arrows around ring -->
+<path d="M800 151 l-11 17 h22 z" fill="#2DD4BF"/>
+<path d="M1058 410 l-17 -11 v22 z" fill="#38BDF8"/>
+<path d="M800 669 l11 -17 h-22 z" fill="#818CF8"/>
+<path d="M542 410 l17 11 v-22 z" fill="#34D399"/>
+
+<!-- cards -->
+<g transform="translate(610 124)">
+  <rect width="380" height="100" rx="20" fill="#111D2B" stroke="#2DD4BF" stroke-width="2"/>
+  <circle cx="42" cy="50" r="21" fill="#5EEAD4"/><text x="42" y="56" text-anchor="middle" class="num">1</text>
+  <text x="78" y="40" class="ct">Production behavior</text>
+  <text x="78" y="67" class="cs">traces · outcomes · policy evidence</text>
+</g>
+
+<g transform="translate(1112 226)">
+  <rect width="390" height="100" rx="20" fill="#111D2B" stroke="#38BDF8" stroke-width="2"/>
+  <circle cx="42" cy="50" r="21" fill="#7DD3FC"/><text x="42" y="56" text-anchor="middle" class="num">2</text>
+  <text x="78" y="40" class="ct">Regression miner</text>
+  <text x="78" y="67" class="cs">deduplicate · cluster · promote to test</text>
+</g>
+
+<g transform="translate(1128 480)">
+  <rect width="374" height="100" rx="20" fill="#111D2B" stroke="#818CF8" stroke-width="2"/>
+  <circle cx="42" cy="50" r="21" fill="#A5B4FC"/><text x="42" y="56" text-anchor="middle" class="num">3</text>
+  <text x="78" y="40" class="ct">Blast radius</text>
+  <text x="78" y="67" class="cs">what changed · what can it affect?</text>
+</g>
+
+<g transform="translate(610 596)">
+  <rect width="380" height="100" rx="20" fill="#111D2B" stroke="#A78BFA" stroke-width="2"/>
+  <circle cx="42" cy="50" r="21" fill="#C4B5FD"/><text x="42" y="56" text-anchor="middle" class="num">4</text>
+  <text x="78" y="40" class="ct">Twin simulation</text>
+  <text x="78" y="67" class="cs">stateful tools · faults · replay</text>
+</g>
+
+<g transform="translate(98 480)">
+  <rect width="384" height="100" rx="20" fill="#111D2B" stroke="#F59E0B" stroke-width="2"/>
+  <circle cx="42" cy="50" r="21" fill="#FCD34D"/><text x="42" y="56" text-anchor="middle" class="num">5</text>
+  <text x="78" y="40" class="ct">Release gate</text>
+  <text x="78" y="67" class="cs">PASS · WARN · BLOCK with evidence</text>
+</g>
+
+<g transform="translate(98 226)">
+  <rect width="384" height="100" rx="20" fill="#111D2B" stroke="#34D399" stroke-width="2"/>
+  <circle cx="42" cy="50" r="21" fill="#6EE7B7"/><text x="42" y="56" text-anchor="middle" class="num">6</text>
+  <text x="78" y="40" class="ct">Runtime containment</text>
+  <text x="78" y="67" class="cs">allow · constrain · approve · deny</text>
+</g>
+
+<!-- connectors -->
+<g fill="none" stroke="#334B64" stroke-width="2.5" stroke-dasharray="6 7">
+  <path d="M990 175 C1070 175 1080 240 1112 260"/>
+  <path d="M1300 326 C1360 380 1350 435 1315 480"/>
+  <path d="M1128 548 C1055 615 1025 635 990 642"/>
+  <path d="M610 646 C520 635 500 600 482 548"/>
+  <path d="M290 480 C235 420 235 355 290 326"/>
+  <path d="M482 260 C520 205 560 182 610 175"/>
+</g>
+</svg>

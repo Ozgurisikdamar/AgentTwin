@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenttwin.dev/contracts/events/envelope.v1.schema.json",
+  "title": "AgentTwin event envelope v1",
+  "type": "object",
+  "required": ["id", "type", "occurred_at", "organization_id", "correlation_id", "payload"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {"type": "string", "format": "uuid"},
+    "type": {"type": "string", "pattern": "^[a-z_]+\\.[a-z_]+\\.v[0-9]+$"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "organization_id": {"type": "string", "format": "uuid"},
+    "project_id": {"type": ["string", "null"], "format": "uuid"},
+    "correlation_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "causation_id": {"type": ["string", "null"], "maxLength": 128},
+    "producer": {"type": "string", "maxLength": 64},
+    "payload": {"type": "object"}
+  }
+}

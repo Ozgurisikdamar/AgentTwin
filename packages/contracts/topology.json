@@ -1,0 +1,29 @@
+{
+  "exchange": "agenttwin.events",
+  "max_attempts": 5,
+  "retry_ttl_ms": 2000,
+  "queues": {
+    "control-plane.events": [
+      "evaluation.run_completed.v1",
+      "audit.recorded.v1"
+    ],
+    "graph-service.events": [
+      "agent.version_registered.v1",
+      "tool.catalog_imported.v1",
+      "trace.ingested.v1",
+      "scenario.upserted.v1",
+      "policy.activated.v1"
+    ],
+    "evaluation-service.events": [
+      "trace.ingested.v1",
+      "trace.outcome_recorded.v1",
+      "trace.flagged.v1",
+      "policy.violation_detected.v1",
+      "evaluation.run_requested.v1",
+      "simulation.run_completed.v1"
+    ],
+    "simulation-service.events": [
+      "simulation.run_requested.v1"
+    ]
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenttwin.dev/schemas/agent-manifest.v1.schema.json",
+  "title": "AgentTwin Agent manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "agenttwin.dev/v1"},
+    "kind": {"const": "Agent"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"$ref": "#/$defs/name"},
+        "version": {"$ref": "#/$defs/semver"},
+        "description": {"type": "string", "maxLength": 2000},
+        "labels": {"type": "object", "maxProperties": 32, "additionalProperties": {"type": "string", "maxLength": 200}}
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "tools"],
+      "properties": {
+        "description": {"type": "string", "maxLength": 4000},
+        "instructions": {"type": "string", "maxLength": 100000, "description": "System prompt. Stored as a PromptVersion; only its hash is kept when content capture is off."},
+        "promptRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "sha256"],
+          "properties": {"name": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "name"],
+          "properties": {
+            "provider": {"type": "string", "minLength": 1, "maxLength": 64},
+            "name": {"type": "string", "minLength": 1, "maxLength": 128},
+            "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+            "maxTokens": {"type": "integer", "minimum": 1, "maximum": 1000000},
+            "params": {"type": "object"}
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxSteps": {"type": "integer", "minimum": 1, "maximum": 10000},
+            "maxToolCalls": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "maxDurationSeconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 86400},
+            "maxCostUsd": {"type": "number", "minimum": 0, "maximum": 100000}
+          }
+        },
+        "tools": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {"$ref": "#/$defs/toolRef"}
+        },
+        "retrieval": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name"],
+                "properties": {"name": {"$ref": "#/$defs/name"}, "kind": {"type": "string"}}
+              }
+            }
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "captureContent": {"type": "boolean", "default": false},
+            "contentMode": {"enum": ["off", "redacted", "full"]},
+            "piiMode": {"enum": ["redact", "drop", "hash", "mask"]}
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": {"type": "string", "format": "uri", "maxLength": 2048, "description": "Agent adapter endpoint used by simulations (POST {endpoint}/run)."}
+          }
+        },
+        "expectedOutcomes": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 500}},
+        "dependencies": {
+          "type": "array",
+          "description": "Manual dependency mappings (tool -> services/databases).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tool", "dependsOn"],
+            "properties": {
+              "tool": {"$ref": "#/$defs/name"},
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["kind", "name"],
+                  "properties": {
+                    "kind": {"enum": ["SERVICE", "HTTP_API", "DATABASE", "QUEUE", "EXTERNAL_SYSTEM", "MCP_SERVER"]},
+                    "name": {"type": "string", "minLength": 1, "maxLength": 200},
+                    "relation": {"enum": ["CALLS", "READS", "WRITES", "PUBLISHES", "CONSUMES", "DEPENDS_ON", "CAN_MUTATE"]},
+                    "criticality": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"},
+    "semver": {"type": "string", "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"},
+    "riskLevel": {"enum": ["READ", "WRITE_REVERSIBLE", "WRITE_IRREVERSIBLE", "EXECUTE", "ADMIN"]},
+    "risk": {
+      "oneOf": [
+        {"$ref": "#/$defs/riskLevel"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level"],
+          "properties": {
+            "level": {"$ref": "#/$defs/riskLevel"},
+            "dimensions": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "financial": {"enum": ["none", "low", "medium", "high"]},
+                "privacy": {"enum": ["none", "low", "medium", "high"]},
+                "operational": {"enum": ["none", "low", "medium", "high"]}
+              }
+            },
+            "compensatingAction": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {"available": {"type": "boolean"}, "tool": {"type": "string"}}
+            }
+          }
+        }
+      ]
+    },
+    "toolRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"$ref": "#/$defs/name"},
+        "version": {"type": "string", "maxLength": 64},
+        "description": {"type": "string", "maxLength": 4000},
+        "risk": {"$ref": "#/$defs/risk"},
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"requiredWhen": {"type": "string", "maxLength": 2000}}
+        },
+        "inputSchema": {"type": "object"}
+      }
+    }
+  }
+}

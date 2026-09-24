@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "trace.outcome_recorded.v1 payload",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["trace_id", "status", "verified", "verification_source"],
+  "properties": {
+    "trace_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+    "status": {"enum": ["SUCCESS", "PARTIAL", "FAILURE", "UNKNOWN"]},
+    "business_outcome": {"type": ["string", "null"]},
+    "verified": {"type": "boolean"},
+    "verification_source": {"enum": ["state_assertion", "tool_twin_state", "tool_result", "external_callback", "human_review", "semantic_judge", "unavailable"]},
+    "contradiction": {"type": "boolean", "description": "Agent claimed success but verification disproved it."}
+  }
+}

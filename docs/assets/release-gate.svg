@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#090D16"/>
+    <stop offset="1" stop-color="#101827"/>
+  </linearGradient>
+  <style>
+    .title{font:700 36px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+    .sub{font:400 17px Inter,Segoe UI,Arial,sans-serif;fill:#94A3B8}
+    .label{font:700 15px Inter,Segoe UI,Arial,sans-serif;fill:#D5DEEA}
+    .card{font:800 28px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+    .txt{font:400 15px Inter,Segoe UI,Arial,sans-serif;fill:#B5C1D0}
+    .gate{font:800 21px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+  </style>
+</defs>
+<rect width="1600" height="560" rx="28" fill="url(#bg)"/>
+<text x="800" y="55" text-anchor="middle" class="title">Explainable release gate</text>
+<text x="800" y="87" text-anchor="middle" class="sub">No mysterious “risk 78”. Every decision decomposes into evidence and explicit policy.</text>
+
+<!-- evidence stack -->
+<text x="90" y="140" class="label">EVIDENCE</text>
+<g transform="translate(90 160)">
+  <rect width="405" height="52" rx="14" fill="#111B2A" stroke="#38BDF8"/>
+  <text x="24" y="33" class="label">ChangeSet — prompts · models · tools · permissions</text>
+</g>
+<g transform="translate(90 225)">
+  <rect width="405" height="52" rx="14" fill="#111B2A" stroke="#60A5FA"/>
+  <text x="24" y="33" class="label">Blast radius — components · paths · impacted scenarios</text>
+</g>
+<g transform="translate(90 290)">
+  <rect width="405" height="52" rx="14" fill="#111B2A" stroke="#818CF8"/>
+  <text x="24" y="33" class="label">Twin simulation — state diffs · faults · trajectories</text>
+</g>
+<g transform="translate(90 355)">
+  <rect width="405" height="52" rx="14" fill="#111B2A" stroke="#A78BFA"/>
+  <text x="24" y="33" class="label">Evaluators — deterministic · semantic · human review</text>
+</g>
+<g transform="translate(90 420)">
+  <rect width="405" height="52" rx="14" fill="#111B2A" stroke="#34D399"/>
+  <text x="24" y="33" class="label">Known regressions · policies · outcome verification</text>
+</g>
+
+<!-- gate -->
+<g transform="translate(610 198)">
+  <path d="M145 0 L268 44 L252 186 Q232 292 145 342 Q58 292 38 186 L22 44 Z" fill="#0C1C2A" stroke="#38BDF8" stroke-width="3"/>
+  <text x="145" y="120" text-anchor="middle" class="gate">AGENTTWIN</text>
+  <text x="145" y="151" text-anchor="middle" class="gate">RELEASE GATE</text>
+  <text x="145" y="198" text-anchor="middle" class="sub">rules are authority</text>
+  <text x="145" y="224" text-anchor="middle" class="sub">scores are secondary</text>
+</g>
+
+<path d="M495 316 H620" stroke="#64748B" stroke-width="3"/>
+<path d="M608 308l12 8-12 8" fill="none" stroke="#64748B" stroke-width="3"/>
+
+<!-- outcomes -->
+<g transform="translate(1005 145)">
+  <rect width="490" height="104" rx="20" fill="#0E241E" stroke="#34D399" stroke-width="2.5"/>
+  <text x="28" y="45" class="card">PASS</text>
+  <text x="28" y="75" class="txt">Critical gates green and configured thresholds satisfied.</text>
+</g>
+<g transform="translate(1005 274)">
+  <rect width="490" height="104" rx="20" fill="#2B2210" stroke="#F59E0B" stroke-width="2.5"/>
+  <text x="28" y="45" class="card">WARN</text>
+  <text x="28" y="75" class="txt">Meaningful regression, new privilege, uncertainty or coverage gap.</text>
+</g>
+<g transform="translate(1005 403)">
+  <rect width="490" height="104" rx="20" fill="#2A1518" stroke="#FB7185" stroke-width="2.5"/>
+  <text x="28" y="45" class="card">BLOCK</text>
+  <text x="28" y="75" class="txt">Critical deterministic failure, unsafe action, leakage or disproven outcome.</text>
+</g>
+
+<path d="M900 318 H985" stroke="#64748B" stroke-width="3"/>
+<path d="M973 310l12 8-12 8" fill="none" stroke="#64748B" stroke-width="3"/>
+</svg>

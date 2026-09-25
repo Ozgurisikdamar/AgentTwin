@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"slices"
@@ -67,7 +68,7 @@ func TestAnOverLimitRefundWaitsForAPersonAndRunsOnce(t *testing.T) {
 	approvalID := r.details(t)["approval_id"].(string)
 	if r.header.Get("X-AgentTwin-Decision") != "require_approval" || r.header.Get("X-AgentTwin-Policy") != "refund-limits" ||
 		r.header.Get("X-AgentTwin-Policy-Version") != "1" || r.header.Get("X-AgentTwin-Policy-Rule") != "approval-above-100" ||
-		r.details(t)["expires_at"] != t0.Add(15*time.Minute).Format(time.RFC3339) {
+		r.details(t)["expires_at"] != t0.Add(20*time.Minute).Format(time.RFC3339) {
 		t.Fatalf("decision %v %s", r.header, r.body)
 	}
 	if n := len(h.tools.received("refund_payment")); n != 0 {
@@ -236,6 +237,13 @@ func TestPoliciesDecideEveryCall(t *testing.T) {
 		t.Fatalf("named project: %d %s", r.status, r.body)
 	}
 
+	var decided []string
+	for _, v := range h.outbox("policy.violation_detected.v1") {
+		decided = append(decided, v["decision"].(string)+":"+v["rule"].(string))
+	}
+	if !slices.Equal(decided, []string{"deny:one-refund-per-conversation", "deny:never-above-500", "deny:valid-order"}) {
+		t.Fatalf("violations %v", decided)
+	}
 	// The record of each decision: redacted arguments, matched rules.
 	denied := h.ok(200, h.viewer(), "GET", h.q("/api/v1/policy-decisions?outcome=denied&tool=refund_payment"), nil)["items"].([]any)
 	if len(denied) != 3 {
@@ -275,6 +283,10 @@ func TestIdempotencyKeys(t *testing.T) {
 		replay.header.Get("Idempotent-Replayed") != "true" || replay.header.Get("X-AgentTwin-Decision") != "allow" ||
 		len(h.tools.received("refund_payment")) != 1 {
 		t.Fatalf("replay %d %s / %s", replay.status, first.body, replay.body)
+	}
+	if replays := h.ok(200, h.viewer(), "GET", h.q("/api/v1/policy-decisions?outcome=replayed"), nil)["items"].([]any); len(replays) != 1 ||
+		replays[0].(map[string]any)["effect"] != nil {
+		t.Fatalf("the replay is recorded: %v", replays)
 	}
 	// The key in the arguments is the same key.
 	args := map[string]any{"order_id": "ORD-1001", "amount": 40, "idempotency_key": "arg-key"}
@@ -330,30 +342,51 @@ func TestIdempotencyKeys(t *testing.T) {
 	if n := len(h.tools.received("lookup_order")); n != 1 {
 		t.Fatalf("concurrent calls with one key reached the tool %d times", n)
 	}
+	// One key, different actions at once: one runs, the others are refused.
+	for i := range statuses {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			statuses[i] = h.invoke(agent, "lookup_order", map[string]any{"order_id": fmt.Sprintf("ORD-%d", 100+i)},
+				agentHeaders(10+i, "shared")).status
+		}()
+	}
+	wg.Wait()
+	if n := len(h.tools.received("lookup_order")); n != 2 || slices.Index(statuses, 200) < 0 {
+		t.Fatalf("one key, different actions: %d calls, %v", n, statuses)
+	}
 }
 
 func TestConcurrentOverLimitCallsShareOneApproval(t *testing.T) {
 	h := newHarness(t)
 	h.demo()
-	var wg sync.WaitGroup
-	got := make([]string, 10)
-	for i := range got {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r := h.invoke(h.key("agent"), "refund_payment", map[string]any{"order_id": "ORD-1003", "amount": 150},
-				agentHeaders(1, fmt.Sprintf("k-%d", i)))
-			if r.status == 403 {
-				got[i] = r.details(t)["approval_id"].(string)
-			}
-		}()
+	// Rounds of simultaneous calls for one action, each with its own key and
+	// conversation: only the action is shared, and it gets one request.
+	for round := range 4 {
+		var wg sync.WaitGroup
+		got := make([]string, 25)
+		start := make(chan struct{})
+		order := fmt.Sprintf("ORD-20%d", round)
+		for i := range got {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				r := h.invoke(h.key("agent"), "refund_payment", map[string]any{"order_id": order, "amount": 150},
+					agentHeaders(100*round+i, fmt.Sprintf("k-%d-%d", round, i)))
+				if r.status == 403 {
+					got[i] = r.details(t)["approval_id"].(string)
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+		slices.Sort(got)
+		if got[0] == "" || got[0] != got[len(got)-1] {
+			t.Fatalf("round %d: approvals %v", round, got)
+		}
 	}
-	wg.Wait()
-	slices.Sort(got)
-	if got[0] == "" || got[0] != got[len(got)-1] {
-		t.Fatalf("approvals %v", got)
-	}
-	if list := h.ok(200, h.viewer(), "GET", h.q("/api/v1/approvals"), nil)["items"].([]any); len(list) != 1 {
+	if list := h.ok(200, h.viewer(), "GET", h.q("/api/v1/approvals"), nil)["items"].([]any); len(list) != 4 {
 		t.Fatalf("%d approval requests", len(list))
 	}
 }
@@ -374,10 +407,14 @@ func TestApprovalsExpire(t *testing.T) {
 
 	// A pending request past its expiry cannot be decided; a new one opens.
 	first := ask("a")
-	h.clock.advance(16 * time.Minute)
+	h.clock.advance(21 * time.Minute)
 	r := h.refused(409, "APPROVAL_CLOSED", h.reviewer(), "POST", "/api/v1/approvals/"+first+"/approve", map[string]any{"project_id": h.project, "reason": "late"})
 	if r.details(t)["status"] != "EXPIRED" {
 		t.Fatalf("closed %s", r.body)
+	}
+	var stored string
+	if err := h.pool.QueryRow(context.Background(), `SELECT status FROM approval_request WHERE id = $1`, first).Scan(&stored); err != nil || stored != "EXPIRED" {
+		t.Fatalf("the request is closed as EXPIRED: %q %v", stored, err)
 	}
 	second := ask("b")
 	if second == first {
@@ -397,7 +434,7 @@ func TestApprovalsExpire(t *testing.T) {
 	// A token lives at most 10 minutes.
 	approve(second)
 	tok := h.ok(201, agent, "POST", "/gateway/v1/approvals/"+second+"/token", nil)
-	if tok["expires_at"] != t0.Add(26*time.Minute).Format(time.RFC3339) {
+	if tok["expires_at"] != t0.Add(31*time.Minute).Format(time.RFC3339) {
 		t.Fatalf("token expiry %v", tok["expires_at"])
 	}
 	h.clock.advance(11 * time.Minute)
@@ -405,11 +442,14 @@ func TestApprovalsExpire(t *testing.T) {
 		403, "APPROVAL_TOKEN_EXPIRED")
 	// A fresh token works until the approval itself expires.
 	fresh := h.ok(201, agent, "POST", "/gateway/v1/approvals/"+second+"/token", nil)
-	if fresh["expires_at"] != t0.Add(31*time.Minute).Format(time.RFC3339) {
+	if fresh["expires_at"] != t0.Add(41*time.Minute).Format(time.RFC3339) {
 		t.Fatalf("capped by the approval: %v", fresh["expires_at"])
 	}
-	h.clock.advance(5 * time.Minute)
+	h.clock.advance(10 * time.Minute)
 	h.refused(403, "APPROVAL_EXPIRED", agent, "POST", "/gateway/v1/approvals/"+second+"/token", nil)
+	if err := h.pool.QueryRow(context.Background(), `SELECT status FROM approval_request WHERE id = $1`, second).Scan(&stored); err != nil || stored != "EXPIRED" {
+		t.Fatalf("a claim after the expiry closes the request: %q %v", stored, err)
+	}
 	if got := h.ok(200, agent, "GET", "/gateway/v1/approvals/"+second, nil); got["status"] != "EXPIRED" {
 		t.Fatalf("status %v", got["status"])
 	}
@@ -468,6 +508,11 @@ func TestToolFailuresAndLimits(t *testing.T) {
 
 	// A policy's limits lower the timeout and the response cap.
 	h.register("big", "READ", nil)
+	h.register("huge", "READ", nil)
+	expectRefused(t, h.invoke(agent, "huge", map[string]any{}, nil), 502, "TOOL_RESPONSE_TOO_LARGE")
+	if r := h.invoke(agent, "big", map[string]any{}, nil); r.status != 200 {
+		t.Fatalf("under the default cap: %d", r.status)
+	}
 	limits := `
 apiVersion: agenttwin.dev/v1
 kind: Policy
@@ -549,4 +594,121 @@ func TestMCPTools(t *testing.T) {
 		t.Fatalf("mcp calls %+v", calls)
 	}
 	expectRefused(t, h.invoke(agent, "broken", map[string]any{}, nil), 502, "TOOL_PROTOCOL_ERROR")
+}
+
+func TestWhatIsRecordedIsRedactedAndTheCallCompletesWithoutTheAgent(t *testing.T) {
+	h := newHarness(t)
+	agent := h.key("agent")
+	h.register("lookup_order", "READ", nil)
+	r := h.invoke(agent, "lookup_order", map[string]any{"order_id": "ORD-1", "api_key": "sk-live-0123456789abcdef",
+		"note": "card 4111 1111 1111 1111"}, agentHeaders(1, ""))
+	if r.status != 200 {
+		t.Fatalf("lookup %d", r.status)
+	}
+	// The tool receives the arguments as sent; the record keeps them redacted.
+	if got := h.tools.received("lookup_order")[0].Body["api_key"]; got != "sk-live-0123456789abcdef" {
+		t.Fatalf("forwarded %v", got)
+	}
+	d := h.ok(200, h.viewer(), "GET", h.q("/api/v1/policy-decisions/"+r.header.Get("X-AgentTwin-Decision-Id")), nil)
+	args := d["arguments"].(map[string]any)
+	if args["api_key"] != "[REDACTED:field]" || strings.Contains(fmt.Sprint(args["note"]), "4111") ||
+		strings.Contains(d["summary"].(string), "sk-live") || d["subject"] != "apikey:agent" || d["agent"] != "support-refund-agent" {
+		t.Fatalf("recorded %v", d)
+	}
+
+	// The agent hangs up while the tool works: the call still completes and
+	// is recorded.
+	h.tools.slow = 400 * time.Millisecond
+	h.register("slow", "READ", map[string]any{"timeout_ms": 5000})
+	client := &http.Client{Timeout: 100 * time.Millisecond}
+	req, _ := http.NewRequest("POST", h.srv.URL+"/gateway/v1/tools/slow", strings.NewReader("{}"))
+	tok, _ := h.tokens.Mint(agent, "runtime-gateway", "rid-hangup")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	if _, err := client.Do(req); err == nil {
+		t.Fatal("the client should have given up")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		list := h.ok(200, h.viewer(), "GET", h.q("/api/v1/policy-decisions?tool=slow"), nil)["items"].([]any)
+		if len(list) == 1 && list[0].(map[string]any)["outcome"] == "executed" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the call was not completed: %v", list)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if n := len(h.tools.received("slow")); n != 1 {
+		t.Fatalf("slow calls %d", n)
+	}
+}
+
+func TestAnApprovalBindsTheAgent(t *testing.T) {
+	h := newHarness(t)
+	h.demo()
+	agent := h.key("agent")
+	refund := map[string]any{"order_id": "ORD-1003", "amount": 150}
+	r := h.invoke(agent, "refund_payment", refund, agentHeaders(1, "k"))
+	id := r.details(t)["approval_id"].(string)
+	h.ok(200, h.reviewer(), "POST", "/api/v1/approvals/"+id+"/approve", map[string]any{"project_id": h.project, "reason": "ok"})
+	tok := h.ok(201, agent, "POST", "/gateway/v1/approvals/"+id+"/token", nil)["token"].(string)
+	// Another agent with the same arguments is another action.
+	expectRefused(t, h.invoke(agent, "refund_payment", refund, with(with(agentHeaders(1, "k"), "X-AgentTwin-Agent", "other-agent"),
+		"X-AgentTwin-Approval-Token", tok)), 403, "APPROVAL_MISMATCH")
+	if r := h.invoke(agent, "refund_payment", refund, with(agentHeaders(1, "k"), "X-AgentTwin-Approval-Token", tok)); r.status != 200 {
+		t.Fatalf("the approved agent: %d %s", r.status, r.body)
+	}
+}
+
+func TestAPolicyLimitLowersTheTimeout(t *testing.T) {
+	h := newHarness(t)
+	h.tools.slow = 800 * time.Millisecond
+	h.register("slow", "READ", map[string]any{"timeout_ms": 5000})
+	h.activate(h.createPolicy(`
+apiVersion: agenttwin.dev/v1
+kind: Policy
+metadata: {name: quick}
+spec:
+  tool: slow
+  default: allow_with_limits
+  limits: {timeoutMs: 200}
+  rules:
+    - {name: never, when: "false", effect: deny}
+  tests:
+    - {name: limited, args: {}, expect: allow_with_limits}
+`), 1)
+	r := h.invoke(h.key("agent"), "slow", map[string]any{}, nil)
+	expectRefused(t, r, 504, "TOOL_TIMEOUT")
+	if !strings.Contains(r.json(t)["error"].(map[string]any)["message"].(string), "200ms") {
+		t.Fatalf("timeout message %s", r.body)
+	}
+	d := h.ok(200, h.viewer(), "GET", h.q("/api/v1/policy-decisions/"+r.details(t)["decision_id"].(string)), nil)
+	if d["limits"].(map[string]any)["timeoutMs"] != 200.0 || d["effect"] != "allow_with_limits" {
+		t.Fatalf("limits %v", d["limits"])
+	}
+}
+
+func TestRulesReadWhoCalls(t *testing.T) {
+	h := newHarness(t)
+	h.register("lookup_order", "READ", nil)
+	h.activate(h.createPolicy(`
+apiVersion: agenttwin.dev/v1
+kind: Policy
+metadata: {name: no-interns}
+spec:
+  tool: lookup_order
+  rules:
+    - {name: intern, when: "subject == 'apikey:intern' && environment == 'production'", effect: deny}
+  tests:
+    - {name: intern, args: {}, context: {subject: "apikey:intern", environment: production}, expect: deny}
+    - {name: others, args: {}, context: {subject: "apikey:agent", environment: production}, expect: allow}
+`), 1)
+	expectRefused(t, h.invoke(h.key("intern"), "lookup_order", map[string]any{}, nil), 403, "POLICY_DENIED")
+	if r := h.invoke(h.key("intern"), "lookup_order", map[string]any{}, map[string]string{"X-AgentTwin-Environment": "staging"}); r.status != 200 {
+		t.Fatalf("staging: %d", r.status)
+	}
+	if r := h.invoke(h.key("agent"), "lookup_order", map[string]any{}, nil); r.status != 200 {
+		t.Fatalf("agent: %d", r.status)
+	}
 }

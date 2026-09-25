@@ -397,6 +397,8 @@ func (s *toolStub) tool(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"done": true})
 	case "big":
+		_ = json.NewEncoder(w).Encode(map[string]any{"blob": strings.Repeat("x", 64<<10)})
+	case "huge":
 		_ = json.NewEncoder(w).Encode(map[string]any{"blob": strings.Repeat("x", 5<<20)})
 	case "html":
 		w.Header().Set("Content-Type", "text/html")
@@ -478,7 +480,7 @@ spec:
       effect: require_approval
       message: Refunds above 100 need a person's approval.
   approval:
-    expiresInSeconds: 900
+    expiresInSeconds: 1200
   tests:
     - name: small refund
       args: {order_id: ORD-1001, amount: 40}

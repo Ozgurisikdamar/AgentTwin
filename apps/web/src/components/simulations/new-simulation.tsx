@@ -13,6 +13,7 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError, api, withQuery } from "@/lib/api";
+import { UUID } from "@/lib/ids";
 import { type BodyOf, queryOf } from "@/lib/api/simulation";
 import type {
   Agent,
@@ -54,6 +55,18 @@ function problemsOf(error: unknown): string[] {
   return out;
 }
 
+/**
+ * The scenario names a link preselects (`?scenarios=a,b`, from a change
+ * set's impact); null when the link names none, so every scenario is picked.
+ */
+export function preselectedScenarios(raw: string | null): Set<string> | null {
+  const names = (raw ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return names.length ? new Set(names) : null;
+}
+
 export function NewSimulation() {
   const router = useRouter();
   const params = useSearchParams();
@@ -62,6 +75,11 @@ export function NewSimulation() {
   const [agentName, setAgentName] = useState(params.get("agent") ?? "");
   const [version, setVersion] = useState(params.get("version") ?? "");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  // Picked by a link: only these (until the user picks all or none).
+  const [only, setOnly] = useState<Set<string> | null>(() => preselectedScenarios(params.get("scenarios")));
+  const changeSetId = UUID.test(params.get("change_set") ?? "")
+    ? params.get("change_set")!.toLowerCase()
+    : "";
   const [seed, setSeed] = useState("");
   const startKey = useActionKey("simulate");
 
@@ -106,7 +124,9 @@ export function NewSimulation() {
     enabled: Boolean(project && agent),
   });
   const scenarioList = scenarios.data?.items ?? [];
-  const selected = scenarioList.filter((s) => !excluded.has(s.name));
+  const isPicked = (name: string) => (only ? only.has(name) : true) && !excluded.has(name);
+  const selected = scenarioList.filter((s) => isPicked(s.name));
+  const missing = only ? [...only].filter((n) => !scenarioList.some((s) => s.name === n)) : [];
 
   const start = useMutation({
     mutationFn: () =>
@@ -118,7 +138,7 @@ export function NewSimulation() {
           agent: agent!.name,
           agent_version: chosenVersion,
           // Everything selected: let the service pick every scenario of the agent.
-          ...(excluded.size ? { scenarios: selected.map((s) => s.name) } : {}),
+          ...(only || excluded.size ? { scenarios: selected.map((s) => s.name) } : {}),
           ...(seed.trim() ? { seed: Number(seed) } : {}),
         } satisfies BodyOf<"startSimulation">,
       }),
@@ -203,6 +223,7 @@ export function NewSimulation() {
                       setAgentName("");
                       setVersion("");
                       setExcluded(new Set());
+                      setOnly(null);
                     }}
                   >
                     {projects.data?.items.map((p) => (
@@ -222,6 +243,7 @@ export function NewSimulation() {
                     setAgentName(e.target.value);
                     setVersion("");
                     setExcluded(new Set());
+                    setOnly(null);
                   }}
                 >
                   {agentList.length === 0 ? <option value="">No agents registered</option> : null}
@@ -273,6 +295,27 @@ export function NewSimulation() {
                 {selected.length} of {scenarioList.length} selected
               </span>
             </CardHeader>
+            {only ? (
+              <div
+                className="space-y-1 border-b border-slate-100 px-4 py-2 text-xs text-slate-600"
+                data-testid="preselected-note"
+              >
+                <p>
+                  Preselected: the scenarios{" "}
+                  {changeSetId ? (
+                    <Link href={`/changes/${changeSetId}`} className="text-indigo-700 underline">
+                      this change
+                    </Link>
+                  ) : (
+                    "a change"
+                  )}{" "}
+                  requires.
+                </p>
+                {missing.length && scenarios.isSuccess ? (
+                  <p className="text-amber-800">Not in this agent&apos;s scenarios: {missing.join(", ")}.</p>
+                ) : null}
+              </div>
+            ) : null}
             {scenarios.isPending && agent ? (
               <Skeleton className="m-4 h-24" />
             ) : scenarioList.length === 0 ? (
@@ -286,13 +329,23 @@ export function NewSimulation() {
               <fieldset className="divide-y divide-slate-100">
                 <legend className="sr-only">Scenarios to run</legend>
                 <div className="flex gap-2 px-4 py-2 text-xs">
-                  <Button size="sm" variant="ghost" onClick={() => setExcluded(new Set())}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setOnly(null);
+                      setExcluded(new Set());
+                    }}
+                  >
                     Select all
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setExcluded(new Set(scenarioList.map((s) => s.name)))}
+                    onClick={() => {
+                      setOnly(null);
+                      setExcluded(new Set(scenarioList.map((s) => s.name)));
+                    }}
                   >
                     Select none
                   </Button>
@@ -305,8 +358,15 @@ export function NewSimulation() {
                     <input
                       type="checkbox"
                       className="mt-1 h-4 w-4 accent-indigo-600"
-                      checked={!excluded.has(s.name)}
+                      checked={isPicked(s.name)}
                       onChange={(e) => {
+                        if (only) {
+                          const next = new Set(only);
+                          if (e.target.checked) next.add(s.name);
+                          else next.delete(s.name);
+                          setOnly(next);
+                          return;
+                        }
                         const next = new Set(excluded);
                         if (e.target.checked) next.delete(s.name);
                         else next.add(s.name);

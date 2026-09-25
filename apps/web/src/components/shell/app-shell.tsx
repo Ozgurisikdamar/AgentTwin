@@ -6,6 +6,7 @@ import {
   Database,
   FlaskConical,
   GitCompareArrows,
+  GitPullRequestArrow,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -28,6 +29,7 @@ interface NavItem {
 // Sections appear here as they ship (see docs/plan/implementation-board.md).
 const NAV: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { href: "/changes", label: "Changes", icon: GitPullRequestArrow },
   { href: "/simulations", label: "Simulations", icon: FlaskConical },
   { href: "/evaluations", label: "Evaluations", icon: GitCompareArrows },
   { href: "/datasets", label: "Datasets", icon: Database },

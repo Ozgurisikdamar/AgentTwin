@@ -27,6 +27,34 @@ export type ResponseOf<
   Status extends keyof contract.ResponsesOf<operations, Op>,
 > = contract.ResponseOf<operations, Op, Status>;
 
+/** The query parameters an operation documents. */
+export type QueryOf<Op extends ControlPlaneOperation> = contract.QueryOf<operations, Op>;
+
+/** URL query parameters from the documented ones; unset and empty values are left out. */
+export function queryOf<Op extends ControlPlaneOperation>(params: QueryOf<Op>): URLSearchParams {
+  return contract.toQuery(params);
+}
+
+type S = ControlPlaneSchemas;
+
+// Change sets and their impact (spec §21-22): the pages read the contract's
+// own types.
+export type ChangeSetSummary = S["ChangeSetSummary"];
+export type ChangeSetPage = S["ChangeSetPage"];
+export type ChangeSet = S["ChangeSet"];
+export type CreatedChangeSet = S["CreatedChangeSet"];
+export type ChangeItem = S["ChangeItem"];
+export type ChangeSeed = S["ChangeSeed"];
+export type ChangeImpact = S["ChangeImpact"];
+export type ImpactScenario = S["ImpactScenario"];
+export type ImpactGraphReason = S["ImpactGraphReason"];
+export type ImpactSimilarity = S["ImpactSimilarity"];
+export type ImpactAffected = S["ImpactAffected"];
+export type ImpactLinked = S["ImpactLinked"];
+export type ImpactProblem = S["ImpactProblem"];
+export type ImpactPrivilege = S["ImpactPrivilege"];
+export type GraphComponentRef = S["GraphComponent"];
+
 /** What the sign-in route reads from a development login. */
 export interface DevLogin {
   token?: string;

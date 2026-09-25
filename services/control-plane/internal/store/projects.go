@@ -78,6 +78,27 @@ func (s *Store) ListProjects(ctx context.Context, orgID string) ([]Project, erro
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Project, error) { return scanProject(r) })
 }
 
+// ProjectIDs returns the ids of the organization's projects.
+func (s *Store) ProjectIDs(ctx context.Context, orgID string) ([]string, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM control.project WHERE organization_id = $1 ORDER BY id`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// CountProjectsForUpdate counts the organization's projects, holding the
+// organization row until the transaction ends so that concurrent creations
+// are counted one after the other.
+func (s *Store) CountProjectsForUpdate(ctx context.Context, tx pgx.Tx, orgID string) (int, error) {
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM control.organization WHERE id = $1 FOR UPDATE`, orgID); err != nil {
+		return 0, err
+	}
+	var n int
+	err := tx.QueryRow(ctx, `SELECT count(*) FROM control.project WHERE organization_id = $1`, orgID).Scan(&n)
+	return n, err
+}
+
 // ProjectSettings is a partial settings update.
 type ProjectSettings struct {
 	Name                  *string          `json:"name,omitempty"`

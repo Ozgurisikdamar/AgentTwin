@@ -1,10 +1,14 @@
 package proxy
 
 import (
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
@@ -36,7 +40,7 @@ func TestProxiedResponsesCarryTheEdgeHeadersOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := New(tokens, map[string]string{"simulation-service": upstream.URL}, slog.New(slog.DiscardHandler))
+	p, err := New(tokens, map[string]string{"simulation-service": upstream.URL}, noProjects, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,5 +80,99 @@ func TestProxiedResponsesCarryTheEdgeHeadersOnce(t *testing.T) {
 	}
 	if sawRequestID != "client-request-0001" {
 		t.Errorf("upstream request id = %q", sawRequestID)
+	}
+}
+
+func noProjects(context.Context, string) ([]string, error) { return nil, nil }
+
+const org = "0190f3b4-0000-7000-8000-00000000000a"
+
+// forwarded proxies one request as principal and returns what the upstream
+// service was told about the caller.
+func forwarded(t *testing.T, principal authn.Principal, projects OrgProjects) (int, authn.Principal, bool) {
+	t.Helper()
+	tokens, err := authn.NewTokenService("test-secret-0123456789abcdef0123456789")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen authn.Principal
+	called := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		seen, _, err = tokens.Verify(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), "graph-service")
+		if err != nil {
+			t.Errorf("upstream token: %v", err)
+		}
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer upstream.Close()
+	p, err := New(tokens, map[string]string{"graph-service": upstream.URL}, projects, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/graph?project_id=x", nil)
+	req = req.WithContext(authn.WithPrincipal(req.Context(), principal))
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+	return rec.Code, seen, called
+}
+
+// A person may act in every project of their organization. A service cannot
+// tell which organization a project id belongs to, so the token names them:
+// another organization's project is not among them.
+func TestAPersonsTokenNamesTheirOrganizationsProjects(t *testing.T) {
+	person := authn.Principal{OrgID: org, Actor: "user:u", Role: authn.RoleEngineer, AllProjects: true}
+	asked := ""
+	code, seen, _ := forwarded(t, person, func(_ context.Context, orgID string) ([]string, error) {
+		asked = orgID
+		return []string{"p-1", "p-2"}, nil
+	})
+	if code != 200 || asked != org {
+		t.Fatalf("%d, projects of %q", code, asked)
+	}
+	if seen.AllProjects || !slices.Equal(seen.ProjectIDs, []string{"p-1", "p-2"}) {
+		t.Errorf("the service was told %+v", seen)
+	}
+	if !seen.CanAccessProject("p-2") || seen.CanAccessProject("p-of-another-organization") {
+		t.Error("project access does not follow the organization's projects")
+	}
+	// An organization without projects: access to none, not to all.
+	_, seen, _ = forwarded(t, person, noProjects)
+	if seen.AllProjects || seen.CanAccessProject("p-1") {
+		t.Errorf("no projects: %+v", seen)
+	}
+}
+
+func TestAKeysProjectsAreNotLookedUp(t *testing.T) {
+	key := authn.Principal{OrgID: org, Actor: "apikey:k", Role: authn.RoleAPIKey, ProjectIDs: []string{"p-9"}, Scopes: []authn.Scope{authn.ScopeRead}}
+	code, seen, _ := forwarded(t, key, func(context.Context, string) ([]string, error) {
+		t.Error("a key's projects were looked up")
+		return nil, nil
+	})
+	if code != 200 || !slices.Equal(seen.ProjectIDs, []string{"p-9"}) {
+		t.Errorf("%d %+v", code, seen)
+	}
+}
+
+func TestNoProjectListNoForwarding(t *testing.T) {
+	person := authn.Principal{OrgID: org, Actor: "user:u", Role: authn.RoleEngineer, AllProjects: true}
+	code, _, called := forwarded(t, person, func(context.Context, string) ([]string, error) {
+		return nil, errors.New("database down")
+	})
+	if code != http.StatusServiceUnavailable || called {
+		t.Errorf("lookup failure: %d, forwarded %v", code, called)
+	}
+	// A token that cannot be minted is the edge's failure, not a 401 from
+	// the service.
+	many := make([]string, authn.MaxTokenProjects+1)
+	for i := range many {
+		many[i] = "p"
+	}
+	code, _, called = forwarded(t, person, func(context.Context, string) ([]string, error) { return many, nil })
+	if code != http.StatusInternalServerError || called {
+		t.Errorf("unmintable token: %d, forwarded %v", code, called)
+	}
+	if _, err := New(nil, nil, nil, slog.New(slog.DiscardHandler)); err == nil {
+		t.Error("a proxy without the organization's projects was built")
 	}
 }

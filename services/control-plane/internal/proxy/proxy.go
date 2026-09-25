@@ -3,6 +3,8 @@
 package proxy
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -47,20 +49,32 @@ var Routes = []Route{
 	{"/api/v1/tool-endpoints", "runtime-gateway"},
 }
 
+// OrgProjects returns the ids of an organization's projects.
+type OrgProjects func(ctx context.Context, orgID string) ([]string, error)
+
 // Proxy forwards requests to services.
 type Proxy struct {
-	tokens  *authn.TokenService
-	targets map[string]*url.URL
-	proxies map[string]*httputil.ReverseProxy
-	log     *slog.Logger
-	maxBody int64
-	routes  []Route
+	tokens   *authn.TokenService
+	projects OrgProjects
+	targets  map[string]*url.URL
+	proxies  map[string]*httputil.ReverseProxy
+	log      *slog.Logger
+	maxBody  int64
+	routes   []Route
 }
 
+type tokenKey struct{}
+
 // New builds a proxy. targets maps service name to base URL; services without a
-// URL answer 503 with an actionable message.
-func New(tokens *authn.TokenService, targets map[string]string, log *slog.Logger) (*Proxy, error) {
-	p := &Proxy{tokens: tokens, targets: map[string]*url.URL{}, proxies: map[string]*httputil.ReverseProxy{}, log: log, maxBody: 16 << 20}
+// URL answer 503 with an actionable message. projects lists an organization's
+// projects: a person may act in every project of their organization, and the
+// internal token names them (a service cannot tell which organization a
+// project id belongs to).
+func New(tokens *authn.TokenService, targets map[string]string, projects OrgProjects, log *slog.Logger) (*Proxy, error) {
+	if projects == nil {
+		return nil, errors.New("proxy: the organization's projects are required")
+	}
+	p := &Proxy{tokens: tokens, projects: projects, targets: map[string]*url.URL{}, proxies: map[string]*httputil.ReverseProxy{}, log: log, maxBody: 16 << 20}
 	transport := otelhttp.NewTransport(&http.Transport{
 		Proxy:                 nil,
 		MaxIdleConnsPerHost:   32,
@@ -89,13 +103,10 @@ func New(tokens *authn.TokenService, targets map[string]string, log *slog.Logger
 					pr.Out.Header.Del(h)
 				}
 				pr.SetXForwarded()
-				principal, _ := authn.FromContext(pr.In.Context())
-				rid := logx.RequestID(pr.In.Context())
-				tok, err := tokens.Mint(principal, service, rid)
-				if err == nil {
+				if tok, ok := pr.In.Context().Value(tokenKey{}).(string); ok {
 					pr.Out.Header.Set("Authorization", "Bearer "+tok)
 				}
-				if rid != "" {
+				if rid := logx.RequestID(pr.In.Context()); rid != "" {
 					pr.Out.Header.Set(httpx.RequestIDHeader, rid)
 				}
 			},
@@ -138,7 +149,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, httpx.ErrNotFound)
 		return
 	}
-	if _, ok := authn.FromContext(r.Context()); !ok {
+	principal, ok := authn.FromContext(r.Context())
+	if !ok {
 		httpx.WriteError(w, r, httpx.ErrUnauthorized)
 		return
 	}
@@ -148,6 +160,24 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("The %s is not configured on this control plane (set %s_URL).", service, strings.ToUpper(strings.ReplaceAll(service, "-", "_")))))
 		return
 	}
+	if principal.AllProjects {
+		// "Every project" means every project of this organization: named,
+		// so that a project id of another organization is not one of them.
+		ids, err := p.projects(r.Context(), principal.OrgID)
+		if err != nil {
+			p.log.ErrorContext(r.Context(), "listing the organization's projects failed", "error", err.Error())
+			httpx.WriteError(w, r, httpx.NewError(http.StatusServiceUnavailable, "UNAVAILABLE",
+				"The control plane cannot read its projects right now. Retry shortly."))
+			return
+		}
+		principal.ProjectIDs, principal.AllProjects = ids, false
+	}
+	tok, err := p.tokens.Mint(principal, service, logx.RequestID(r.Context()))
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	r = r.WithContext(context.WithValue(authn.WithPrincipal(r.Context(), principal), tokenKey{}, tok))
 	httpx.SetRouteName(r, "proxy "+service)
 	r.Body = http.MaxBytesReader(w, r.Body, p.maxBody)
 	rp.ServeHTTP(w, r)

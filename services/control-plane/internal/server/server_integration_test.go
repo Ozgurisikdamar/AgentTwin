@@ -868,3 +868,85 @@ func TestAPIContractWalk(t *testing.T) {
 		t.Fatalf("internal lookup of a malformed id: %d %s", r.Status, r.Raw)
 	}
 }
+
+// A person may act in every project of their organization; a service cannot
+// tell which organization a project id belongs to. Through the edge, a
+// person of another organization therefore cannot name this one's project:
+// the internal token lists their own projects, read fresh on every request.
+func TestTheEdgeNamesOnlyTheCallersProjects(t *testing.T) {
+	tokens, _ := authn.NewTokenService(internalSecret)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, _, err := tokens.Verify(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), "graph-service")
+		switch {
+		case err != nil:
+			w.WriteHeader(http.StatusUnauthorized)
+		case p.AllProjects || !p.CanAccessProject(r.URL.Query().Get("project_id")):
+			// What every service does: another organization's project
+			// looks like a missing one.
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{}`)
+		}
+	}))
+	defer upstream.Close()
+	h := newHarness(t, map[string]string{"graph-service": upstream.URL})
+	pid := h.s.Demo.ProjectID
+	eng := h.login("engineer@demo.agenttwin.dev")
+	other := h.login("owner@other.agenttwin.dev")
+	if r := h.request("GET", "/api/v1/graph?project_id="+pid, nil, bearer(eng)); r.Status != 200 {
+		t.Fatalf("own project: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("GET", "/api/v1/graph?project_id="+pid, nil, bearer(other)); r.Status != 404 {
+		t.Errorf("another organization's project: %d %s", r.Status, r.Raw)
+	}
+	created := h.request("POST", "/api/v1/projects", map[string]any{"slug": "other-graph", "name": "Other graph"}, bearer(other))
+	if created.Status != 201 {
+		t.Fatalf("create: %d %s", created.Status, created.Raw)
+	}
+	fresh := created.Body["id"].(string)
+	if r := h.request("GET", "/api/v1/graph?project_id="+fresh, nil, bearer(other)); r.Status != 200 {
+		t.Errorf("a project created a moment ago: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("GET", "/api/v1/graph?project_id="+fresh, nil, bearer(eng)); r.Status != 404 {
+		t.Errorf("the other organization's new project, from the demo organization: %d", r.Status)
+	}
+}
+
+// An organization's projects are bounded (they are named in every internal
+// token), also when created concurrently.
+func TestAnOrganizationHasBoundedProjects(t *testing.T) {
+	h := newHarness(t, nil)
+	owner := h.login("owner@other.agenttwin.dev")
+	create := func(i int) resp {
+		return h.request("POST", "/api/v1/projects", map[string]any{"slug": fmt.Sprintf("p-%03d", i), "name": "P"}, bearer(owner))
+	}
+	have := h.count(`SELECT count(*) FROM control.project p JOIN control.organization o ON o.id = p.organization_id
+		JOIN control.membership m ON m.organization_id = o.id JOIN control.app_user u ON u.id = m.user_id
+		WHERE u.email = 'owner@other.agenttwin.dev'`)
+	for i := have; i < authn.MaxTokenProjects-5; i++ {
+		if r := create(i); r.Status != 201 {
+			t.Fatalf("project %d: %d %s", i, r.Status, r.Raw)
+		}
+	}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	statuses := map[int]int{}
+	for i := range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r := create(1000 + i)
+			mu.Lock()
+			statuses[r.Status]++
+			if r.Status == 409 && errCode(r) != "PROJECT_LIMIT_REACHED" {
+				t.Errorf("limit code = %s", errCode(r))
+			}
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	if statuses[201] != 5 || statuses[409] != 5 {
+		t.Errorf("concurrent creations at %d of %d: %v", authn.MaxTokenProjects-5, authn.MaxTokenProjects, statuses)
+	}
+}

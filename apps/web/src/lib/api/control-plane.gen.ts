@@ -104,7 +104,8 @@ export interface paths {
          * Create a project
          * @description Creates a project with the `dev`, `staging` and `production`
          *     environments. Requires `settings.write`. The slug is unique within the
-         *     organization (`409 PROJECT_EXISTS`).
+         *     organization (`409 PROJECT_EXISTS`). An organization has at most 100
+         *     projects (`409 PROJECT_LIMIT_REACHED`, `details.limit`).
          */
         post: operations["createProject"];
         delete?: never;

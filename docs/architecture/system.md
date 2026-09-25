@@ -138,7 +138,10 @@ process.
    **internal JWT** (`aud` = target service) carrying `org`, `projects`, `role`,
    `actor` and `request_id`. Downstream services verify the token **and** scope
    every SQL query by organization (defense in depth: a bug in the edge must not
-   leak tenants).
+   leak tenants). For a person, who may act in every project of the
+   organization, `projects` lists them, read fresh on each request. A service
+   cannot tell which organization a project id belongs to, and "all projects"
+   would let another organization's project id through (ADR-0025).
 
 ### 3.2 Telemetry ingestion
 

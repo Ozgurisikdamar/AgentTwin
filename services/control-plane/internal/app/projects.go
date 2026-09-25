@@ -48,7 +48,15 @@ func (a *App) CreateProject(ctx context.Context, p authn.Principal, in CreatePro
 	}
 	var proj store.Project
 	err := a.Store.Tx(ctx, func(tx pgx.Tx) error {
-		var err error
+		n, err := a.Store.CountProjectsForUpdate(ctx, tx, p.OrgID)
+		if err != nil {
+			return err
+		}
+		if n >= authn.MaxTokenProjects {
+			return httpx.NewError(http.StatusConflict, "PROJECT_LIMIT_REACHED",
+				fmt.Sprintf("An organization has at most %d projects.", authn.MaxTokenProjects)).
+				WithDetails(map[string]any{"limit": authn.MaxTokenProjects})
+		}
 		proj, err = a.Store.CreateProject(ctx, tx, p.OrgID, in.Slug, in.Name, in.Description, in.ContentMode, p.Actor)
 		if err != nil {
 			return err

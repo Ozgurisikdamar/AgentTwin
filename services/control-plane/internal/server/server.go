@@ -118,7 +118,7 @@ func New(ctx context.Context, pool *pgxpool.Pool, tokens *authn.TokenService, lo
 		log.Info("demo organization ready", "organization_id", s.Demo.OrganizationID, "project_id", s.Demo.ProjectID)
 	}
 
-	s.Proxy, err = proxy.New(tokens, c.Targets, log)
+	s.Proxy, err = proxy.New(tokens, c.Targets, st.ProjectIDs, log)
 	if err != nil {
 		return nil, err
 	}

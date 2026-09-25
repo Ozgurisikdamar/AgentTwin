@@ -20,6 +20,12 @@ const InternalIssuer = "agenttwin-internal"
 // InternalTokenTTL bounds the replay window of a leaked internal token.
 const InternalTokenTTL = 60 * time.Second
 
+// MaxTokenProjects bounds the projects one internal token names. The edge
+// names every project of a person's organization (they may act in all of
+// them), so it also bounds an organization's projects; the token then stays
+// well under the header limits of every service (ADR-0025).
+const MaxTokenProjects = 100
+
 type internalClaims struct {
 	jwt.RegisteredClaims
 	Org         string   `json:"org"`
@@ -55,6 +61,9 @@ func (t *TokenService) Mint(p Principal, audience, requestID string) (string, er
 	}
 	if p.OrgID == SystemOrg && p.Role != RoleService {
 		return "", errors.New("mint: only service principals may use the system organization")
+	}
+	if len(p.ProjectIDs) > MaxTokenProjects {
+		return "", fmt.Errorf("mint: a token names at most %d projects, got %d", MaxTokenProjects, len(p.ProjectIDs))
 	}
 	now := t.now()
 	claims := internalClaims{

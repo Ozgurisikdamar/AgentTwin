@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/ids"
 )
 
 const secret = "0123456789abcdef0123456789abcdef-test"
@@ -93,6 +95,34 @@ func TestMintVerifyRoundTrip(t *testing.T) {
 	}
 	if got.OrgID != "org-1" || got.Actor != "user:u1" || got.Role != RoleEngineer || !got.AllProjects || rid != "req-1" {
 		t.Fatalf("round trip mismatch: %+v rid=%s", got, rid)
+	}
+}
+
+// A token names at most MaxTokenProjects projects, and a token naming that
+// many stays small enough for every service's header limits (the Python
+// services' HTTP parser refuses headers past 16 KiB; 8 KiB is a common
+// proxy default).
+func TestTokensNameABoundedNumberOfProjects(t *testing.T) {
+	ts, _ := NewTokenService(secret)
+	many := make([]string, MaxTokenProjects)
+	for i := range many {
+		many[i] = ids.New()
+	}
+	p := Principal{OrgID: ids.New(), Actor: "user:u1", Role: RoleEngineer, ProjectIDs: many, Email: "someone-with-a-long-address@example.com"}
+	tok, err := ts.Mint(p, "evaluation-service", ids.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len("Authorization: Bearer "+tok) > 8<<10 {
+		t.Errorf("a token naming %d projects is %d bytes", MaxTokenProjects, len(tok))
+	}
+	got, _, err := ts.Verify(tok, "evaluation-service")
+	if err != nil || len(got.ProjectIDs) != MaxTokenProjects || !got.CanAccessProject(many[MaxTokenProjects-1]) {
+		t.Fatalf("round trip: %v %d", err, len(got.ProjectIDs))
+	}
+	p.ProjectIDs = append(p.ProjectIDs, ids.New())
+	if _, err := ts.Mint(p, "evaluation-service", ""); err == nil {
+		t.Error("a token naming too many projects was minted")
 	}
 }
 

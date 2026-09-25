@@ -244,8 +244,9 @@ services:
       rabbitmq: {condition: service_healthy}
     <<: *hardening
 
-  # Evaluates runs and calibrates judges; separate from the API so a slow
-  # judge never blocks it (same image, `worker` role).
+  # Evaluates runs, calibrates judges and mines production failures into
+  # regression groups; separate from the API so a slow judge never blocks it
+  # (same image, `worker` role).
   evaluation-worker:
     build: *evaluation-build
     image: agenttwin/evaluation-service:${AGENTTWIN_VERSION:-dev}
@@ -320,8 +321,11 @@ services:
   # a batch of verified production traffic, simulates the scenario suite for
   # the given versions, keeps the regression suite dataset, evaluates the
   # candidate against its baseline on it, and compares versions (a change set
-  # each, with the scenarios the change requires and why). Idempotent for
-  # manifests, catalogs, twins, scenarios, the dataset and change sets.
+  # each, with the scenarios the change requires and why). Then a canary
+  # production incident on SEED_INCIDENT (a refund whose payment times out
+  # after the money moved; 1.3.0 pays twice) and the regression inbox the
+  # miner builds from it. Idempotent for manifests, catalogs, twins,
+  # scenarios, the dataset and change sets; SEED_INCIDENT= skips the incident.
   seed:
     build: *demo-build
     image: agenttwin/demo:${AGENTTWIN_VERSION:-dev}
@@ -338,6 +342,8 @@ services:
       - ${SEED_CHANGES-1.2.4:1.3.0,1.3.1:1.3.2}
       - --releases
       - ${SEED_RELEASES-1.2.4:1.3.0,1.2.4:1.3.1}
+      - --incident
+      - ${SEED_INCIDENT-1.3.0}
     environment:
       <<: *demo-env
       DEMO_AGENT_URL: http://demo-agent:8090

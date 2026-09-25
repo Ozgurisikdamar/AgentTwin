@@ -10,13 +10,15 @@ support-refund-agent seed          load the demo workspace: register the agent
                                    the regression suite (a dataset) and evaluate a
                                    candidate against its baseline on it, compare
                                    versions (change sets, with the scenarios each
-                                   change requires) and send verified production
-                                   traffic
+                                   change requires), send verified production
+                                   traffic and a canary production incident, and
+                                   report the regression inbox
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -24,7 +26,7 @@ import signal
 import sys
 import time
 import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -173,9 +175,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _traffic(args: argparse.Namespace, cfg: Config, *, verify_outcomes: bool) -> list[dict[str, Any]]:
-    """Runs ``args.count`` conversations, over HTTP against a deployed agent
-    (``--agent-url``) or in process."""
+@contextlib.contextmanager
+def _generator(args: argparse.Namespace, cfg: Config, *, verify_outcomes: bool) -> Iterator[TrafficGenerator]:
+    """A traffic generator over HTTP against a deployed agent
+    (``--agent-url``) or in process; its telemetry is shut down on exit."""
     telemetry = None
     run: Callable[[RunRequest], dict[str, Any]]
     if args.agent_url:
@@ -194,21 +197,26 @@ def _traffic(args: argparse.Namespace, cfg: Config, *, verify_outcomes: bool) ->
         if telemetry is not None:
             telemetry.flush()
 
-    gen = TrafficGenerator(
-        run,
-        tools_url=args.tools_url,
-        tools_admin_token=os.environ.get("DEMO_TOOLS_ADMIN_TOKEN"),
-        versions=_parse_versions(args.versions),
-        seed=args.seed,
-        telemetry_config=cfg,
-        verify_outcomes=verify_outcomes,
-        flush=flush,
-    )
     try:
-        return gen.run(args.count, delay_s=getattr(args, "delay", 0.0))
+        yield TrafficGenerator(
+            run,
+            tools_url=args.tools_url,
+            tools_admin_token=os.environ.get("DEMO_TOOLS_ADMIN_TOKEN"),
+            versions=_parse_versions(args.versions),
+            seed=args.seed,
+            telemetry_config=cfg,
+            verify_outcomes=verify_outcomes,
+            flush=flush,
+        )
     finally:
         if telemetry is not None:
             telemetry.shutdown()
+
+
+def _traffic(args: argparse.Namespace, cfg: Config, *, verify_outcomes: bool) -> list[dict[str, Any]]:
+    """Runs ``args.count`` conversations."""
+    with _generator(args, cfg, verify_outcomes=verify_outcomes) as gen:
+        return gen.run(args.count, delay_s=getattr(args, "delay", 0.0))
 
 
 def cmd_traffic(args: argparse.Namespace) -> int:
@@ -594,6 +602,107 @@ def _healthy(simulation: Mapping[str, Any]) -> bool:
     return simulation.get("status") == "COMPLETED" and not simulation.get("errored")
 
 
+def _canary_incident(gen: TrafficGenerator, version: str) -> dict[str, Any]:
+    try:
+        incident = _incident_summary(gen.incident(version))
+    except (OSError, ValueError, KeyError) as err:
+        logging.error("the canary incident on %s: %s", version, err)
+        return {"version": version, "error": str(err), "regression_expected": False, "regression": None}
+    logging.info(
+        "canary incident on %s: order %s, trace %s, %d refund(s), verified %s",
+        version,
+        incident["order_id"],
+        incident["trace_id"],
+        incident["refund_count"],
+        incident["verified_outcome"],
+    )
+    return incident
+
+
+def _incident_summary(record: Mapping[str, Any]) -> dict[str, Any]:
+    """The canary production incident as the seed reports it. A duplicate
+    refund must become a regression group; a fixed version leaves none."""
+    verified = record.get("verified_outcome") or {}
+    refunds = int(verified.get("refund_count") or 0)
+    return {
+        "version": record.get("version"),
+        "order_id": record.get("order_id"),
+        "trace_id": record.get("trace_id"),
+        "business_outcome": record.get("business_outcome"),
+        "claimed_outcome": record.get("claimed_outcome"),
+        "verified_outcome": verified.get("status"),
+        "refund_count": refunds,
+        "outcome_reported": verified.get("reported"),
+        "regression_expected": refunds > 1 or verified.get("status") == "FAILURE",
+        "regression": None,
+    }
+
+
+def _regression_line(item: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "id": item.get("id"),
+        "title": item.get("title"),
+        "status": item.get("status"),
+        "taxonomy": item.get("taxonomy"),
+        "severity": item.get("severity"),
+        "occurrences": item.get("occurrence_count"),
+        "versions": item.get("versions"),
+    }
+
+
+def _find_regression(
+    client: Client,
+    project_id: str,
+    trace_id: str,
+    *,
+    timeout_s: float,
+    interval_s: float = 2.0,
+    scan: int = 10,
+) -> dict[str, Any] | None:
+    """Waits for the regression miner to group ``trace_id``: the group it
+    represents, or one of the most recently seen groups whose failures
+    include it. None when the deadline passes first."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        items = client.regressions(project_id, limit=50)
+        for item in items:
+            if item.get("representative_trace_id") == trace_id:
+                return _regression_line(item)
+        for item in items[:scan]:
+            detail = client.regression(str(item["id"]))
+            if any(o.get("trace_id") == trace_id for o in detail.get("occurrences") or []):
+                return _regression_line(detail.get("regression") or item)
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(interval_s)
+
+
+def _inbox_summary(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """The regression inbox by status and severity, the open groups first."""
+    by_status: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    for item in items:
+        status, severity = str(item.get("status")), str(item.get("severity"))
+        by_status[status] = by_status.get(status, 0) + 1
+        by_severity[severity] = by_severity.get(severity, 0) + 1
+    open_ = [i for i in items if i.get("status") in ("CANDIDATE", "CONFIRMED", "REOPENED")]
+    return {
+        "total": len(items),
+        "by_status": by_status,
+        "by_severity": by_severity,
+        "open": [_regression_line(i) for i in open_[:10]],
+    }
+
+
+def _incident_healthy(incident: Mapping[str, Any]) -> bool:
+    """Ran, reported its verified outcome, and was grouped when it failed."""
+    if incident.get("error") or not incident.get("trace_id"):
+        return False
+    if incident.get("verified_outcome") is not None and not incident.get("outcome_reported"):
+        return False
+    return not incident.get("regression_expected") or incident.get("regression") is not None
+
+
 def cmd_seed(args: argparse.Namespace) -> int:
     """Loads the demo workspace. Idempotent for manifests, the tool twin and
     the scenarios; every run adds another batch of production traffic and
@@ -624,6 +733,9 @@ def cmd_seed(args: argparse.Namespace) -> int:
         logging.error(
             "--releases: unknown agent version(s) in %s; known: %s", unknown_releases, store.versions
         )
+        return 2
+    if args.incident and args.incident not in store.versions:
+        logging.error("--incident: unknown agent version %s; known: %s", args.incident, store.versions)
         return 2
     started: list[tuple[str, str]] = []
     change_sets: list[dict[str, Any]] = []
@@ -690,8 +802,13 @@ def cmd_seed(args: argparse.Namespace) -> int:
         return 1
 
     records: list[dict[str, Any]] = []
-    if args.count > 0:
-        records = _traffic(args, cfg, verify_outcomes=True)
+    incident: dict[str, Any] | None = None
+    if args.count > 0 or args.incident:
+        with _generator(args, cfg, verify_outcomes=True) as gen:
+            if args.count > 0:
+                records = gen.run(args.count)
+            if args.incident:
+                incident = _canary_incident(gen, args.incident)
 
     simulations: list[dict[str, Any]] = []
     for version, run_id in started:
@@ -727,6 +844,39 @@ def cmd_seed(args: argparse.Namespace) -> int:
                 evaluation.get("status"),
                 evaluation.get("incomplete") or evaluation.get("error"),
             )
+
+    # The miner groups the incident asynchronously, from the trace's events.
+    if incident is not None and incident["regression_expected"] and incident.get("trace_id"):
+        try:
+            incident["regression"] = _find_regression(
+                client, project_id, str(incident["trace_id"]), timeout_s=args.incident_timeout
+            )
+        except APIError as err:
+            incident["error"] = f"the regression inbox: {err}"
+        if incident["regression"] is None:
+            logging.error(
+                "the incident %s was not grouped into a regression within %.0fs: %s",
+                incident["trace_id"],
+                args.incident_timeout,
+                incident.get("error") or "is the regression miner running?",
+            )
+        else:
+            logging.info(
+                "the incident is regression %s (%s, %s, %s)",
+                incident["regression"]["id"],
+                incident["regression"]["title"],
+                incident["regression"]["severity"],
+                incident["regression"]["status"],
+            )
+    elif incident is not None and not incident.get("error"):
+        logging.info(
+            "the incident on %s did not fail (%d refund)", incident["version"], incident["refund_count"]
+        )
+    try:
+        inbox = _inbox_summary(client.regressions(project_id))
+    except APIError as err:
+        (logging.error if incident is not None else logging.warning)("the regression inbox: %s", err)
+        inbox = {"error": str(err)}
 
     impacts: list[dict[str, Any]] = []
     try:
@@ -785,6 +935,8 @@ def cmd_seed(args: argparse.Namespace) -> int:
         "simulations": simulations,
         "dataset": suite,
         "evaluation": evaluation,
+        "incident": incident,
+        "regressions": inbox,
         "conversations": len(records),
         "verified_outcomes": len(verified),
         "verified_outcomes_reported": sum(1 for v in verified if v.get("reported")),
@@ -805,6 +957,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
         and (evaluation is None or _evaluation_healthy(evaluation))
         and all(_impact_settled(i) for i in impacts)
         and all(_release_healthy(r) for r in releases)
+        and (incident is None or (_incident_healthy(incident) and "error" not in inbox))
     )
     return 0 if ok else 1
 
@@ -936,6 +1089,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         default=60.0,
         help="seconds to wait for the dependency graph to know every changed component",
+    )
+    s.add_argument(
+        "--incident",
+        metavar="VERSION",
+        help="send a canary production incident on VERSION (a refund whose payment times out after "
+        "the money moved) and wait for the regression miner to group it",
+    )
+    s.add_argument(
+        "--incident-timeout",
+        type=float,
+        default=120.0,
+        help="seconds to wait for the incident to reach the regression inbox",
     )
     s.set_defaults(fn=cmd_seed)
 

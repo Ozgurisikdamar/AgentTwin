@@ -55,6 +55,14 @@ class FakeAPI:
         self.gate_lag = 1
         self.gate_incomplete = False
         self.gate_unverified = False
+        # The regression inbox: groups (newest first) and their failures'
+        # traces. ``regression_lag`` inbox reads pass before the miner adds
+        # ``pending`` (group id, trace id) to its group.
+        self.regressions: list[dict[str, Any]] = []
+        self.occurrences: dict[str, list[str]] = {}
+        self.pending: tuple[str, str] | None = None
+        self.regression_lag = 0
+        self.inbox_reads = 0
         self.keys: list[tuple[str, str, str | None]] = []
         self.checker = fake.ExchangeChecker()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
@@ -280,6 +288,22 @@ class FakeAPI:
                 return 202, self._gate(release_id)
             evaluations[-1] += 1
             return 200, self._gate(release_id)
+        return self.respond_regressions(method, path, body)
+
+    def respond_regressions(self, method: str, path: str, body: Any) -> tuple[int, Any]:
+        if (method, path) == ("GET", "/api/v1/regressions/candidates"):
+            self.inbox_reads += 1
+            if self.pending is not None and self.inbox_reads > self.regression_lag:
+                group_id, trace_id = self.pending
+                self.occurrences[group_id].insert(0, trace_id)
+                self.pending = None
+            return 200, {"items": self.regressions, "next_cursor": None}
+        if method == "GET" and (m := re.fullmatch(r"/api/v1/regressions/([^/]+)", path)):
+            [group] = [g for g in self.regressions if g["id"] == m.group(1)]
+            detail = fake.regression_detail(group)
+            [occurrence] = detail["occurrences"]
+            detail["occurrences"] = [occurrence | {"trace_id": t} for t in self.occurrences[group["id"]]]
+            return 200, detail
         return 404, fake.error("NOT_FOUND", path)
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
@@ -729,4 +753,173 @@ def test_seed_rejects_bad_releases_before_calling_the_api(
     api: FakeAPI, capsys: pytest.CaptureFixture[str], spec: str
 ) -> None:
     assert seed(capsys, "--releases", spec) == (2, {})
+    assert api.calls == []
+
+
+INCIDENT_TRACE = "1" * 32
+
+
+def incident_record(version: str = "1.3.0", *, refunds: int = 2, reported: bool = True) -> dict[str, Any]:
+    """What ``TrafficGenerator.incident`` returns: on 1.3.0 the retried
+    payment paid twice and the verified outcome contradicts the claim."""
+    status = "SUCCESS" if refunds == 1 else "FAILURE"
+    return {
+        "kind": "incident",
+        "version": version,
+        "order_id": "ORD-9001",
+        "trace_id": INCIDENT_TRACE,
+        "business_outcome": "REFUND_COMPLETED",
+        "claimed_outcome": "SUCCESS",
+        "verified_outcome": {"status": status, "refund_count": refunds, "reported": reported},
+    }
+
+
+@pytest.fixture
+def incident(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Stubs the incident conversation (its behaviour against the tools is
+    tested in test_server_traffic); the seed's own wiring runs for real."""
+    from support_refund_agent import cli
+
+    answers: list[Any] = []
+    asked: list[str] = []
+
+    def run(self: Any, version: str) -> dict[str, Any]:
+        asked.append(version)
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        assert isinstance(answer, dict)
+        return answer
+
+    monkeypatch.setattr(cli.TrafficGenerator, "incident", run)
+    answers.append(asked)  # the first element: the versions asked, for the test
+    return answers
+
+
+def with_inbox(api: FakeAPI, *, lag: int = 1) -> str:
+    """An inbox where the miner joins the incident to an existing
+    duplicate-refund group after ``lag`` reads."""
+    older = fake.regression(
+        id=fake.uuid(0xE010),
+        title="order_status timed out",
+        severity="low",
+        taxonomy="TIMEOUT",
+        suggested_taxonomy="TIMEOUT",
+        status="DISMISSED",
+        representative_trace_id="2" * 32,
+    )
+    dup = fake.regression(id=fake.uuid(0xE011), representative_trace_id="3" * 32, occurrence_count=4)
+    api.regressions = [dup, older]
+    api.occurrences = {dup["id"]: ["3" * 32], older["id"]: ["2" * 32]}
+    api.pending = (dup["id"], INCIDENT_TRACE)
+    api.regression_lag = lag
+    return str(dup["id"])
+
+
+def test_seed_sends_a_canary_incident_and_finds_its_regression(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], incident: list[Any]
+) -> None:
+    asked = incident.pop(0)
+    incident.append(incident_record())
+    group = with_inbox(api)
+    code, summary = seed(capsys, "--incident", "1.3.0", "--incident-timeout", "30")
+    assert code == 0
+    assert asked == ["1.3.0"]
+    got = summary["incident"]
+    assert (got["version"], got["trace_id"], got["refund_count"], got["verified_outcome"]) == (
+        "1.3.0",
+        INCIDENT_TRACE,
+        2,
+        "FAILURE",
+    )
+    assert got["outcome_reported"] is True and got["regression_expected"] is True
+    assert (got["regression"]["id"], got["regression"]["severity"], got["regression"]["status"]) == (
+        group,
+        "critical",
+        "CANDIDATE",
+    )
+    # Waited for the miner: the first read did not have the incident yet.
+    assert api.inbox_reads >= 2
+    assert f"GET /api/v1/regressions/{group}" in api.calls
+    inbox = summary["regressions"]
+    assert inbox["total"] == 2
+    assert inbox["by_status"] == {"CANDIDATE": 1, "DISMISSED": 1}
+    assert inbox["by_severity"] == {"critical": 1, "low": 1}
+    assert [r["id"] for r in inbox["open"]] == [group]  # a dismissed group is not open
+    assert {"listRegressions", "getRegression"} <= api.checker.succeeded()
+
+
+def test_seed_finds_the_incident_that_represents_its_group(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], incident: list[Any]
+) -> None:
+    incident.pop(0)
+    incident.append(incident_record())
+    new = fake.regression(id=fake.uuid(0xE012), representative_trace_id=INCIDENT_TRACE)
+    api.regressions = [new]
+    api.occurrences = {new["id"]: [INCIDENT_TRACE]}
+    code, summary = seed(capsys, "--incident", "1.3.0", "--incident-timeout", "30")
+    assert code == 0
+    assert summary["incident"]["regression"]["id"] == new["id"]
+    # Its representative trace names it: no detail read needed.
+    assert not any(c.startswith("GET /api/v1/regressions/0") for c in api.calls)
+
+
+def test_seed_fails_when_the_incident_is_never_grouped(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], incident: list[Any]
+) -> None:
+    incident.pop(0)
+    incident.append(incident_record())
+    with_inbox(api, lag=1_000_000)
+    code, summary = seed(capsys, "--incident", "1.3.0", "--incident-timeout", "0")
+    assert code == 1
+    assert summary["incident"]["regression"] is None
+    assert summary["regressions"]["total"] == 2
+
+
+def test_seed_does_not_wait_when_the_incident_did_not_fail(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], incident: list[Any]
+) -> None:
+    asked = incident.pop(0)
+    incident.append(incident_record("1.3.1", refunds=1))
+    code, summary = seed(capsys, "--incident", "1.3.1", "--incident-timeout", "30")
+    assert code == 0
+    assert asked == ["1.3.1"]
+    got = summary["incident"]
+    assert (got["verified_outcome"], got["refund_count"], got["regression_expected"]) == ("SUCCESS", 1, False)
+    assert got["regression"] is None
+    # Only the inbox report reads the inbox.
+    assert api.calls.count("GET /api/v1/regressions/candidates") == 1
+
+
+@pytest.mark.parametrize(
+    ("answer", "reason"),
+    [
+        (OSError("connection refused"), "the tools are unreachable"),
+        (incident_record(reported=False), "the verified outcome was not reported"),
+        ({**incident_record(), "trace_id": None}, "the agent returned no trace"),
+    ],
+)
+def test_seed_fails_on_a_broken_incident(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], incident: list[Any], answer: Any, reason: str
+) -> None:
+    incident.pop(0)
+    incident.append(answer)
+    with_inbox(api, lag=0)
+    code, summary = seed(capsys, "--incident", "1.3.0", "--incident-timeout", "0")
+    assert code == 1, reason
+    assert summary["incident"]["version"] == "1.3.0", reason
+
+
+def test_seed_reports_the_inbox_without_an_incident(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
+    group = with_inbox(api)
+    code, summary = seed(capsys)
+    assert code == 0
+    assert summary["incident"] is None
+    assert summary["regressions"]["total"] == 2 and [r["id"] for r in summary["regressions"]["open"]] == [
+        group
+    ]
+
+
+def test_seed_rejects_an_unknown_incident_version(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
+    assert seed(capsys, "--incident", "9.9.9") == (2, {})
     assert api.calls == []

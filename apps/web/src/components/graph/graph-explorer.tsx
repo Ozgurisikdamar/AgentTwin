@@ -173,7 +173,7 @@ function FindComponent({ projectId, onPick }: { projectId: string; onPick: (id: 
   }
   return (
     <div className="min-w-[14rem] flex-1">
-      <form onSubmit={submit} role="search" aria-label="Find a component">
+      <form onSubmit={submit} role="search" aria-label="Component search">
         <Label htmlFor="graph-find">Find a component</Label>
         <div className="flex gap-1">
           <Input

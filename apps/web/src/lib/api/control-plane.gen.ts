@@ -613,6 +613,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List releases
+         * @description The project's releases, newest first, each with the gate of its latest evaluation (`null` before one).
+         */
+        get: operations["listReleases"];
+        put?: never;
+        /**
+         * Create a release and evaluate it
+         * @description Records a candidate version of an agent against its baseline (spec
+         *     §38): the change set between the two versions (stored as
+         *     `POST /projects/{project_id}/change-sets` would) and, unless
+         *     `evaluate` is `false`, the release's first evaluation (see
+         *     `POST /releases/{release_id}/evaluate`). The candidate commit is taken
+         *     from `git.candidate_commit`. Every call creates a new release; use an
+         *     `Idempotency-Key` so a retried CI job does not create two.
+         *
+         *     Requires `release.write`; CI keys hold it.
+         */
+        post: operations["createRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a release and its evaluations
+         * @description The release with the gate of each of its evaluations (revisions), newest first.
+         */
+        get: operations["getRelease"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Evaluate a release (a new revision)
+         * @description Starts a new evaluation of the release (spec §28, §91): a new
+         *     revision that records what it rests on as it is now — the project's
+         *     gate policy, the change set's impact and the suite pinned from it
+         *     (each scenario at the version the impact selected), and the
+         *     candidate's tools — and asks the evaluation service to run the suite
+         *     against both versions with the release's seed. Earlier revisions and
+         *     their decisions are kept as they were.
+         *
+         *     When the evaluation service reports the run, the gate decides and
+         *     stores the decision with the input it rests on and the SHA-256 of
+         *     both; a decision never changes. A suite with nothing to run is
+         *     decided at once (`201`): an empty suite is a coverage warning, a
+         *     suite no scenario of which the library confirmed is missing evidence.
+         *
+         *     Requires `release.write`; CI keys hold it.
+         */
+        post: operations["evaluateRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/gate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The gate of a release
+         * @description The gate of the latest evaluation, or of `revision`: what it rests
+         *     on, the decision (every rule that fired, with its evidence, the
+         *     counts, coverage and the risk index), the override when there is one,
+         *     and what it means for CI. `effective_outcome` is `PENDING` while the
+         *     evaluation runs, `OVERRIDDEN` while an override applies (the
+         *     decision keeps its outcome), otherwise the decision's outcome.
+         *     `exit_code` is the CLI's (0 pass, 2 warn, 3 block; 0 while
+         *     overridden), `null` while pending.
+         */
+        get: operations["getReleaseGate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Override a gate that did not pass
+         * @description Lets a gated release through (spec §92), recording who, why, until
+         *     when (`expires_at`, at most 90 days; without it the override lasts as
+         *     long as this decision is the latest) and the ticket behind it. The
+         *     decision is not changed: the gate still reports its outcome
+         *     (`decision.outcome`, `override.original_outcome`) next to
+         *     `effective_outcome: OVERRIDDEN`. One override per decision; a new
+         *     evaluation is gated anew.
+         *
+         *     Only the latest revision's decision can be overridden, and only when
+         *     it is `WARN` or `BLOCK`. Requires `release.override` (owners,
+         *     administrators and reviewers); reviewers only when the project's
+         *     gate policy allows it (`allowReviewerOverride`).
+         */
+        post: operations["overrideReleaseGate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1575,6 +1719,258 @@ export interface components {
             /** @description The cursor of the next page; `null` on the last page. */
             next_cursor: string | null;
         };
+        CreateReleaseRequest: {
+            project_id: components["schemas"]["Uuid"];
+            agent: string;
+            /** @description The version in use. */
+            baseline_version: string;
+            /** @description The version to release; must differ from `baseline_version`. */
+            candidate_version: string;
+            title?: string;
+            git?: components["schemas"]["ChangeSetGit"];
+            declared?: components["schemas"]["DeclaredChange"][];
+            /** @description The CI run that created the release (http or https). */
+            ci_url?: string;
+            /**
+             * @description Start the first evaluation at once.
+             * @default true
+             */
+            evaluate?: boolean;
+        };
+        OverrideRequest: {
+            /** @description Why the release may go out despite the gate. */
+            reason: string;
+            /** @description The ticket or approval behind the override (http or https). */
+            ticket_url?: string;
+            expires_at?: components["schemas"]["Timestamp"];
+            /** @description The revision the override is meant for; refused unless it is the latest. */
+            revision?: number;
+        };
+        /** @enum {string} */
+        GateOutcome: "PASS" | "WARN" | "BLOCK";
+        /**
+         * @description `PENDING` while evaluating, `OVERRIDDEN` while an override applies, otherwise the decision's outcome.
+         * @enum {string}
+         */
+        EffectiveOutcome: "PENDING" | "PASS" | "WARN" | "BLOCK" | "OVERRIDDEN";
+        /** @enum {string} */
+        ReleaseEvaluationStatus: "EVALUATING" | "DECIDED";
+        ReleaseAgent: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+        };
+        ReleaseCost: {
+            /** @description What the judge's calls cost. */
+            judge_usd: number;
+            /** @description What both sides' agent runs reported costing (`null` when none reported a cost). */
+            agent_usd: number | null;
+            /** @description How many cases reported their cost on both sides. */
+            agent_cases_known: number;
+            total_usd: number;
+        };
+        /** @description What a decision says at a glance. */
+        GateDecisionSummary: {
+            /** @description Scenarios the suite required. */
+            scenarios: number;
+            evaluated: number;
+            new_critical_failures: number;
+            regressed: number;
+            failed: number;
+            /** @description The rules that fired, most severe first. */
+            rules: string[];
+            /** @enum {integer} */
+            exit_code: 0 | 2 | 3;
+            ci_fails: boolean;
+            eval_run_status: string | null;
+            cost: components["schemas"]["ReleaseCost"] | null;
+            /** @description Candidate minus baseline agent cost, when both sides reported it for the same cases. */
+            cost_delta_usd: number | null;
+            latency_p95_delta_ms: number | null;
+        };
+        /** @description One evaluation (revision) of a release, as lists show it. */
+        GateSummary: {
+            revision: number;
+            status: components["schemas"]["ReleaseEvaluationStatus"];
+            outcome: components["schemas"]["GateOutcome"] | null;
+            effective_outcome: components["schemas"]["EffectiveOutcome"];
+            /** @description Evidence was missing (the outcome is then BLOCK). */
+            incomplete: boolean | null;
+            risk_index: number | null;
+            summary: components["schemas"]["GateDecisionSummary"] | null;
+            requested_by: components["schemas"]["Actor"];
+            requested_at: components["schemas"]["Timestamp"];
+            decided_at: components["schemas"]["Timestamp"] | null;
+            eval_run_id: components["schemas"]["Uuid"] | null;
+            /** @description The decision was overridden (the override may have expired). */
+            overridden: boolean;
+        };
+        Release: {
+            id: components["schemas"]["Uuid"];
+            project_id: components["schemas"]["Uuid"];
+            agent: components["schemas"]["ReleaseAgent"];
+            change_set_id: components["schemas"]["Uuid"];
+            baseline: components["schemas"]["ChangeSetVersionRef"];
+            candidate: components["schemas"]["ChangeSetVersionRef"];
+            title: string;
+            commit_sha: components["schemas"]["CommitSha"] | null;
+            ci_url: string | null;
+            created_by: components["schemas"]["Actor"];
+            created_at: components["schemas"]["Timestamp"];
+            /** @description The gate of the latest evaluation; `null` before one. */
+            gate: components["schemas"]["GateSummary"] | null;
+        };
+        ReleasePage: {
+            items: components["schemas"]["Release"][];
+            /** @description The cursor of the next page; `null` on the last page. */
+            next_cursor: string | null;
+        };
+        ReleaseDetail: {
+            release: components["schemas"]["Release"];
+            /** @description Every evaluation, newest first. */
+            revisions: components["schemas"]["GateSummary"][];
+        };
+        CreatedRelease: {
+            release: components["schemas"]["Release"];
+            gate: components["schemas"]["ReleaseGate"] | null;
+        };
+        /** @description The gate policy as it applied, every default resolved. */
+        ResolvedGatePolicy: {
+            always_run_tags: string[];
+            max_production_samples: number;
+            include_known_regressions: boolean;
+            max_depth: number;
+            max_gate_cost_usd: number;
+            latency_regression_pct: number;
+            latency_regression_min_ms: number;
+            cost_regression_pct: number;
+            semantic_regression_drop: number;
+            judge_min_agreement: number;
+            allow_reviewer_override: boolean;
+            warn_fails_ci: boolean;
+        };
+        /** @description A scenario the release requires, pinned to the version its impact selected. */
+        ReleaseSuiteEntry: {
+            /** @description Absent when the scenario library did not confirm the scenario (it cannot run; its result is missing). */
+            scenario_version_id?: components["schemas"]["Uuid"];
+            scenario_name: string;
+            severity: string;
+            /** @description Critical, always run by the gate policy, or a known production regression. */
+            mandatory: boolean;
+            known_regression: boolean;
+            reasons: components["schemas"]["ImpactReasons"];
+            why: string[];
+        };
+        GateObservation: {
+            detail: string;
+            ref?: string;
+            expected?: unknown;
+            actual?: unknown;
+        };
+        GateEvidence: {
+            scenario?: string;
+            expectation?: string;
+            /** @description One sentence. */
+            summary: string;
+            candidate?: string;
+            baseline?: string;
+            observed?: components["schemas"]["GateObservation"][];
+            /** @description Where the candidate first acted differently. */
+            divergence?: string;
+            trace_id?: string;
+            /** @description The baseline fails the same way. */
+            pre_existing?: boolean;
+        };
+        GateRule: {
+            /** @description `critical_failure`, `regression`, `incomplete`… (clients ignore rules they do not know). */
+            rule: string;
+            /** @enum {string} */
+            outcome: "WARN" | "BLOCK";
+            title: string;
+            statement: string;
+            evidence: components["schemas"]["GateEvidence"][];
+        };
+        GateCounts: {
+            required: number;
+            evaluated: number;
+            passed: number;
+            failed: number;
+            incomplete: number;
+            new_critical_failures: number;
+            regressed: number;
+            improved: number;
+            known_regressions: number;
+        };
+        GateRatio: {
+            name: string;
+            covered: number;
+            total: number;
+            missing: string[] | null;
+        };
+        GateRiskFactor: {
+            name: string;
+            count: number;
+            points: number;
+            cap: number;
+            contribution: number;
+        };
+        /** @description Sorts releases; not a probability, and never decides. */
+        GateRiskIndex: {
+            value: number;
+            formula: string;
+            factors: components["schemas"]["GateRiskFactor"][];
+        };
+        /** @description The gate's decision (spec §28); it never changes. */
+        GateDecision: {
+            outcome: components["schemas"]["GateOutcome"];
+            incomplete: boolean;
+            rules_version: string;
+            summary: string;
+            /** @description Every rule that fired, most severe first. */
+            rules: components["schemas"]["GateRule"][];
+            counts: components["schemas"]["GateCounts"];
+            coverage: components["schemas"]["GateRatio"][] | null;
+            risk_index: components["schemas"]["GateRiskIndex"];
+            /** @enum {integer} */
+            exit_code: 0 | 2 | 3;
+            ci_fails: boolean;
+        };
+        GateOverride: {
+            id: components["schemas"]["Uuid"];
+            gate_decision_id: components["schemas"]["Uuid"];
+            /** @enum {string} */
+            original_outcome: "WARN" | "BLOCK";
+            reason: string;
+            ticket_url: string | null;
+            expires_at: components["schemas"]["Timestamp"] | null;
+            actor: components["schemas"]["Actor"];
+            created_at: components["schemas"]["Timestamp"];
+            /** @description False once expired. */
+            active: boolean;
+        };
+        ReleaseGate: {
+            release_id: components["schemas"]["Uuid"];
+            release_evaluation_id: components["schemas"]["Uuid"];
+            revision: number;
+            status: components["schemas"]["ReleaseEvaluationStatus"];
+            requested_by: components["schemas"]["Actor"];
+            requested_at: components["schemas"]["Timestamp"];
+            decided_at: components["schemas"]["Timestamp"] | null;
+            eval_run_id: components["schemas"]["Uuid"] | null;
+            policy: components["schemas"]["ResolvedGatePolicy"];
+            suite: components["schemas"]["ReleaseSuiteEntry"][];
+            impact: components["schemas"]["ChangeImpact"];
+            decision: components["schemas"]["GateDecision"] | null;
+            summary: components["schemas"]["GateDecisionSummary"] | null;
+            /** @description SHA-256 of the canonical JSON of the decision and its input. */
+            evidence_sha256: components["schemas"]["Sha256"] | null;
+            /** @description The stored decision and input still hash to `evidence_sha256`. */
+            evidence_verified: boolean | null;
+            override: components["schemas"]["GateOverride"] | null;
+            effective_outcome: components["schemas"]["EffectiveOutcome"];
+            /** @enum {integer|null} */
+            exit_code: 0 | 2 | 3 | null;
+            ci_fails: boolean | null;
+        };
         AuditEntry: {
             id: components["schemas"]["Uuid"];
             organization_id: components["schemas"]["Uuid"];
@@ -1733,7 +2129,8 @@ export interface components {
          *     operation-specific code (`INVALID_PROJECT`, `INVALID_SETTINGS`,
          *     `INVALID_GATE_POLICY`, `INVALID_API_KEY`, `INVALID_AGENT`,
          *     `INVALID_TOOL`, `INVALID_MANIFEST` with `details.problems`,
-         *     `INVALID_COMMIT`, `MANIFEST_AGENT_MISMATCH`, `INVALID_QUERY`).
+         *     `INVALID_COMMIT`, `MANIFEST_AGENT_MISMATCH`, `INVALID_QUERY`,
+         *     `INVALID_CHANGE_SET`, `INVALID_RELEASE`, `INVALID_OVERRIDE`).
          */
         BadRequest: {
             headers: {
@@ -1861,6 +2258,7 @@ export interface components {
         AgentId: components["schemas"]["Uuid"];
         CatalogId: components["schemas"]["Uuid"];
         ChangeSetId: components["schemas"]["Uuid"];
+        ReleaseId: components["schemas"]["Uuid"];
         /** @description The `next_cursor` of the previous page. */
         Cursor: string;
         Limit: number;
@@ -3130,6 +3528,297 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    listReleases: {
+        parameters: {
+            query: {
+                project_id: components["schemas"]["Uuid"];
+                /** @description Only the releases of this agent (by name); an unknown name matches nothing. */
+                agent?: string;
+                limit?: components["parameters"]["Limit"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of releases. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleasePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    createRelease: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description The release, and its gate when it was evaluated at once. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedRelease"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description The project, the agent or one of the versions does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            409: components["responses"]["IdempotencyInProgress"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    getRelease: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                release_id: components["parameters"]["ReleaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The release. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    evaluateRelease: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                release_id: components["parameters"]["ReleaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nothing was to run; the gate decided at once. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseGate"];
+                };
+            };
+            /** @description The evaluation was requested; its gate is `PENDING`. */
+            202: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseGate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["IdempotencyInProgress"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    getReleaseGate: {
+        parameters: {
+            query?: {
+                /** @description The revision to read (the latest when absent). */
+                revision?: number;
+            };
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                release_id: components["parameters"]["ReleaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The gate. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseGate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description The release or the revision does not exist (`NOT_FOUND`), or the
+             *     release was never evaluated (`NOT_EVALUATED`).
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    overrideReleaseGate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                release_id: components["parameters"]["ReleaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description The override was recorded; the gate as it now stands. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseGate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /**
+             * @description The credential lacks `release.override` (`FORBIDDEN`), or the
+             *     project's gate policy does not let reviewers override
+             *     (`OVERRIDE_NOT_ALLOWED`).
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /**
+             * @description There is nothing to override: the release was never evaluated
+             *     (`NOT_EVALUATED`), `revision` is not the latest
+             *     (`NOT_LATEST_REVISION`), the evaluation has not decided
+             *     (`GATE_PENDING`), the gate passed (`NOTHING_TO_OVERRIDE`) or the
+             *     decision was overridden before (`ALREADY_OVERRIDDEN`); or the
+             *     first request with this `Idempotency-Key` is still running
+             *     (`IDEMPOTENCY_IN_PROGRESS`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Internal"];
         };

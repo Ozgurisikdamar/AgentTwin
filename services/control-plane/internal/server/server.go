@@ -112,9 +112,12 @@ func New(ctx context.Context, pool *pgxpool.Pool, tokens *authn.TokenService, lo
 		return nil, err
 	}
 	a := &app.App{Store: st, Auth: authenticator, Pepper: c.Pepper, Log: log, Now: now}
-	// The services a change set's impact asks (spec §22); a missing URL
-	// makes the impact incomplete, not the control plane unavailable.
-	for name, client := range map[string]**svcclient.Client{"graph-service": &a.Graph, "simulation-service": &a.Simulation} {
+	// The services a change set's impact asks (spec §22) and the one a
+	// release's gate reads its run from (spec §28); a missing URL makes the
+	// impact or the gate incomplete, not the control plane unavailable.
+	for name, client := range map[string]**svcclient.Client{
+		"graph-service": &a.Graph, "simulation-service": &a.Simulation, "evaluation-service": &a.Evaluation,
+	} {
 		if url := c.Targets[name]; url != "" {
 			if *client, err = svcclient.New(name, url, tokens, impactTimeout); err != nil {
 				return nil, err

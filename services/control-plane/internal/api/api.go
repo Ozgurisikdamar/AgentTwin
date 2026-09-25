@@ -111,6 +111,13 @@ func (s *Server) PublicRoutes(mux Router) {
 	mux.HandleFunc("GET /api/v1/change-sets/{id}", h(s.getChangeSet))
 	mux.HandleFunc("GET /api/v1/change-sets/{id}/impact", h(s.changeSetImpact))
 
+	mux.HandleFunc("POST /api/v1/releases", h(s.createRelease))
+	mux.HandleFunc("GET /api/v1/releases", h(s.listReleases))
+	mux.HandleFunc("GET /api/v1/releases/{id}", h(s.getRelease))
+	mux.HandleFunc("POST /api/v1/releases/{id}/evaluate", h(s.evaluateRelease))
+	mux.HandleFunc("GET /api/v1/releases/{id}/gate", h(s.releaseGate))
+	mux.HandleFunc("POST /api/v1/releases/{id}/override", h(s.overrideGate))
+
 	mux.HandleFunc("GET /api/v1/audit", h(s.listAudit))
 	mux.HandleFunc("GET /api/v1/audit/verify", h(s.verifyAudit))
 
@@ -708,6 +715,119 @@ func (s *Server) changeSetImpact(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	httpx.WriteJSON(w, http.StatusOK, imp)
+	return nil
+}
+
+// maxOverrideBody bounds an override request: a reason of at most 2000
+// characters and a ticket URL of at most 2048.
+const maxOverrideBody = 64 << 10
+
+func (s *Server) createRelease(w http.ResponseWriter, r *http.Request) error {
+	var in app.CreateReleaseInput
+	if err := httpx.DecodeJSON(w, r, &in, maxChangeSetBody); err != nil {
+		return err
+	}
+	rel, err := s.App.CreateRelease(r.Context(), principal(r), in)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusCreated, rel)
+	return nil
+}
+
+func (s *Server) listReleases(w http.ResponseWriter, r *http.Request) error {
+	limit, err := httpx.QueryInt(r, "limit", 50, 1, 200)
+	if err != nil {
+		return err
+	}
+	cur, err := httpx.DecodeCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		return err
+	}
+	if cur != nil && !ids.Valid(cur.ID) {
+		return httpx.Invalid("INVALID_CURSOR", "Cursor is malformed.", nil)
+	}
+	q := r.URL.Query()
+	items, err := s.App.ListReleases(r.Context(), principal(r), strings.ToLower(q.Get("project_id")), app.ReleasePage{
+		Agent: q.Get("agent"), Before: cur, Limit: limit + 1,
+	})
+	if err != nil {
+		return err
+	}
+	var next *string // null on the last page
+	if len(items) > limit {
+		items = items[:limit]
+		last := items[len(items)-1]
+		c := httpx.EncodeCursor(httpx.Cursor{TS: last.CreatedAt, ID: last.ID})
+		next = &c
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next})
+	return nil
+}
+
+func (s *Server) getRelease(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "release_id")
+	if err != nil {
+		return err
+	}
+	rel, err := s.App.GetRelease(r.Context(), principal(r), id)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusOK, rel)
+	return nil
+}
+
+func (s *Server) evaluateRelease(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "release_id")
+	if err != nil {
+		return err
+	}
+	g, err := s.App.EvaluateRelease(r.Context(), principal(r), id)
+	if err != nil {
+		return err
+	}
+	// 202 while the evaluation service runs the suite; a suite with nothing
+	// to run is decided at once.
+	status := http.StatusAccepted
+	if g.Status != "EVALUATING" {
+		status = http.StatusCreated
+	}
+	httpx.WriteJSON(w, status, g)
+	return nil
+}
+
+func (s *Server) releaseGate(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "release_id")
+	if err != nil {
+		return err
+	}
+	revision, err := httpx.QueryInt(r, "revision", 0, 1, 1_000_000)
+	if err != nil {
+		return err
+	}
+	g, err := s.App.ReleaseGate(r.Context(), principal(r), id, revision)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusOK, g)
+	return nil
+}
+
+func (s *Server) overrideGate(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "release_id")
+	if err != nil {
+		return err
+	}
+	var in app.OverrideInput
+	if err := httpx.DecodeJSON(w, r, &in, maxOverrideBody); err != nil {
+		return err
+	}
+	g, err := s.App.OverrideGate(r.Context(), principal(r), id, in)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusCreated, g)
 	return nil
 }
 

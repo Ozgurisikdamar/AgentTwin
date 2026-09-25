@@ -30,6 +30,15 @@ type fakeService struct {
 
 func newFakeService(t *testing.T, service, document string, answer func(body map[string]any) (int, any)) *fakeService {
 	t.Helper()
+	return newRoutedFakeService(t, service, document, func(_ *http.Request, body map[string]any) (int, any) {
+		return answer(body)
+	})
+}
+
+// newRoutedFakeService is newFakeService for a service asked on several
+// paths: answer sees the request.
+func newRoutedFakeService(t *testing.T, service, document string, answer func(r *http.Request, body map[string]any) (int, any)) *fakeService {
+	t.Helper()
 	contract, err := openapicheck.Load(contracts.OpenAPI, document)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +58,7 @@ func newFakeService(t *testing.T, service, document string, answer func(body map
 		f.callers = append(f.callers, p)
 		f.requests = append(f.requests, body)
 		f.mu.Unlock()
-		status, out := answer(body)
+		status, out := answer(r, body)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(out)

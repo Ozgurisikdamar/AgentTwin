@@ -185,11 +185,12 @@ type CaseSummary struct {
 // gate reads).
 type RunDetail struct {
 	Run struct {
-		ID     string         `json:"id"`
-		Status string         `json:"status"`
-		Error  *string        `json:"error"`
-		Judge  *JudgeIdentity `json:"judge"`
-		Budget *struct {
+		ID                  string         `json:"id"`
+		ReleaseEvaluationID *string        `json:"release_evaluation_id"`
+		Status              string         `json:"status"`
+		Error               *string        `json:"error"`
+		Judge               *JudgeIdentity `json:"judge"`
+		Budget              *struct {
 			SpentUSD  float64 `json:"spent_usd"`
 			Exhausted bool    `json:"exhausted"`
 		} `json:"budget"`

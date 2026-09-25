@@ -39,7 +39,7 @@ func TestMigrationsRollBackAndReapply(t *testing.T) {
 	if n, err := m.Down(ctx, later); err != nil || n != later {
 		t.Fatalf("down %d: %d, %v", later, n, err)
 	}
-	for _, table := range []string{"change_set", "tool_catalog"} {
+	for _, table := range []string{"change_set", "tool_catalog", "release", "release_evaluation", "gate_decision", "gate_override"} {
 		var exists bool
 		if err := pool.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, migrations.Schema+"."+table).Scan(&exists); err != nil || exists {
 			t.Fatalf("%s after rollback: exists=%v err=%v", table, exists, err)

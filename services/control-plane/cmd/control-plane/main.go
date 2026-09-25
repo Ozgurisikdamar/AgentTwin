@@ -31,7 +31,8 @@ func main() {
 			}
 			rt.Relay(ctx, migrations.Schema)
 			rt.Consume(ctx, "control-plane.events", 4, map[string]events.Handler{
-				"audit.recorded.v1": s.App.HandleAuditEvent,
+				"audit.recorded.v1":           s.App.HandleAuditEvent,
+				"evaluation.run_completed.v1": s.App.HandleEvaluationCompleted,
 			})
 			rt.Go(ctx, "idempotency-purge", func(ctx context.Context) error {
 				t := time.NewTicker(time.Hour)

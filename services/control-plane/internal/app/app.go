@@ -36,6 +36,9 @@ type App struct {
 	// Graph and Simulation are asked for a change set's impact; nil when
 	// the service is not configured.
 	Graph, Simulation *svcclient.Client
+	// Evaluation is read for the run a release's gate decides on; nil when
+	// the service is not configured.
+	Evaluation *svcclient.Client
 }
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)

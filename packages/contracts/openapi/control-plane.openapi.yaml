@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: AgentTwin control plane API
   version: 1.0.0
-  summary: Identity, projects, API keys, the agent and tool registry and the audit log.
+  summary: Identity, projects, API keys, the agent and tool registry, releases and their gates, and the audit log.
   description: |
     The control plane is the edge of AgentTwin: it authenticates every
     request, applies rate limits and `Idempotency-Key`, serves the resources
@@ -49,6 +49,8 @@ tags:
     description: The project's tool registry.
   - name: Changes
     description: What changed between two versions of an agent (change sets).
+  - name: Releases
+    description: Releases of an agent version, their evaluations, gate decisions and overrides.
   - name: Audit
     description: The append-only, hash-chained audit log.
   - name: Internal
@@ -1345,6 +1347,321 @@ paths:
         '500':
           $ref: '#/components/responses/Internal'
 
+  /api/v1/releases:
+    post:
+      operationId: createRelease
+      tags: [Releases]
+      summary: Create a release and evaluate it
+      description: |
+        Records a candidate version of an agent against its baseline (spec
+        §38): the change set between the two versions (stored as
+        `POST /projects/{project_id}/change-sets` would) and, unless
+        `evaluate` is `false`, the release's first evaluation (see
+        `POST /releases/{release_id}/evaluate`). The candidate commit is taken
+        from `git.candidate_commit`. Every call creates a new release; use an
+        `Idempotency-Key` so a retried CI job does not create two.
+
+        Requires `release.write`; CI keys hold it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReleaseRequest'
+      responses:
+        '201':
+          description: The release, and its gate when it was evaluated at once.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedRelease'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The project, the agent or one of the versions does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    get:
+      operationId: listReleases
+      tags: [Releases]
+      summary: List releases
+      description: The project's releases, newest first, each with the gate of its latest evaluation (`null` before one).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - name: project_id
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - name: agent
+          in: query
+          description: Only the releases of this agent (by name); an unknown name matches nothing.
+          schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of releases.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleasePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/releases/{release_id}:
+    get:
+      operationId: getRelease
+      tags: [Releases]
+      summary: Get a release and its evaluations
+      description: The release with the gate of each of its evaluations (revisions), newest first.
+      parameters:
+        - $ref: '#/components/parameters/ReleaseId'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The release.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/releases/{release_id}/evaluate:
+    post:
+      operationId: evaluateRelease
+      tags: [Releases]
+      summary: Evaluate a release (a new revision)
+      description: |
+        Starts a new evaluation of the release (spec §28, §91): a new
+        revision that records what it rests on as it is now — the project's
+        gate policy, the change set's impact and the suite pinned from it
+        (each scenario at the version the impact selected), and the
+        candidate's tools — and asks the evaluation service to run the suite
+        against both versions with the release's seed. Earlier revisions and
+        their decisions are kept as they were.
+
+        When the evaluation service reports the run, the gate decides and
+        stores the decision with the input it rests on and the SHA-256 of
+        both; a decision never changes. A suite with nothing to run is
+        decided at once (`201`): an empty suite is a coverage warning, a
+        suite no scenario of which the library confirmed is missing evidence.
+
+        Requires `release.write`; CI keys hold it.
+      parameters:
+        - $ref: '#/components/parameters/ReleaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '202':
+          description: The evaluation was requested; its gate is `PENDING`.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseGate'
+        '201':
+          description: Nothing was to run; the gate decided at once.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseGate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/releases/{release_id}/gate:
+    get:
+      operationId: getReleaseGate
+      tags: [Releases]
+      summary: The gate of a release
+      description: |
+        The gate of the latest evaluation, or of `revision`: what it rests
+        on, the decision (every rule that fired, with its evidence, the
+        counts, coverage and the risk index), the override when there is one,
+        and what it means for CI. `effective_outcome` is `PENDING` while the
+        evaluation runs, `OVERRIDDEN` while an override applies (the
+        decision keeps its outcome), otherwise the decision's outcome.
+        `exit_code` is the CLI's (0 pass, 2 warn, 3 block; 0 while
+        overridden), `null` while pending.
+      parameters:
+        - $ref: '#/components/parameters/ReleaseId'
+        - $ref: '#/components/parameters/Organization'
+        - name: revision
+          in: query
+          description: The revision to read (the latest when absent).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000000
+      responses:
+        '200':
+          description: The gate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseGate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: |
+            The release or the revision does not exist (`NOT_FOUND`), or the
+            release was never evaluated (`NOT_EVALUATED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/releases/{release_id}/override:
+    post:
+      operationId: overrideReleaseGate
+      tags: [Releases]
+      summary: Override a gate that did not pass
+      description: |
+        Lets a gated release through (spec §92), recording who, why, until
+        when (`expires_at`, at most 90 days; without it the override lasts as
+        long as this decision is the latest) and the ticket behind it. The
+        decision is not changed: the gate still reports its outcome
+        (`decision.outcome`, `override.original_outcome`) next to
+        `effective_outcome: OVERRIDDEN`. One override per decision; a new
+        evaluation is gated anew.
+
+        Only the latest revision's decision can be overridden, and only when
+        it is `WARN` or `BLOCK`. Requires `release.override` (owners,
+        administrators and reviewers); reviewers only when the project's
+        gate policy allows it (`allowReviewerOverride`).
+      parameters:
+        - $ref: '#/components/parameters/ReleaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideRequest'
+      responses:
+        '201':
+          description: The override was recorded; the gate as it now stands.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseGate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          description: |
+            The credential lacks `release.override` (`FORBIDDEN`), or the
+            project's gate policy does not let reviewers override
+            (`OVERRIDE_NOT_ALLOWED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            There is nothing to override: the release was never evaluated
+            (`NOT_EVALUATED`), `revision` is not the latest
+            (`NOT_LATEST_REVISION`), the evaluation has not decided
+            (`GATE_PENDING`), the gate passed (`NOTHING_TO_OVERRIDE`) or the
+            decision was overridden before (`ALREADY_OVERRIDDEN`); or the
+            first request with this `Idempotency-Key` is still running
+            (`IDEMPOTENCY_IN_PROGRESS`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
   /api/v1/audit:
     get:
       operationId: listAudit
@@ -1648,6 +1965,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    ReleaseId:
+      name: release_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
     Cursor:
       name: cursor
       in: query
@@ -1721,7 +2044,8 @@ components:
         operation-specific code (`INVALID_PROJECT`, `INVALID_SETTINGS`,
         `INVALID_GATE_POLICY`, `INVALID_API_KEY`, `INVALID_AGENT`,
         `INVALID_TOOL`, `INVALID_MANIFEST` with `details.problems`,
-        `INVALID_COMMIT`, `MANIFEST_AGENT_MISMATCH`, `INVALID_QUERY`).
+        `INVALID_COMMIT`, `MANIFEST_AGENT_MISMATCH`, `INVALID_QUERY`,
+        `INVALID_CHANGE_SET`, `INVALID_RELEASE`, `INVALID_OVERRIDE`).
       content:
         application/json:
           schema:
@@ -3487,6 +3811,541 @@ components:
         next_cursor:
           type: [string, 'null']
           description: The cursor of the next page; `null` on the last page.
+
+    CreateReleaseRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, agent, baseline_version, candidate_version]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        baseline_version:
+          type: string
+          description: The version in use.
+          minLength: 1
+          maxLength: 100
+        candidate_version:
+          type: string
+          description: The version to release; must differ from `baseline_version`.
+          minLength: 1
+          maxLength: 100
+        title:
+          type: string
+          maxLength: 200
+        git:
+          $ref: '#/components/schemas/ChangeSetGit'
+        declared:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/DeclaredChange'
+        ci_url:
+          type: string
+          description: The CI run that created the release (http or https).
+          maxLength: 2048
+        evaluate:
+          type: boolean
+          default: true
+          description: Start the first evaluation at once.
+    OverrideRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: Why the release may go out despite the gate.
+        ticket_url:
+          type: string
+          maxLength: 2048
+          description: The ticket or approval behind the override (http or https).
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        revision:
+          type: integer
+          minimum: 1
+          description: The revision the override is meant for; refused unless it is the latest.
+    GateOutcome:
+      type: string
+      enum: [PASS, WARN, BLOCK]
+    EffectiveOutcome:
+      type: string
+      description: '`PENDING` while evaluating, `OVERRIDDEN` while an override applies, otherwise the decision''s outcome.'
+      enum: [PENDING, PASS, WARN, BLOCK, OVERRIDDEN]
+    ReleaseEvaluationStatus:
+      type: string
+      enum: [EVALUATING, DECIDED]
+    ReleaseAgent:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+    ReleaseCost:
+      type: object
+      required: [judge_usd, agent_usd, agent_cases_known, total_usd]
+      properties:
+        judge_usd:
+          type: number
+          description: What the judge's calls cost.
+        agent_usd:
+          type: [number, 'null']
+          description: What both sides' agent runs reported costing (`null` when none reported a cost).
+        agent_cases_known:
+          type: integer
+          description: How many cases reported their cost on both sides.
+        total_usd:
+          type: number
+    GateDecisionSummary:
+      type: object
+      description: What a decision says at a glance.
+      required: [scenarios, evaluated, new_critical_failures, regressed, failed, rules, exit_code, ci_fails,
+        eval_run_status, cost, cost_delta_usd, latency_p95_delta_ms]
+      properties:
+        scenarios:
+          type: integer
+          description: Scenarios the suite required.
+        evaluated:
+          type: integer
+        new_critical_failures:
+          type: integer
+        regressed:
+          type: integer
+        failed:
+          type: integer
+        rules:
+          type: array
+          description: The rules that fired, most severe first.
+          items:
+            type: string
+        exit_code:
+          type: integer
+          enum: [0, 2, 3]
+        ci_fails:
+          type: boolean
+        eval_run_status:
+          type: [string, 'null']
+        cost:
+          oneOf:
+            - $ref: '#/components/schemas/ReleaseCost'
+            - type: 'null'
+        cost_delta_usd:
+          type: [number, 'null']
+          description: Candidate minus baseline agent cost, when both sides reported it for the same cases.
+        latency_p95_delta_ms:
+          type: [number, 'null']
+    GateSummary:
+      type: object
+      description: One evaluation (revision) of a release, as lists show it.
+      required: [revision, status, outcome, effective_outcome, incomplete, risk_index, summary, requested_by,
+        requested_at, decided_at, eval_run_id, overridden]
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/ReleaseEvaluationStatus'
+        outcome:
+          oneOf:
+            - $ref: '#/components/schemas/GateOutcome'
+            - type: 'null'
+        effective_outcome:
+          $ref: '#/components/schemas/EffectiveOutcome'
+        incomplete:
+          type: [boolean, 'null']
+          description: Evidence was missing (the outcome is then BLOCK).
+        risk_index:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+        summary:
+          oneOf:
+            - $ref: '#/components/schemas/GateDecisionSummary'
+            - type: 'null'
+        requested_by:
+          $ref: '#/components/schemas/Actor'
+        requested_at:
+          $ref: '#/components/schemas/Timestamp'
+        decided_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        eval_run_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        overridden:
+          type: boolean
+          description: The decision was overridden (the override may have expired).
+    Release:
+      type: object
+      required: [id, project_id, agent, change_set_id, baseline, candidate, title, commit_sha, ci_url, created_by,
+        created_at, gate]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          $ref: '#/components/schemas/ReleaseAgent'
+        change_set_id:
+          $ref: '#/components/schemas/Uuid'
+        baseline:
+          $ref: '#/components/schemas/ChangeSetVersionRef'
+        candidate:
+          $ref: '#/components/schemas/ChangeSetVersionRef'
+        title:
+          type: string
+        commit_sha:
+          oneOf:
+            - $ref: '#/components/schemas/CommitSha'
+            - type: 'null'
+        ci_url:
+          type: [string, 'null']
+        created_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        gate:
+          description: The gate of the latest evaluation; `null` before one.
+          oneOf:
+            - $ref: '#/components/schemas/GateSummary'
+            - type: 'null'
+    ReleasePage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Release'
+        next_cursor:
+          type: [string, 'null']
+          description: The cursor of the next page; `null` on the last page.
+    ReleaseDetail:
+      type: object
+      required: [release, revisions]
+      properties:
+        release:
+          $ref: '#/components/schemas/Release'
+        revisions:
+          type: array
+          description: Every evaluation, newest first.
+          items:
+            $ref: '#/components/schemas/GateSummary'
+    CreatedRelease:
+      type: object
+      required: [release, gate]
+      properties:
+        release:
+          $ref: '#/components/schemas/Release'
+        gate:
+          oneOf:
+            - $ref: '#/components/schemas/ReleaseGate'
+            - type: 'null'
+    ResolvedGatePolicy:
+      type: object
+      description: The gate policy as it applied, every default resolved.
+      required: [always_run_tags, max_production_samples, include_known_regressions, max_depth, max_gate_cost_usd,
+        latency_regression_pct, latency_regression_min_ms, cost_regression_pct, semantic_regression_drop,
+        judge_min_agreement, allow_reviewer_override, warn_fails_ci]
+      properties:
+        always_run_tags:
+          type: array
+          items:
+            type: string
+        max_production_samples:
+          type: integer
+        include_known_regressions:
+          type: boolean
+        max_depth:
+          type: integer
+        max_gate_cost_usd:
+          type: number
+        latency_regression_pct:
+          type: number
+        latency_regression_min_ms:
+          type: number
+        cost_regression_pct:
+          type: number
+        semantic_regression_drop:
+          type: number
+        judge_min_agreement:
+          type: number
+        allow_reviewer_override:
+          type: boolean
+        warn_fails_ci:
+          type: boolean
+    ReleaseSuiteEntry:
+      type: object
+      description: A scenario the release requires, pinned to the version its impact selected.
+      required: [scenario_name, severity, mandatory, known_regression, reasons, why]
+      properties:
+        scenario_version_id:
+          description: Absent when the scenario library did not confirm the scenario (it cannot run; its result is missing).
+          $ref: '#/components/schemas/Uuid'
+        scenario_name:
+          type: string
+        severity:
+          type: string
+        mandatory:
+          type: boolean
+          description: Critical, always run by the gate policy, or a known production regression.
+        known_regression:
+          type: boolean
+        reasons:
+          $ref: '#/components/schemas/ImpactReasons'
+        why:
+          type: array
+          items:
+            type: string
+    GateObservation:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+        ref:
+          type: string
+        expected: {}
+        actual: {}
+    GateEvidence:
+      type: object
+      required: [summary]
+      properties:
+        scenario:
+          type: string
+        expectation:
+          type: string
+        summary:
+          type: string
+          description: One sentence.
+        candidate:
+          type: string
+        baseline:
+          type: string
+        observed:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateObservation'
+        divergence:
+          type: string
+          description: Where the candidate first acted differently.
+        trace_id:
+          type: string
+        pre_existing:
+          type: boolean
+          description: The baseline fails the same way.
+    GateRule:
+      type: object
+      required: [rule, outcome, title, statement, evidence]
+      properties:
+        rule:
+          type: string
+          description: '`critical_failure`, `regression`, `incomplete`… (clients ignore rules they do not know).'
+        outcome:
+          type: string
+          enum: [WARN, BLOCK]
+        title:
+          type: string
+        statement:
+          type: string
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateEvidence'
+    GateCounts:
+      type: object
+      required: [required, evaluated, passed, failed, incomplete, new_critical_failures, regressed, improved,
+        known_regressions]
+      properties:
+        required:
+          type: integer
+        evaluated:
+          type: integer
+        passed:
+          type: integer
+        failed:
+          type: integer
+        incomplete:
+          type: integer
+        new_critical_failures:
+          type: integer
+        regressed:
+          type: integer
+        improved:
+          type: integer
+        known_regressions:
+          type: integer
+    GateRatio:
+      type: object
+      required: [name, covered, total, missing]
+      properties:
+        name:
+          type: string
+        covered:
+          type: integer
+        total:
+          type: integer
+        missing:
+          type: [array, 'null']
+          items:
+            type: string
+    GateRiskFactor:
+      type: object
+      required: [name, count, points, cap, contribution]
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+        points:
+          type: integer
+        cap:
+          type: integer
+        contribution:
+          type: integer
+    GateRiskIndex:
+      type: object
+      description: Sorts releases; not a probability, and never decides.
+      required: [value, formula, factors]
+      properties:
+        value:
+          type: integer
+          minimum: 0
+          maximum: 100
+        formula:
+          type: string
+        factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/GateRiskFactor'
+    GateDecision:
+      type: object
+      description: The gate's decision (spec §28); it never changes.
+      required: [outcome, incomplete, rules_version, summary, rules, counts, coverage, risk_index, exit_code, ci_fails]
+      properties:
+        outcome:
+          $ref: '#/components/schemas/GateOutcome'
+        incomplete:
+          type: boolean
+        rules_version:
+          type: string
+        summary:
+          type: string
+        rules:
+          type: array
+          description: Every rule that fired, most severe first.
+          items:
+            $ref: '#/components/schemas/GateRule'
+        counts:
+          $ref: '#/components/schemas/GateCounts'
+        coverage:
+          type: [array, 'null']
+          items:
+            $ref: '#/components/schemas/GateRatio'
+        risk_index:
+          $ref: '#/components/schemas/GateRiskIndex'
+        exit_code:
+          type: integer
+          enum: [0, 2, 3]
+        ci_fails:
+          type: boolean
+    GateOverride:
+      type: object
+      required: [id, gate_decision_id, original_outcome, reason, ticket_url, expires_at, actor, created_at, active]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        gate_decision_id:
+          $ref: '#/components/schemas/Uuid'
+        original_outcome:
+          type: string
+          enum: [WARN, BLOCK]
+        reason:
+          type: string
+        ticket_url:
+          type: [string, 'null']
+        expires_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        actor:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        active:
+          type: boolean
+          description: False once expired.
+    ReleaseGate:
+      type: object
+      required: [release_id, release_evaluation_id, revision, status, requested_by, requested_at, decided_at,
+        eval_run_id, policy, suite, impact, decision, summary, evidence_sha256, evidence_verified, override,
+        effective_outcome, exit_code, ci_fails]
+      properties:
+        release_id:
+          $ref: '#/components/schemas/Uuid'
+        release_evaluation_id:
+          $ref: '#/components/schemas/Uuid'
+        revision:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/ReleaseEvaluationStatus'
+        requested_by:
+          $ref: '#/components/schemas/Actor'
+        requested_at:
+          $ref: '#/components/schemas/Timestamp'
+        decided_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        eval_run_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        policy:
+          $ref: '#/components/schemas/ResolvedGatePolicy'
+        suite:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReleaseSuiteEntry'
+        impact:
+          $ref: '#/components/schemas/ChangeImpact'
+        decision:
+          oneOf:
+            - $ref: '#/components/schemas/GateDecision'
+            - type: 'null'
+        summary:
+          oneOf:
+            - $ref: '#/components/schemas/GateDecisionSummary'
+            - type: 'null'
+        evidence_sha256:
+          description: SHA-256 of the canonical JSON of the decision and its input.
+          oneOf:
+            - $ref: '#/components/schemas/Sha256'
+            - type: 'null'
+        evidence_verified:
+          type: [boolean, 'null']
+          description: The stored decision and input still hash to `evidence_sha256`.
+        override:
+          oneOf:
+            - $ref: '#/components/schemas/GateOverride'
+            - type: 'null'
+        effective_outcome:
+          $ref: '#/components/schemas/EffectiveOutcome'
+        exit_code:
+          type: [integer, 'null']
+          enum: [0, 2, 3, null]
+        ci_fails:
+          type: [boolean, 'null']
 
     AuditEntry:
       type: object

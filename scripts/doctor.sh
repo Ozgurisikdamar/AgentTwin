@@ -222,6 +222,25 @@ if [ -n "${AGENTTWIN_DEMO_API_KEY:-}" ]; then
   runs=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
     "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/eval-runs?status=COMPLETED&limit=1" 2>/dev/null)
   if grep -q '"status": \?"COMPLETED"' <<<"$runs"; then ok "demo project has a completed evaluation run"; else warn "no completed evaluation run yet - run 'make seed'"; fi
+  project=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
+    "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/projects" 2>/dev/null |
+    grep -o '"items": \?\[{"id": \?"[0-9a-f-]*"' | grep -o '[0-9a-f-]\{36\}' || true)
+  releases=""
+  if [ -n "$project" ]; then
+    releases=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
+      "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/releases?project_id=$project&limit=100" 2>/dev/null)
+  fi
+  decided=$(grep -o '"status": \?"DECIDED"' <<<"$releases" | wc -l | tr -d ' ')
+  if [ "${decided:-0}" -gt 0 ]; then
+    outcomes=""
+    for o in BLOCK WARN PASS OVERRIDDEN; do
+      n=$(grep -o "\"effective_outcome\": \?\"$o\"" <<<"$releases" | wc -l | tr -d ' ')
+      [ "$n" -gt 0 ] && outcomes="${outcomes:+$outcomes, }$n $o"
+    done
+    ok "demo project has $decided gated releases ($outcomes)"
+  else
+    warn "no gated release yet - run 'make seed'"
+  fi
 fi
 
 printf '\n%d failed, %d warnings\n' "$fails" "$warns"

@@ -1,0 +1,2334 @@
+openapi: 3.1.0
+info:
+  title: AgentTwin runtime gateway API
+  version: 1.0.0
+  summary: Runtime containment of an agent's tool actions — policies, approvals and every decision.
+  description: |
+    The runtime gateway is an opt-in path through which an agent's tool
+    actions pass at runtime (spec §30-31, ADR-0033). Each call is decided by
+    the tool's active policies: allowed, allowed with limits, sent to a
+    person for approval, or denied — before it reaches the tool.
+
+    * **Tool endpoints** name the tools the gateway may call, their risk tier
+      and timeout; a URL outside the egress allowlist is refused.
+    * **Policies** are named, versioned documents of CEL rules that guard one
+      tool. A version is tested (its own tests and every numeric threshold)
+      and activated only when every test passes.
+    * **Approvals** bind a person's decision to one exact action: the approved
+      action runs once; a changed action needs its own approval.
+    * **Decisions** record every call the gateway decided (append-only).
+
+    **Where to call it.** The public API is served by the control plane (the
+    edge), which authenticates the caller, applies rate limits and, on
+    `/api/v1` mutations, `Idempotency-Key`; it forwards the request to the
+    runtime gateway. The invocation path (`/gateway/v1`) is reached the same
+    way with an API key holding the `runtime:invoke` scope; there the
+    gateway itself implements `Idempotency-Key`, per action, and forwards the
+    key to the tool.
+
+    **Conventions.**
+    * Every response carries `X-Request-Id`; the gateway's errors are
+      `{"error": {"code", "message", "request_id", "details"?}}` with a stable
+      machine-readable `code`.
+    * Request bodies of `/api/v1` are strict: unknown fields are rejected
+      (`400 INVALID_JSON`). Responses may gain fields: clients ignore fields
+      and enum values they do not know.
+    * Projects and resources outside the caller's access answer `404`, never
+      `403`, so their existence cannot be probed.
+
+    Compatibility and the checks that keep this document true are described
+    in `packages/contracts/README.md`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: The control plane of a local stack (`make dev`).
+tags:
+  - name: Tool endpoints
+    description: The tools the gateway may call (ADR-0033).
+  - name: Policies
+    description: Versioned CEL policies, their tests and activation (ADR-0005, ADR-0033).
+  - name: Approvals
+    description: A person's decision on one exact action (spec §41.9).
+  - name: Decisions
+    description: Every call the gateway decided.
+  - name: Invocation
+    description: The path an agent's tool calls take (opt-in by base URL).
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  /api/v1/tool-endpoints:
+    get:
+      operationId: listToolEndpoints
+      tags: [Tool endpoints]
+      summary: List tool endpoints
+      description: The project's registered tools, by name.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+      responses:
+        '200':
+          description: The registered tools.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolEndpointPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/tool-endpoints/{tool}:
+    parameters:
+      - $ref: '#/components/parameters/Tool'
+    get:
+      operationId: getToolEndpoint
+      tags: [Tool endpoints]
+      summary: Read a tool endpoint
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+      responses:
+        '200':
+          description: The tool endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolEndpoint'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      operationId: putToolEndpoint
+      tags: [Tool endpoints]
+      summary: Register or replace a tool endpoint
+      description: |
+        Registers the tool (`201`) or replaces its endpoint (`200`); needs
+        `policy.write`. The URL's host must be in the egress allowlist
+        (`RUNTIME_EGRESS_ALLOWED_HOSTS`, or `RUNTIME_EGRESS_PRIVATE_HOSTS` for
+        an internal service); every call is checked again when it dials.
+        An irreversible tool requires an idempotency key unless
+        `idempotency: optional` is set. Audited (`tool_endpoint.registered` or
+        `tool_endpoint.updated`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolEndpointInput'
+      responses:
+        '200':
+          description: The endpoint was replaced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolEndpoint'
+        '201':
+          description: The tool was registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolEndpoint'
+        '400':
+          $ref: '#/components/responses/EndpointInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: deleteToolEndpoint
+      tags: [Tool endpoints]
+      summary: Remove a tool endpoint
+      description: |
+        The tool can no longer be called through the gateway (`404
+        TOOL_NOT_REGISTERED`); its policies and decisions are kept. Needs
+        `policy.write`; audited (`tool_endpoint.removed`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policies:
+    get:
+      operationId: listPolicies
+      tags: [Policies]
+      summary: List policies
+      description: The project's policies by name, optionally those guarding one tool.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+        - name: tool
+          in: query
+          schema:
+            $ref: '#/components/schemas/ToolName'
+      responses:
+        '200':
+          description: The policies.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: createPolicy
+      tags: [Policies]
+      summary: Create a policy
+      description: |
+        Stores a policy document (YAML or JSON, `apiVersion:
+        agenttwin.dev/v1`, `kind: Policy`) as version 1 of a new policy named
+        by its `metadata.name`, guarding `spec.tool`. Every rule is compiled
+        and type-checked; nothing is activated. Needs `policy.write`; audited
+        (`policy.created`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyDocumentInput'
+      responses:
+        '201':
+          description: The policy and its first version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyCreated'
+        '400':
+          $ref: '#/components/responses/PolicyInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/PolicyExists'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policies/test:
+    post:
+      operationId: testPolicy
+      tags: [Policies]
+      summary: Test a policy
+      description: |
+        Decides a draft document, or a saved version, against its own tests
+        and the extra `cases`, and around every numeric threshold its rules
+        compare against: `args.amount > 100` is decided at 99, 99.99, 100,
+        100.01 and 101 (one hundredth either side of a decimal threshold; one
+        call either side of `trace.calls`). The boundaries start from `base`,
+        else from the first test's action. Reports the rules no test decided
+        and whether the version could be activated for the tool as
+        registered. Needs `policy.test`; nothing is stored.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyTestInput'
+      responses:
+        '200':
+          description: What the policy decided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyTestReport'
+        '400':
+          $ref: '#/components/responses/PolicyTestInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policies/{policy_id}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyId'
+    get:
+      operationId: getPolicy
+      tags: [Policies]
+      summary: Read a policy
+      description: The policy, its active version and every version (newest first).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+      responses:
+        '200':
+          description: The policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policies/{policy_id}/versions:
+    parameters:
+      - $ref: '#/components/parameters/PolicyId'
+    post:
+      operationId: addPolicyVersion
+      tags: [Policies]
+      summary: Add a policy version
+      description: |
+        Stores the document as the policy's next version (`201`). Its
+        `metadata.name` and `spec.tool` must stay the policy's. A document
+        that decides exactly what the latest version decides (the same
+        `spec_hash`) returns that version (`200`, `created: false`). Versions
+        are immutable; the active one does not change. Needs `policy.write`;
+        audited (`policy.version_created`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyDocumentInput'
+      responses:
+        '200':
+          description: The latest version already decides this.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyVersionAdded'
+        '201':
+          description: The new version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyVersionAdded'
+        '400':
+          $ref: '#/components/responses/PolicyInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policies/{policy_id}/versions/{version}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyId'
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: getPolicyVersion
+      tags: [Policies]
+      summary: Read a policy version
+      description: |
+        The document as written and as read (defaults filled), the variables
+        its rules can use and the numeric thresholds they compare against.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+      responses:
+        '200':
+          description: The version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyVersionDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policies/{policy_id}/activate:
+    parameters:
+      - $ref: '#/components/parameters/PolicyId'
+    post:
+      operationId: activatePolicy
+      tags: [Policies]
+      summary: Activate a policy version
+      description: |
+        Makes the version the policy's active one, from the next call on.
+        Refused (`422 POLICY_NOT_ACTIVATABLE`, `details.problems`) unless the
+        version has tests and every test passes; `fail_open` only for a tool
+        registered as `READ`. Activating the active version changes nothing.
+        Needs `policy.activate`; publishes `policy.activated.v1` and is
+        audited (`policy.activated`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateInput'
+      responses:
+        '200':
+          description: The policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/NotActivatable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policies/{policy_id}/deactivate:
+    parameters:
+      - $ref: '#/components/parameters/PolicyId'
+    post:
+      operationId: deactivatePolicy
+      tags: [Policies]
+      summary: Deactivate a policy
+      description: |
+        The policy no longer guards its tool, from the next call on. A reason
+        is required: removing a guard is audited (`policy.deactivated`).
+        Needs `policy.activate`.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInput'
+      responses:
+        '200':
+          description: The policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          $ref: '#/components/responses/ReasonInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/approvals:
+    get:
+      operationId: listApprovals
+      tags: [Approvals]
+      summary: List approval requests
+      description: |
+        Newest first. `status` is the status as of now: `EXPIRED` includes
+        open requests past their expiry, which `PENDING` and `APPROVED`
+        exclude.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ApprovalStatus'
+        - name: tool
+          in: query
+          schema:
+            $ref: '#/components/schemas/ToolName'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/approvals/{approval_id}:
+    parameters:
+      - $ref: '#/components/parameters/ApprovalId'
+    get:
+      operationId: getApproval
+      tags: [Approvals]
+      summary: Read an approval request
+      description: |
+        What the agent is trying to do (the tool, its risk tier, the redacted
+        arguments), why it needs approval (the policy, rule and reason), the
+        decision that asked, the expiry, the trace, and every call that
+        presented the approval's token with how its arguments differ from the
+        approved ones (spec §41.9).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+      responses:
+        '200':
+          description: The request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/approvals/{approval_id}/approve:
+    parameters:
+      - $ref: '#/components/parameters/ApprovalId'
+    post:
+      operationId: approveApproval
+      tags: [Approvals]
+      summary: Approve the action
+      description: |
+        Approves this exact action, with a reason. The agent that asked then
+        claims a token and the action runs once. A request that is no longer
+        pending answers `409 APPROVAL_CLOSED` (`details.status`); one past its
+        expiry is closed as `EXPIRED`. Needs `approval.decide`; audited
+        (`approval.approved`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInput'
+      responses:
+        '200':
+          description: The request, approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '400':
+          $ref: '#/components/responses/ReasonInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ApprovalClosed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/approvals/{approval_id}/deny:
+    parameters:
+      - $ref: '#/components/parameters/ApprovalId'
+    post:
+      operationId: denyApproval
+      tags: [Approvals]
+      summary: Deny the action
+      description: |
+        Denies this action, with a reason; the agent's token claim answers
+        `403 APPROVAL_DENIED`. The same rules as approving. Needs
+        `approval.decide`; audited (`approval.denied`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInput'
+      responses:
+        '200':
+          description: The request, denied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '400':
+          $ref: '#/components/responses/ReasonInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ApprovalClosed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policy-decisions:
+    get:
+      operationId: listPolicyDecisions
+      tags: [Decisions]
+      summary: List decisions
+      description: Every call the gateway decided, newest first.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+        - name: tool
+          in: query
+          schema:
+            $ref: '#/components/schemas/ToolName'
+        - name: outcome
+          in: query
+          schema:
+            $ref: '#/components/schemas/Outcome'
+        - name: effect
+          in: query
+          schema:
+            $ref: '#/components/schemas/Effect'
+        - name: trace_id
+          in: query
+          schema:
+            $ref: '#/components/schemas/TraceId'
+        - name: approval_id
+          in: query
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of decisions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/policy-decisions/{decision_id}:
+    parameters:
+      - name: decision_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+    get:
+      operationId: getPolicyDecision
+      tags: [Decisions]
+      summary: Read a decision
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+      responses:
+        '200':
+          description: The decision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /gateway/v1/tools/{tool}:
+    parameters:
+      - $ref: '#/components/parameters/Tool'
+    post:
+      operationId: invokeTool
+      tags: [Invocation]
+      summary: Call a tool through the gateway
+      description: |
+        The body is the tool's arguments — exactly what the tool itself takes
+        — so an agent opts in by changing its tools base URL. The tool's
+        active policies decide the call:
+
+        * **allow** / **allow_with_limits** (a lower timeout, a smaller
+          response cap): the arguments are forwarded (http: `POST` of their
+          canonical JSON; mcp: a JSON-RPC `tools/call`) with the
+          `Idempotency-Key`, `traceparent` and the endpoint's forwarded
+          headers, and the tool's status and body are returned.
+        * **require_approval**: `403 APPROVAL_REQUIRED` with
+          `details.approval_id` and `details.expires_at`. Once a person
+          approves, the agent claims a token and sends it in
+          `X-AgentTwin-Approval-Token` with the same call: the approved action
+          runs once. A different action (`403 APPROVAL_MISMATCH`, with
+          `details.changes`) is recorded on the approval and does not use it.
+          An approval never overrides a `deny`.
+        * **deny**: `403 POLICY_DENIED`.
+
+        With an `Idempotency-Key` (scoped to the project and tool), a call
+        that already completed for the same action returns the stored
+        response (`Idempotent-Replayed: true`) without calling the tool; the
+        same key for another action is `409 IDEMPOTENCY_KEY_REUSED`; while it
+        runs, `409 IDEMPOTENCY_IN_PROGRESS`. A timeout leaves the outcome
+        unknown: the next call with the key is forwarded again, for the tool
+        to deduplicate.
+
+        Every decided call is recorded; the decision is in the response
+        headers. `deny` and `require_approval` publish
+        `policy.violation_detected.v1`.
+      parameters:
+        - name: X-AgentTwin-Project
+          in: header
+          description: The project (optional when the API key reaches one project).
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - name: X-AgentTwin-Agent
+          in: header
+          schema:
+            type: string
+            maxLength: 200
+        - name: X-AgentTwin-Agent-Version
+          in: header
+          schema:
+            type: string
+            maxLength: 200
+        - name: X-AgentTwin-Environment
+          in: header
+          description: Defaults to `production`.
+          schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,39}$
+        - name: traceparent
+          in: header
+          description: The W3C trace context of the agent's run; `trace.calls` counts per trace.
+          schema:
+            type: string
+        - name: X-AgentTwin-Trace-Id
+          in: header
+          description: The trace, when no `traceparent` is sent (they must agree when both are).
+          schema:
+            $ref: '#/components/schemas/TraceId'
+        - name: Idempotency-Key
+          in: header
+          description: |
+            Required for a tool registered with `idempotency: required`
+            (irreversible tools by default); may instead be the
+            `idempotency_key` argument (they must agree when both are sent).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: X-AgentTwin-Approval-Token
+          in: header
+          description: The token of an approved request for this exact action.
+          schema:
+            type: string
+            pattern: ^apt_[A-Za-z0-9_-]{43}$
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolArguments'
+      responses:
+        '2XX':
+          description: The tool's own answer (its status and body).
+          headers:
+            X-AgentTwin-Decision:
+              $ref: '#/components/headers/Decision'
+            X-AgentTwin-Decision-Id:
+              $ref: '#/components/headers/DecisionId'
+            X-AgentTwin-Policy:
+              $ref: '#/components/headers/Policy'
+            X-AgentTwin-Policy-Version:
+              $ref: '#/components/headers/PolicyVersion'
+            X-AgentTwin-Policy-Rule:
+              $ref: '#/components/headers/PolicyRule'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+            application/octet-stream:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+        '400':
+          $ref: '#/components/responses/InvokeInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/InvokeRefused'
+        '404':
+          $ref: '#/components/responses/ToolNotRegistered'
+        '409':
+          $ref: '#/components/responses/InvokeConflict'
+        '413':
+          $ref: '#/components/responses/InvokePayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/InvokeRateLimited'
+        '500':
+          $ref: '#/components/responses/InvokeInternal'
+        '502':
+          $ref: '#/components/responses/ToolFailed'
+        '503':
+          $ref: '#/components/responses/GatewayUnavailable'
+        '504':
+          $ref: '#/components/responses/ToolTimeout'
+        default:
+          description: The tool's own answer with another status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+            application/octet-stream:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+
+  /gateway/v1/approvals/{approval_id}:
+    parameters:
+      - $ref: '#/components/parameters/ApprovalId'
+    get:
+      operationId: getGatewayApproval
+      tags: [Invocation]
+      summary: Read an approval request (agent side)
+      description: The status of a request the agent's call opened, for the agent to poll.
+      parameters:
+        - $ref: '#/components/parameters/ProjectHeader'
+      responses:
+        '200':
+          description: The request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /gateway/v1/approvals/{approval_id}/token:
+    parameters:
+      - $ref: '#/components/parameters/ApprovalId'
+    post:
+      operationId: claimApprovalToken
+      tags: [Invocation]
+      summary: Claim the token of an approved request
+      description: |
+        Mints the token the approved action runs with — 32 random bytes,
+        stored only as a hash, valid for at most 10 minutes and never past
+        the approval's expiry. Only the caller that asked for the approval
+        may claim it (`403 NOT_REQUESTER`); claiming again voids the previous
+        token. `409 APPROVAL_PENDING` while a person has not decided;
+        `403 APPROVAL_DENIED`, `APPROVAL_EXPIRED` or `APPROVAL_USED`
+        otherwise. Audited (`approval.token_issued`).
+      parameters:
+        - $ref: '#/components/parameters/ProjectHeader'
+      responses:
+        '201':
+          description: The token (shown once).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalToken'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ClaimRefused'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ApprovalPending'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A session token (dev login), an OIDC access token or an API key.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-AgentTwin-Api-Key
+      description: A project API key.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        One key per user action (ADR-0019), handled by the edge. A repeat of
+        the same request returns the stored response with
+        `Idempotent-Replayed: true`; the same key with a different request
+        answers `422`; while the first request runs, `409`. Keys expire after
+        24 hours.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9._:-]{8,128}$
+    Organization:
+      name: X-AgentTwin-Org
+      in: header
+      required: false
+      description: The organization to act in, for credentials that belong to several.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Project:
+      name: project_id
+      in: query
+      required: true
+      description: The project. A project outside the caller's access answers `404`.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ProjectHeader:
+      name: X-AgentTwin-Project
+      in: header
+      required: false
+      description: The project (optional when the API key reaches one project).
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Tool:
+      name: tool
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ToolName'
+    PolicyId:
+      name: policy_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ApprovalId:
+      name: approval_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Cursor:
+      name: cursor
+      in: query
+      description: The `next_cursor` of the previous page.
+      schema:
+        type: string
+        maxLength: 512
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+  headers:
+    Decision:
+      description: The effect decided (`allow`, `allow_with_limits`, `require_approval`, `deny`).
+      schema:
+        $ref: '#/components/schemas/Effect'
+    DecisionId:
+      description: The recorded decision (`GET /api/v1/policy-decisions/{decision_id}`).
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Policy:
+      description: The policy that decided (absent when no policy guards the tool).
+      schema:
+        type: string
+    PolicyVersion:
+      description: The version of the deciding policy.
+      schema:
+        type: string
+    PolicyRule:
+      description: The rule that decided (absent when the policy's default applied).
+      schema:
+        type: string
+    IdempotentReplayed:
+      description: '`true` when the answer is the stored answer of an earlier call with the same `Idempotency-Key`.'
+      schema:
+        type: string
+        enum: ['true']
+
+  responses:
+    BadRequest:
+      description: |
+        The request is invalid: `INVALID_PARAMETER` (`details.field`),
+        `INVALID_CURSOR`, `PROJECT_REQUIRED` or `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    EndpointInvalid:
+      description: |
+        `INVALID_ENDPOINT` (kind, risk, timeout, idempotency, forwarded
+        headers or URL; `details.field`), `EGRESS_NOT_ALLOWED` (the URL's host
+        is not in the egress allowlist, a private or metadata address,
+        credentials in the URL, or plain http where it is not allowed),
+        `INVALID_PARAMETER`, `INVALID_JSON` (including an unknown field),
+        `EMPTY_BODY` or `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PolicyInvalid:
+      description: |
+        `INVALID_POLICY` (`details.problems`: every problem with its field —
+        schema, names, rules that do not compile or are not boolean, tests;
+        a new version that renames the policy or retargets its tool),
+        `INVALID_PARAMETER`, `INVALID_JSON`, `EMPTY_BODY` or
+        `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PolicyTestInvalid:
+      description: |
+        `INVALID_POLICY` (a draft document that is not valid;
+        `details.problems`), `INVALID_CASES` (`details.field`),
+        `INVALID_PARAMETER` (neither or both of a document and a saved
+        version), `INVALID_JSON`, `EMPTY_BODY` or `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ReasonInvalid:
+      description: |
+        `INVALID_REASON` (missing or longer than 2000 characters),
+        `INVALID_PARAMETER`, `INVALID_JSON`, `EMPTY_BODY` or
+        `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: No valid credential (`UNAUTHENTICATED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The credential lacks the permission (`FORBIDDEN`; `details.required_permission`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The project or resource does not exist or is outside the caller's projects (`NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PolicyExists:
+      description: |
+        A policy of that name exists in the project (`POLICY_EXISTS`; add a
+        version to it), or the first request with this `Idempotency-Key` is
+        still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotActivatable:
+      description: |
+        The version cannot be activated (`POLICY_NOT_ACTIVATABLE`;
+        `details.problems`: no tests, a failing test, `fail_open` on a tool
+        that is not `READ`), or the `Idempotency-Key` was used for a
+        different request (`IDEMPOTENCY_KEY_REUSED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ApprovalClosed:
+      description: |
+        The request is no longer pending (`APPROVAL_CLOSED`;
+        `details.status`), or the first request with this `Idempotency-Key`
+        is still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ApprovalPending:
+      description: A person has not decided yet (`APPROVAL_PENDING`); poll and claim again.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ClaimRefused:
+      description: |
+        `NOT_REQUESTER`, `APPROVAL_DENIED` (`details.reason`),
+        `APPROVAL_EXPIRED`, `APPROVAL_USED`, or `FORBIDDEN` (no
+        `runtime:invoke`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyInProgress:
+      description: The first request with this `Idempotency-Key` is still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: The request body is too large (`PAYLOAD_TOO_LARGE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsupportedMediaType:
+      description: The body is not `application/json` (`UNSUPPORTED_MEDIA_TYPE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyKeyReused:
+      description: The `Idempotency-Key` was used for a different request (`IDEMPOTENCY_KEY_REUSED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests (`RATE_LIMITED`).
+      headers:
+        Retry-After:
+          description: Seconds to wait.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Internal:
+      description: An unexpected error (`INTERNAL`); quote the `request_id`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UpstreamUnavailable:
+      description: The runtime gateway is not reachable from the control plane (`UPSTREAM_UNAVAILABLE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: |
+        The runtime gateway is not configured on this control plane
+        (`SERVICE_NOT_CONFIGURED`) or its database is unavailable
+        (`UNAVAILABLE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InvokeInvalid:
+      description: |
+        The gateway refused the call before deciding it: `INVALID_ARGUMENTS`
+        (not one JSON object), `INVALID_CONTEXT` (`details.problems`: a
+        header that cannot be used), `PROJECT_REQUIRED`,
+        `IDEMPOTENCY_KEY_REQUIRED`, `INVALID_PARAMETER` — or the tool's own
+        `400` answer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    InvokeRefused:
+      description: |
+        The decision refused the call: `POLICY_DENIED`, `APPROVAL_REQUIRED`
+        (`details.approval_id`, `details.expires_at`), `APPROVAL_MISMATCH`
+        (`details.changes`), `APPROVAL_USED`, `APPROVAL_EXPIRED`,
+        `APPROVAL_NOT_APPROVED`, `APPROVAL_TOKEN_INVALID`,
+        `APPROVAL_TOKEN_EXPIRED` (claim a new token); the decision is in
+        the headers. `FORBIDDEN` without `runtime:invoke` — or the tool's own
+        `403` answer.
+      headers:
+        X-AgentTwin-Decision:
+          $ref: '#/components/headers/Decision'
+        X-AgentTwin-Decision-Id:
+          $ref: '#/components/headers/DecisionId'
+        X-AgentTwin-Policy:
+          $ref: '#/components/headers/Policy'
+        X-AgentTwin-Policy-Version:
+          $ref: '#/components/headers/PolicyVersion'
+        X-AgentTwin-Policy-Rule:
+          $ref: '#/components/headers/PolicyRule'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    ToolNotRegistered:
+      description: |
+        The tool is not registered with the gateway (`TOOL_NOT_REGISTERED`),
+        the project is outside the key's (`NOT_FOUND`) — or the tool's own
+        `404` answer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    InvokeConflict:
+      description: |
+        `IDEMPOTENCY_KEY_REUSED` (the key was used for another action) or
+        `IDEMPOTENCY_IN_PROGRESS` — or the tool's own `409` answer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    InvokePayloadTooLarge:
+      description: The arguments exceed 256 KiB (`PAYLOAD_TOO_LARGE`) — or the tool's own `413` answer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    InvokeRateLimited:
+      description: Too many requests at the edge (`RATE_LIMITED`) — or the tool's own `429` answer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    InvokeInternal:
+      description: An unexpected error (`INTERNAL`) — or the tool's own `500` answer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    ToolFailed:
+      description: |
+        The tool could not be called: `TOOL_UNAVAILABLE`, `EGRESS_BLOCKED`
+        (its address is refused when dialled), `TOOL_RESPONSE_TOO_LARGE`,
+        `TOOL_PROTOCOL_ERROR` (an MCP server's error) — or the tool's own
+        `502` answer, or the edge's `UPSTREAM_UNAVAILABLE`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    GatewayUnavailable:
+      description: |
+        The gateway could not decide the call (`GATEWAY_UNAVAILABLE`):
+        nothing was forwarded — or the tool's own `503` answer, or the edge's
+        `SERVICE_NOT_CONFIGURED`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+    ToolTimeout:
+      description: |
+        The tool did not answer in time (`TOOL_TIMEOUT`): its outcome is
+        unknown; retry with the same `Idempotency-Key` — or the tool's own
+        `504` answer.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrToolAnswer'
+        text/plain:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+        application/octet-stream:
+          schema:
+            $ref: '#/components/schemas/ToolAnswer'
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    ToolName:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$
+    TraceId:
+      type: string
+      pattern: ^[0-9a-f]{32}$
+    Hash:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+    Risk:
+      type: string
+      enum: [READ, WRITE_REVERSIBLE, WRITE_IRREVERSIBLE, EXECUTE, ADMIN]
+    Effect:
+      type: string
+      enum: [allow, allow_with_limits, require_approval, deny]
+    Outcome:
+      type: string
+      description: |
+        `forwarded` (sent, not yet answered), `executed` (the tool answered),
+        `failed` (it failed, timed out or answered 5xx), `replayed` (a stored
+        answer), `denied`, `approval_required`, `approval_refused` (a token
+        that did not let the call run).
+      enum: [forwarded, executed, failed, replayed, denied, approval_required, approval_refused]
+    ApprovalStatus:
+      type: string
+      enum: [PENDING, APPROVED, DENIED, EXPIRED, USED]
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+
+    ErrorOrToolAnswer:
+      description: The gateway's error, or the tool's own answer with that status.
+      anyOf:
+        - $ref: '#/components/schemas/Error'
+        - $ref: '#/components/schemas/ToolAnswer'
+    ToolArguments:
+      type: object
+      description: The tool's arguments, exactly as the tool takes them.
+    ToolAnswer:
+      description: |
+        What the tool answered: JSON as `application/json`, text as
+        `text/plain`, anything else as `application/octet-stream` (never
+        HTML).
+
+    ToolEndpoint:
+      type: object
+      required: [tool, kind, url, risk, timeout_ms, idempotency, forward_headers, updated_by, created_at, updated_at]
+      properties:
+        tool:
+          $ref: '#/components/schemas/ToolName'
+        kind:
+          type: string
+          enum: [http, mcp]
+        url:
+          type: string
+        risk:
+          $ref: '#/components/schemas/Risk'
+        timeout_ms:
+          type: integer
+          minimum: 100
+          maximum: 60000
+        idempotency:
+          type: string
+          enum: [required, optional]
+        forward_headers:
+          type: array
+          items:
+            type: string
+        updated_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    ToolEndpointInput:
+      type: object
+      additionalProperties: false
+      required: [project_id, url, risk]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          type: string
+          enum: [http, mcp]
+          default: http
+        url:
+          type: string
+          maxLength: 2000
+          description: An absolute http(s) URL in the egress allowlist; for `http`, the arguments are POSTed to it.
+        risk:
+          $ref: '#/components/schemas/Risk'
+        timeout_ms:
+          type: integer
+          minimum: 100
+          maximum: 60000
+          default: 10000
+        idempotency:
+          type: string
+          enum: [required, optional]
+          description: Defaults to `required` for `WRITE_IRREVERSIBLE`, else `optional`.
+        forward_headers:
+          type: array
+          maxItems: 10
+          description: Request headers passed to the tool (never credentials or the gateway's own).
+          items:
+            type: string
+            pattern: ^[A-Za-z0-9-]{1,100}$
+    ToolEndpointPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolEndpoint'
+
+    VersionRef:
+      type: object
+      required: [id, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+    Policy:
+      type: object
+      required: [id, name, tool, description, latest_version, active, activated_by, activated_at, created_by, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        tool:
+          $ref: '#/components/schemas/ToolName'
+        description:
+          type: string
+        latest_version:
+          type: integer
+        active:
+          description: The active version, or `null` when the policy guards nothing.
+          oneOf:
+            - $ref: '#/components/schemas/VersionRef'
+            - type: 'null'
+        activated_by:
+          type: [string, 'null']
+        activated_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    PolicyPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Policy'
+    VersionSummary:
+      type: object
+      required: [id, version, spec_hash, created_by, created_at, active]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+        spec_hash:
+          $ref: '#/components/schemas/Hash'
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        active:
+          type: boolean
+    PolicyDetail:
+      allOf:
+        - $ref: '#/components/schemas/Policy'
+        - type: object
+          required: [versions]
+          properties:
+            versions:
+              type: array
+              items:
+                $ref: '#/components/schemas/VersionSummary'
+    PolicySpec:
+      type: object
+      description: |
+        The document as read, defaults filled (`apiVersion`, `kind`,
+        `metadata`, `spec`: `tool`, `default`, `failMode`, `rules`, `limits`,
+        `approval`, `tests`).
+    PolicyVersion:
+      type: object
+      required: [id, policy_id, version, document, spec, spec_hash, created_by, created_at, active]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        policy_id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+        document:
+          type: string
+          description: The document as its author wrote it.
+        spec:
+          $ref: '#/components/schemas/PolicySpec'
+        spec_hash:
+          $ref: '#/components/schemas/Hash'
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        active:
+          type: boolean
+    PolicyVersionDetail:
+      allOf:
+        - $ref: '#/components/schemas/PolicyVersion'
+        - type: object
+          required: [variables, thresholds]
+          properties:
+            variables:
+              type: array
+              description: What a rule can read.
+              items:
+                type: string
+            thresholds:
+              type: array
+              items:
+                $ref: '#/components/schemas/Threshold'
+    PolicyDocumentInput:
+      type: object
+      additionalProperties: false
+      required: [project_id, document]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        document:
+          type: string
+          maxLength: 262144
+          description: The policy document, YAML or JSON.
+    PolicyCreated:
+      type: object
+      required: [policy, version]
+      properties:
+        policy:
+          $ref: '#/components/schemas/Policy'
+        version:
+          $ref: '#/components/schemas/PolicyVersion'
+    PolicyVersionAdded:
+      type: object
+      required: [policy, version, created]
+      properties:
+        policy:
+          $ref: '#/components/schemas/Policy'
+        version:
+          $ref: '#/components/schemas/PolicyVersion'
+        created:
+          type: boolean
+    ActivateInput:
+      type: object
+      additionalProperties: false
+      required: [project_id, version]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 2000
+    ReasonInput:
+      type: object
+      additionalProperties: false
+      required: [project_id, reason]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+
+    TestContext:
+      type: object
+      additionalProperties: false
+      description: The action's context, the arguments aside.
+      properties:
+        agent:
+          type: string
+        agentVersion:
+          type: string
+        environment:
+          type: string
+        subject:
+          type: string
+        risk:
+          type: string
+        traceId:
+          type: string
+        traceCalls:
+          type: integer
+          minimum: 0
+    PolicyTestCase:
+      type: object
+      additionalProperties: false
+      required: [name, expect]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        args:
+          type: object
+        context:
+          $ref: '#/components/schemas/TestContext'
+        expect:
+          $ref: '#/components/schemas/Effect'
+        rule:
+          type: string
+          description: The rule expected to decide.
+    PolicyTestInput:
+      type: object
+      additionalProperties: false
+      required: [project_id]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        document:
+          type: string
+          maxLength: 262144
+          description: A draft document (or give `policy_id` and `version`).
+        policy_id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+          minimum: 1
+        cases:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/PolicyTestCase'
+        base:
+          type: object
+          additionalProperties: false
+          description: The action the boundaries start from.
+          properties:
+            args:
+              type: object
+            context:
+              $ref: '#/components/schemas/TestContext'
+    Limits:
+      type: object
+      properties:
+        timeoutMs:
+          type: integer
+        maxResponseBytes:
+          type: integer
+    Match:
+      type: object
+      required: [rule, effect]
+      properties:
+        rule:
+          type: string
+        effect:
+          $ref: '#/components/schemas/Effect'
+        message:
+          type: string
+    PolicyDecision:
+      type: object
+      required: [policy, effect, message, matched, fail_mode_applied]
+      properties:
+        policy:
+          type: string
+        effect:
+          $ref: '#/components/schemas/Effect'
+        rule:
+          type: string
+          description: The rule that decided; absent when the default applied.
+        message:
+          type: string
+        matched:
+          type: array
+          description: Every rule whose condition held, in order.
+          items:
+            $ref: '#/components/schemas/Match'
+        errors:
+          type: array
+          description: Rules that could not be evaluated (the fail mode applied).
+          items:
+            type: object
+            required: [rule, error]
+            properties:
+              rule:
+                type: string
+              error:
+                type: string
+        fail_mode_applied:
+          type: boolean
+        limits:
+          $ref: '#/components/schemas/Limits'
+    TestResult:
+      type: object
+      required: [name, expect, decision, passed]
+      properties:
+        name:
+          type: string
+        expect:
+          $ref: '#/components/schemas/Effect'
+        expect_rule:
+          type: string
+        decision:
+          $ref: '#/components/schemas/PolicyDecision'
+        passed:
+          type: boolean
+        why:
+          type: string
+          description: Why the test failed.
+    Threshold:
+      type: object
+      required: [rule, path, op, value, integer]
+      properties:
+        rule:
+          type: string
+        path:
+          type: string
+          description: '`args.<name>[.<name>…]` or `trace.calls`.'
+        op:
+          type: string
+        value:
+          type: number
+        integer:
+          type: boolean
+    Boundary:
+      allOf:
+        - $ref: '#/components/schemas/Threshold'
+        - type: object
+          required: [probes]
+          properties:
+            probes:
+              type: array
+              items:
+                type: object
+                required: [value, effect, fail_mode_applied]
+                properties:
+                  value:
+                    type: number
+                  effect:
+                    $ref: '#/components/schemas/Effect'
+                  rule:
+                    type: string
+                  fail_mode_applied:
+                    type: boolean
+    Problem:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+    PolicyTestReport:
+      type: object
+      required: [tool, spec_hash, passed, results, boundaries, undecided, tool_risk, activatable, activation_problems]
+      properties:
+        tool:
+          $ref: '#/components/schemas/ToolName'
+        spec_hash:
+          $ref: '#/components/schemas/Hash'
+        passed:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestResult'
+        boundaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Boundary'
+        undecided:
+          type: array
+          description: Rules no test decided.
+          items:
+            type: string
+        tool_risk:
+          description: The tool's risk tier as registered, `null` when it is not.
+          oneOf:
+            - $ref: '#/components/schemas/Risk'
+            - type: 'null'
+        activatable:
+          type: boolean
+        activation_problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/Problem'
+
+    Approval:
+      type: object
+      required: [id, project_id, tool, risk, agent, agent_version, environment, trace_id, action_hash, arguments,
+        summary, policy, policy_version_id, rule, reason, decision_id, status, requested_by, expires_at, decided_by,
+        decided_at, decision_reason, used_at, used_decision_id, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        tool:
+          $ref: '#/components/schemas/ToolName'
+        risk:
+          $ref: '#/components/schemas/Risk'
+        agent:
+          type: string
+        agent_version:
+          type: string
+        environment:
+          type: string
+        trace_id:
+          oneOf:
+            - $ref: '#/components/schemas/TraceId'
+            - type: 'null'
+        action_hash:
+          $ref: '#/components/schemas/Hash'
+        arguments:
+          type: object
+          description: The action's arguments, redacted.
+        summary:
+          type: string
+          description: A one-line description of the action.
+        policy:
+          type: string
+        policy_version_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        rule:
+          type: string
+        reason:
+          type: string
+          description: Why the action needs approval (the rule's message).
+        decision_id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          $ref: '#/components/schemas/ApprovalStatus'
+        requested_by:
+          type: string
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        decided_by:
+          type: [string, 'null']
+        decided_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        decision_reason:
+          type: [string, 'null']
+        used_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        used_decision_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    ApprovalPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Approval'
+        next_cursor:
+          type: string
+    Change:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: The argument (`amount`, `items[1].sku`).
+        before:
+          description: The approved value (absent when the argument was not there).
+        after:
+          description: The attempted value (absent when the argument is gone).
+        added:
+          type: boolean
+        removed:
+          type: boolean
+    Attempt:
+      type: object
+      required: [id, result, action_hash, arguments, subject, trace_id, decision_id, created_at, changes]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        result:
+          type: string
+          enum: [executed, mismatch, used, expired, not_approved]
+        action_hash:
+          $ref: '#/components/schemas/Hash'
+        arguments:
+          type: object
+        subject:
+          type: string
+        trace_id:
+          type: [string, 'null']
+        decision_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        changes:
+          type: array
+          description: How the attempted arguments differ from the approved ones.
+          items:
+            $ref: '#/components/schemas/Change'
+    ApprovalDetail:
+      allOf:
+        - $ref: '#/components/schemas/Approval'
+        - type: object
+          required: [decision, used_decision, attempts]
+          properties:
+            decision:
+              description: The decision that asked for the approval.
+              oneOf:
+                - $ref: '#/components/schemas/Decision'
+                - type: 'null'
+            used_decision:
+              description: The decision that executed the approved action.
+              oneOf:
+                - $ref: '#/components/schemas/Decision'
+                - type: 'null'
+            attempts:
+              type: array
+              items:
+                $ref: '#/components/schemas/Attempt'
+    ApprovalToken:
+      type: object
+      required: [approval_id, token, expires_at]
+      properties:
+        approval_id:
+          $ref: '#/components/schemas/Uuid'
+        token:
+          type: string
+          pattern: ^apt_[A-Za-z0-9_-]{43}$
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+
+    RecordedDecision:
+      allOf:
+        - $ref: '#/components/schemas/PolicyDecision'
+        - type: object
+          required: [policy_version_id, version]
+          properties:
+            policy_version_id:
+              $ref: '#/components/schemas/Uuid'
+            version:
+              type: integer
+    Decision:
+      type: object
+      required: [id, tool, risk, agent, agent_version, environment, subject, trace_id, action_hash, arguments, summary,
+        effect, outcome, policy, policy_version_id, rule, message, decisions, fail_mode_applied, approval_id,
+        idempotency_key, limits, upstream_status, error_code, latency_ms, created_at, completed_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        tool:
+          $ref: '#/components/schemas/ToolName'
+        risk:
+          $ref: '#/components/schemas/Risk'
+        agent:
+          type: string
+        agent_version:
+          type: string
+        environment:
+          type: string
+        subject:
+          type: string
+          description: Who called (`apikey:<id>`).
+        trace_id:
+          oneOf:
+            - $ref: '#/components/schemas/TraceId'
+            - type: 'null'
+        action_hash:
+          $ref: '#/components/schemas/Hash'
+        arguments:
+          type: object
+          description: The arguments, redacted.
+        summary:
+          type: string
+        effect:
+          description: The combined effect; `null` for a replay (decided by the call it replays).
+          oneOf:
+            - $ref: '#/components/schemas/Effect'
+            - type: 'null'
+        outcome:
+          $ref: '#/components/schemas/Outcome'
+        policy:
+          type: [string, 'null']
+        policy_version_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        rule:
+          type: [string, 'null']
+        message:
+          type: string
+        decisions:
+          type: array
+          description: What each active policy decided.
+          items:
+            $ref: '#/components/schemas/RecordedDecision'
+        fail_mode_applied:
+          type: boolean
+        approval_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        idempotency_key:
+          type: [string, 'null']
+        limits:
+          oneOf:
+            - $ref: '#/components/schemas/Limits'
+            - type: 'null'
+        upstream_status:
+          type: [integer, 'null']
+        error_code:
+          type: [string, 'null']
+        latency_ms:
+          type: [integer, 'null']
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        completed_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+    DecisionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Decision'
+        next_cursor:
+          type: string

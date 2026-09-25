@@ -108,9 +108,11 @@ What exists already:
     anywhere else it fails closed. A rule that matched `deny` still denies
     when another rule erred. If the gateway cannot read its policies or
     record its decision, nothing is forwarded (`503`).
-  - **Counters.** `trace.calls` is the number of times the tool was forwarded
-    in the same trace before this call, so "at most one refund per
-    conversation" is the rule `trace.calls >= 1 → deny`.
+  - **Counters.** `trace.calls` is the number of other actions of the tool
+    forwarded in the same trace before this call, so "at most one refund per
+    conversation" is the rule `trace.calls >= 1 → deny`. A retry of the same
+    action is not another call: it must not deny itself, and an irreversible
+    tool's retry carries an idempotency key the tool deduplicates on.
 
 * **Approvals.** `require_approval` creates an approval request: the tool,
   the redacted arguments, the action hash, the rule and its message, the

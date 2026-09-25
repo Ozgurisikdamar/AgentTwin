@@ -41,8 +41,8 @@ type Input struct {
 	Environment  string
 	Subject      string
 	TraceID      string
-	// TraceCalls is how many times the tool was forwarded in the same trace
-	// before this call.
+	// TraceCalls is how many other actions of the tool were forwarded in the
+	// same trace before this call (a retry of the same action is not one).
 	TraceCalls int
 	// Args are the tool's arguments as decoded from JSON (numbers are float64).
 	Args map[string]any

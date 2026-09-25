@@ -90,6 +90,7 @@ def test_there_is_a_document_per_service_api() -> None:
         "control-plane",
         "evaluation-service",
         "graph-service",
+        "runtime-gateway",
         "simulation-service",
         "trace-service",
     ]

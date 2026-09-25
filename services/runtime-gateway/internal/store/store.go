@@ -157,3 +157,16 @@ func (s *Store) DeleteEndpoint(ctx context.Context, tx pgx.Tx, sc Scope, tool st
 	}
 	return e, err
 }
+
+// ---------------------------------------------------------------- locks
+
+// Lock takes transaction-scoped advisory locks on keys, in the order given
+// (callers keep one global order so two transactions cannot deadlock).
+func (s *Store) Lock(ctx context.Context, tx pgx.Tx, keys ...string) error {
+	for _, k := range keys {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, k); err != nil {
+			return err
+		}
+	}
+	return nil
+}

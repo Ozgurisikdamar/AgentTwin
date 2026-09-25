@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS trace_tool_call;
+DROP TABLE IF EXISTS idempotency_record;
+DROP TABLE IF EXISTS approval_attempt;
+DROP TABLE IF EXISTS approval_request;
+DROP FUNCTION IF EXISTS approval_request_guard();
+DROP TABLE IF EXISTS policy_decision;
+DROP FUNCTION IF EXISTS policy_decision_guard();
+ALTER TABLE IF EXISTS policy DROP CONSTRAINT IF EXISTS policy_active_version_id_fkey;
+DROP TABLE IF EXISTS policy_version;
+DROP TABLE IF EXISTS policy;
+DROP TABLE IF EXISTS tool_endpoint;
+DROP FUNCTION IF EXISTS forbid_mutation();

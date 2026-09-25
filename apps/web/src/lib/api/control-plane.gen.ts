@@ -1480,6 +1480,8 @@ export interface components {
             /** @description Empty when the scenario library did not answer. */
             source: string;
             latest_version?: number;
+            /** @description The scenario version the impact selected; a release evaluating this impact runs it. */
+            latest_version_id?: components["schemas"]["Uuid"];
             description: string;
             /** @description False for a scenario the graph links that the scenario library could not confirm (it did not answer). */
             in_library: boolean;

@@ -1967,6 +1967,9 @@
             "/scenarios/[]/latest_version": [
               "integer"
             ],
+            "/scenarios/[]/latest_version_id": [
+              "string"
+            ],
             "/scenarios/[]/name": [
               "string"
             ],

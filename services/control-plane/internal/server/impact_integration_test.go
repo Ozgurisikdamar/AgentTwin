@@ -237,6 +237,11 @@ func TestAChangeSetsImpactSelectsScenariosAndSaysWhy(t *testing.T) {
 		t.Errorf("unlinked = %v", got)
 	}
 	happy := scenarioOf(t, r, "refund-happy-path")
+	// The version the library selected is what a release pins.
+	if happy["latest_version_id"] != "01a0d7b0-77fb-709b-b8fe-"+strings.Repeat("0", 12-len("refund-happy-path")%10)+
+		strings.Repeat("1", len("refund-happy-path")%10) {
+		t.Errorf("latest_version_id = %v", happy["latest_version_id"])
+	}
 	why := strs(happy["why"])
 	if len(why) != 2 || why[0] != "tests tool refund_payment, which the change to the prompt reaches in 2 steps" ||
 		!strings.HasPrefix(why[1], "its description is close to the change of the prompt (similarity 0.35)") {
@@ -370,7 +375,7 @@ func TestAnImpactWithoutAServiceIsIncompleteNotAnError(t *testing.T) {
 	if got := scenarioNames(r); !slices.Equal(got, []string{"refund-happy-path", "gone-scenario"}) {
 		t.Errorf("scenarios = %v", got)
 	}
-	if s := scenarioOf(t, r, "gone-scenario"); s["in_library"] != false {
+	if s := scenarioOf(t, r, "gone-scenario"); s["in_library"] != false || s["latest_version_id"] != nil {
 		t.Errorf("unconfirmed scenario = %v", s)
 	}
 	probs = r.Body["problems"].([]any)

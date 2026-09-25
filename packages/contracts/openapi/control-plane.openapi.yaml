@@ -3276,6 +3276,9 @@ components:
         latest_version:
           type: integer
           minimum: 1
+        latest_version_id:
+          description: The scenario version the impact selected; a release evaluating this impact runs it.
+          $ref: '#/components/schemas/Uuid'
         description:
           type: string
         in_library:

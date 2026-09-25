@@ -256,8 +256,10 @@ type MatchedScenario struct {
 	Tags          []string `json:"tags"`
 	Source        string   `json:"source"`
 	LatestVersion int      `json:"latest_version"`
-	Description   string   `json:"description"`
-	Matched       struct {
+	// LatestVersionID is the version a selection pins (a release runs it).
+	LatestVersionID string `json:"latest_version_id"`
+	Description     string `json:"description"`
+	Matched         struct {
 		Name    bool         `json:"name"`
 		Tags    []string     `json:"tags"`
 		Source  bool         `json:"source"`
@@ -354,7 +356,10 @@ type Scenario struct {
 	Tags          []string `json:"tags"`
 	Source        string   `json:"source"`
 	LatestVersion int      `json:"latest_version,omitempty"`
-	Description   string   `json:"description"`
+	// LatestVersionID is the scenario version the impact selected: what a
+	// release evaluating this impact runs (empty when not in the library).
+	LatestVersionID string `json:"latest_version_id,omitempty"`
+	Description     string `json:"description"`
 	// InLibrary is false for a scenario the graph links but the scenario
 	// library cannot confirm (the simulation service did not answer).
 	InLibrary bool     `json:"in_library"`
@@ -434,8 +439,8 @@ func Merge(items []changes.Item, g *Graph, m *Match, queries []Query) Impact {
 		}
 		for _, ms := range m.Scenarios {
 			sc := Scenario{ID: ms.ID, Name: ms.Name, Agent: ms.Agent, Twin: ms.Twin, Severity: ms.Severity,
-				Tags: nonNil(ms.Tags), Source: ms.Source, LatestVersion: ms.LatestVersion, Description: ms.Description,
-				InLibrary: true, Reasons: emptyReasons()}
+				Tags: nonNil(ms.Tags), Source: ms.Source, LatestVersion: ms.LatestVersion,
+				LatestVersionID: ms.LatestVersionID, Description: ms.Description, InLibrary: true, Reasons: emptyReasons()}
 			// The graph's links are facts, whatever the library matched the scenario by.
 			if l, ok := links[ms.Name]; ok {
 				sc.Reasons.Graph = graphReasons(l)

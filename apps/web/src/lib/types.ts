@@ -214,7 +214,7 @@ export interface TraceDetail {
 
 export interface TracePage {
   items: Trace[];
-  next_cursor: string;
+  next_cursor: string | null;
 }
 
 export interface Facet {

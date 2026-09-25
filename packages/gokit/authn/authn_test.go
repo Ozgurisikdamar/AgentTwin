@@ -68,6 +68,13 @@ func TestProjectAccess(t *testing.T) {
 	if !all.CanAccessProject("anything") || all.CanAccessProject("") {
 		t.Fatal("all-projects scoping broken")
 	}
+	// Project ids are UUIDs: case-insensitive, and nothing more lenient.
+	id := "0190f3b4-0000-7000-8000-00000000abcd"
+	scoped := Principal{ProjectIDs: []string{id}}
+	if !scoped.CanAccessProject(strings.ToUpper(id)) || scoped.CanAccessProject(id[:35]) ||
+		scoped.CanAccessProject(" "+id) {
+		t.Fatal("project ids must match case-insensitively and exactly otherwise")
+	}
 }
 
 func TestMintVerifyRoundTrip(t *testing.T) {

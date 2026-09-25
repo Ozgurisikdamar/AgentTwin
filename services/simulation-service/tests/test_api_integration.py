@@ -309,6 +309,12 @@ async def test_access_is_scoped_to_the_callers_projects() -> None:
 
         # A viewer reads but cannot start, cancel or change anything.
         assert (await s.call("GET", f"/api/v1/simulations/{run_id}", as_=VIEWER)).status_code == 200
+        # Ids are UUIDs, case-insensitive on input (RFC 9562): a project or a
+        # run named in upper case is the same one, answered in canonical form.
+        listed = await s.call("GET", "/api/v1/simulations", as_=VIEWER, project_id=PROJECT.upper())
+        assert listed.status_code == 200 and [it["id"] for it in listed.json()["items"]] == [run_id]
+        one = await s.call("GET", f"/api/v1/simulations/{run_id.upper()}", as_=VIEWER)
+        assert one.status_code == 200 and one.json()["run"]["id"] == run_id
         start = {"project_id": PROJECT, "agent": AGENT, "agent_version": "1.2.4"}
         for method, path, body in (
             ("POST", "/api/v1/simulations", start),

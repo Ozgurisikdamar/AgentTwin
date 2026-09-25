@@ -2,13 +2,17 @@ package openapicheck
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 
@@ -82,7 +86,7 @@ const document = `{
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"type": "object", "required": ["n"], "properties": {"n": {"type": "integer"}}}
+              "schema": {"type": "object", "required": ["n"], "properties": {"n": {"type": "integer"}, "run": {"type": "string", "format": "uuid"}}}
             }
           }
         },
@@ -90,7 +94,7 @@ const document = `{
           "200": {
             "description": "pong",
             "content": {
-              "application/json": {"schema": {"type": "object", "properties": {"pong": {"type": "boolean"}}}}
+              "application/json": {"schema": {"type": "object", "properties": {"pong": {"type": "boolean"}, "by": {"type": "string", "format": "uuid"}}}}
             }
           }
         }
@@ -269,6 +273,47 @@ func TestStrictifyClosesDeclaredObjectsButNotAllOfMembers(t *testing.T) {
 	}
 	if _, ok := schema["properties"].(map[string]any)["a"].(map[string]any)["unevaluatedProperties"]; ok {
 		t.Fatal("the input was modified")
+	}
+}
+
+// `then`, `else` and `dependentSchemas` add to the object they sit in: their
+// properties count as declared by it. Closed on their own, they would reject
+// every other property of that object; a closed `if` or `not` would invert
+// its condition.
+func TestConditionalAndNegatedSubschemasKeepTheirMeaning(t *testing.T) {
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("mem:///s.json", Strictify(parse(t, `{
+		"type": "object",
+		"properties": {"kind": {"type": "string"}, "done": {"type": "boolean"}, "detail": {"type": "object"}},
+		"if": {"properties": {"done": {"const": true}}},
+		"then": {"properties": {"detail": {"required": ["at"], "properties": {"at": {"type": "string"}}}}},
+		"else": {"properties": {"detail": {"maxProperties": 0}}},
+		"dependentSchemas": {"kind": {"properties": {"kind": {"minLength": 1}}}},
+		"not": {"properties": {"kind": {"const": "forbidden"}}, "required": ["kind"]}
+	}`))); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Compile("mem:///s.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		instance string
+		valid    bool
+		why      string
+	}{
+		{`{"kind": "a", "done": true, "detail": {"at": "x"}}`, true, "a complete object"},
+		{`{"kind": "a", "done": false, "detail": {}}`, true, "the else branch"},
+		{`{"kind": "a", "done": true, "detail": {}}`, false, "then applies"},
+		{`{"kind": "a", "done": false, "detail": {"at": "x"}}`, false, "else applies"},
+		{`{"kind": "", "done": false}`, false, "dependentSchemas applies"},
+		{`{"kind": "forbidden", "done": false}`, false, "not keeps its meaning"},
+		{`{"kind": "a", "done": true, "detail": {"at": "x", "zz": 1}}`, false, "nested objects stay closed"},
+		{`{"kind": "a", "extra": 1}`, false, "the object itself stays closed"},
+	} {
+		if err := s.Validate(parse(t, tc.instance)); (err == nil) != tc.valid {
+			t.Errorf("%s: %s valid=%v, want %v (%v)", tc.why, tc.instance, err == nil, tc.valid, err)
+		}
 	}
 }
 
@@ -550,4 +595,119 @@ func TestCheckExchangeChecksAcceptedRequestsOnly(t *testing.T) {
 	if strings.Contains(strings.Join(c.Uncovered(), ","), "createThing") {
 		t.Fatal("a checked exchange did not count as coverage")
 	}
+}
+
+func gzipped(t testing.TB, b []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(b); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// A schema describes the representation, not its coding on the wire: gzip
+// bodies are checked decoded, and a coding the checker cannot undo is a
+// violation, not a pass.
+func TestContentCodingsAreUndoneBeforeTheCheck(t *testing.T) {
+	c := contract(t)
+	json201 := http.Header{"Content-Type": {"application/json"}}
+	req := httptest.NewRequest("POST", "/things", nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	passes(t, c.CheckExchange(req, gzipped(t, []byte(`{"name":"n"}`)), 201, json201, encode(t, thing(nil))))
+	fails(t, c.CheckExchange(req, gzipped(t, []byte(`{"name":"n","x":1}`)), 201, json201, encode(t, thing(nil))),
+		`additional properties 'x' not allowed`)
+	fails(t, c.CheckExchange(req, []byte(`{"name":"n"}`), 201, json201, encode(t, thing(nil))), `createThing request: the body is not valid gzip`)
+	req.Header.Set("Content-Encoding", "br")
+	fails(t, c.CheckExchange(req, []byte(`{"name":"n"}`), 201, json201, encode(t, thing(nil))), `content coding "br" cannot be checked`)
+	gz := http.Header{"Content-Type": {"application/json"}, "Content-Encoding": {"gzip"}}
+	ok := httptest.NewRequest("GET", "/things", nil)
+	passes(t, c.CheckExchange(ok, nil, 200, gz, gzipped(t, encode(t, map[string]any{"items": []any{thing(nil)}}))))
+	fails(t, c.CheckExchange(ok, nil, 200, gz, gzipped(t, encode(t, map[string]any{}))), `listThings 200 response`, `'items'`)
+}
+
+// Checking holds every exchange a server makes on a documented operation to
+// the contract — including a request body the handler never read — and
+// leaves undocumented paths alone.
+func TestCheckingHoldsEveryServedExchangeToTheContract(t *testing.T) {
+	c := contract(t)
+	var mu sync.Mutex
+	var reported []string
+	var answer atomic.Value
+	answer.Store(`{"id":"` + uuid + `","at":"2026-09-25T10:00:00Z","note":null}`)
+	srv := httptest.NewServer(c.Checking(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/things":
+			// Answers without reading the body: Checking reads the rest itself.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, answer.Load().(string))
+		default:
+			w.WriteHeader(http.StatusTeapot)
+		}
+	}), func(err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		reported = append(reported, err.Error())
+	}))
+	defer srv.Close()
+	post := func(body string) {
+		t.Helper()
+		res, err := srv.Client().Post(srv.URL+"/things", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+	}
+	take := func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		out := reported
+		reported = nil
+		return out
+	}
+	post(`{"name":"n"}`)
+	if got := take(); len(got) != 0 || strings.Contains(strings.Join(c.Uncovered(), ","), "createThing") {
+		t.Fatalf("a valid exchange was reported or not recorded: %v", got)
+	}
+	post(`{"name":"n","x":1}`)
+	if got := take(); len(got) != 1 || !strings.Contains(got[0], `additional properties 'x' not allowed`) {
+		t.Fatalf("an accepted request the contract forbids: %v", got)
+	}
+	answer.Store(`{"id":"` + uuid + `"}`)
+	post(`{"name":"n"}`)
+	if got := take(); len(got) != 1 || !strings.Contains(got[0], "createThing 201 response") {
+		t.Fatalf("a response the contract forbids: %v", got)
+	}
+	res, err := srv.Client().Get(srv.URL + "/undocumented")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if got := take(); res.StatusCode != http.StatusTeapot || len(got) != 0 {
+		t.Fatalf("an undocumented path was checked or changed: %d %v", res.StatusCode, got)
+	}
+}
+
+// UUIDs are case-insensitive on input and lower-case on output (RFC 9562): a
+// value the service reads may be in either case, one it writes must be
+// canonical. For a webhook the service writes the request and reads the answer.
+func TestUUIDsAreCaseInsensitiveOnlyWhereTheServiceReadsThem(t *testing.T) {
+	c := contract(t)
+	upper := strings.ToUpper(uuid)
+	passes(t, c.CheckRequest("GET", "/things/"+upper, nil, nil, "", nil))
+	passes(t, c.CheckRequest("GET", "/things", nil, http.Header{"X-Org": {upper}}, "", nil))
+	fails(t, c.CheckRequest("GET", "/things/"+uuid[:35], nil, nil, "", nil), `not a hyphenated UUID`)
+	fails(t, c.CheckResponse("GET", "/things/"+uuid, 200, "application/json", encode(t, thing(map[string]any{"id": upper}))),
+		`at /id: .* is not valid uuid: not a canonical \(lower-case\) UUID`)
+	passes(t, c.CheckWebhook("ping", "application/json", encode(t, map[string]any{"n": 1, "run": uuid}), 200, "application/json",
+		encode(t, map[string]any{"by": upper})))
+	fails(t, c.CheckWebhook("ping", "application/json", encode(t, map[string]any{"n": 1, "run": upper}), 0, "", nil),
+		`ping request does not match the contract`, `not a canonical \(lower-case\) UUID`)
 }

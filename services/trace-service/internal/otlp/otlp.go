@@ -37,6 +37,32 @@ var DefaultLimits = Limits{MaxDecompressedBytes: 32 << 20, MaxSpans: 20000, MaxA
 // ErrTooLarge is returned when the (decompressed) payload exceeds the limit.
 var ErrTooLarge = errors.New("otlp payload too large")
 
+// ErrUnsupported is returned for a Content-Type or Content-Encoding the
+// endpoint does not accept.
+var ErrUnsupported = errors.New("unsupported")
+
+func mediaType(contentType string) string {
+	return strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
+}
+
+// Protobuf reports whether contentType selects the binary protobuf encoding;
+// the response to such a request is protobuf too.
+func Protobuf(contentType string) bool {
+	switch mediaType(contentType) {
+	case "application/x-protobuf", "application/protobuf":
+		return true
+	}
+	return false
+}
+
+// CheckContentType reports whether contentType is an accepted encoding.
+func CheckContentType(contentType string) error {
+	if mediaType(contentType) == "application/json" || Protobuf(contentType) {
+		return nil
+	}
+	return fmt.Errorf("%w Content-Type %q (use application/json or application/x-protobuf)", ErrUnsupported, contentType)
+}
+
 // Event is a span event.
 type Event struct {
 	Name  string         `json:"name"`
@@ -91,7 +117,7 @@ func ReadBody(body io.Reader, contentEncoding string, limit int64) ([]byte, erro
 		defer func() { _ = gz.Close() }()
 		r = gz
 	default:
-		return nil, fmt.Errorf("unsupported Content-Encoding %q", contentEncoding)
+		return nil, fmt.Errorf("%w Content-Encoding %q (use gzip or none)", ErrUnsupported, contentEncoding)
 	}
 	b, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
@@ -106,15 +132,13 @@ func ReadBody(body io.Reader, contentEncoding string, limit int64) ([]byte, erro
 // Decode parses an OTLP ExportTraceServiceRequest. contentType selects the
 // encoding ("application/json" or "application/x-protobuf").
 func Decode(b []byte, contentType string, lim Limits) (Result, error) {
-	ct := strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
-	switch ct {
-	case "application/json":
-		return decodeJSON(b, lim)
-	case "application/x-protobuf", "application/protobuf":
-		return decodeProto(b, lim)
-	default:
-		return Result{}, fmt.Errorf("unsupported Content-Type %q (use application/json or application/x-protobuf)", contentType)
+	if err := CheckContentType(contentType); err != nil {
+		return Result{}, err
 	}
+	if Protobuf(contentType) {
+		return decodeProto(b, lim)
+	}
+	return decodeJSON(b, lim)
 }
 
 // ---- JSON (OTLP/HTTP JSON encoding: hex ids, int64 as strings, enums as ints)

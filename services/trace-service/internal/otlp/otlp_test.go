@@ -116,8 +116,29 @@ func TestGzipAndBombLimit(t *testing.T) {
 	if _, err := ReadBody(bytes.NewReader(buf.Bytes()), "gzip", 1<<20); !errors.Is(err, ErrTooLarge) {
 		t.Fatalf("bomb not stopped: %v", err)
 	}
-	if _, err := ReadBody(strings.NewReader("x"), "br", 10); err == nil {
-		t.Fatal("unsupported encoding must be rejected")
+	if _, err := ReadBody(strings.NewReader("x"), "br", 10); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("an unsupported encoding must be rejected as such: %v", err)
+	}
+	if _, err := ReadBody(strings.NewReader("x"), "gzip", 10); err == nil || errors.Is(err, ErrUnsupported) {
+		t.Fatalf("a malformed gzip body is a bad request, not an unsupported encoding: %v", err)
+	}
+}
+
+// The response to a protobuf request is protobuf; both media types that name
+// the protobuf encoding select it.
+func TestContentTypes(t *testing.T) {
+	for ct, proto := range map[string]bool{
+		"application/x-protobuf": true, "application/protobuf": true, "Application/X-Protobuf; charset=binary": true,
+		"application/json": false, "application/json; charset=utf-8": false,
+	} {
+		if Protobuf(ct) != proto || CheckContentType(ct) != nil {
+			t.Errorf("%s: protobuf=%v, accepted=%v", ct, Protobuf(ct), CheckContentType(ct) == nil)
+		}
+	}
+	for _, ct := range []string{"", "text/plain", "application/grpc", "application/jsonx"} {
+		if err := CheckContentType(ct); !errors.Is(err, ErrUnsupported) {
+			t.Errorf("%q accepted: %v", ct, err)
+		}
 	}
 }
 
@@ -134,11 +155,11 @@ func TestLimits(t *testing.T) {
 	if err != nil || len(res.Spans[0].Attrs) != 2 || !res.Spans[0].Truncated {
 		t.Fatalf("attribute limit: %v %+v", err, res.Spans)
 	}
-	if _, err := Decode([]byte("{"), "application/json", DefaultLimits); err == nil {
-		t.Fatal("malformed JSON must fail")
+	if _, err := Decode([]byte("{"), "application/json", DefaultLimits); err == nil || errors.Is(err, ErrUnsupported) {
+		t.Fatalf("malformed JSON must fail as a bad request: %v", err)
 	}
-	if _, err := Decode([]byte("{}"), "text/plain", DefaultLimits); err == nil {
-		t.Fatal("unknown content type must fail")
+	if _, err := Decode([]byte("{}"), "text/plain", DefaultLimits); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("an unknown content type must fail as unsupported: %v", err)
 	}
 }
 

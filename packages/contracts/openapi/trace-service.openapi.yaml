@@ -1,0 +1,1707 @@
+openapi: 3.1.0
+info:
+  title: AgentTwin trace API
+  version: 1.0.0
+  summary: OTLP trace ingestion, the trace explorer, outcomes and flags.
+  description: |
+    Agents send their OpenTelemetry traces over OTLP/HTTP; the trace service
+    authenticates the project API key, applies the project's content capture
+    policy, stores the normalized spans and — once a trace settles — its
+    deterministic summary (ADR-0003). The query operations read traces back,
+    record verified outcomes and flag traces for review.
+
+    **Where to call it.**
+    * `POST /v1/traces` is the OTLP/HTTP endpoint. SDKs export to the
+      OpenTelemetry Collector (`AGENTTWIN_OTLP_ENDPOINT`), which batches per API
+      key and forwards to the trace service; both follow OTLP/HTTP (errors are
+      a `google.rpc.Status`, `503` is retried).
+    * The `/api/v1` operations are public through the control plane (the
+      edge), which authenticates the caller, applies rate limits and
+      `Idempotency-Key`, and forwards them. Other AgentTwin services call them
+      on the trace service directly with an internal token.
+
+    **Conventions** (the `/api/v1` operations).
+    * Every response carries `X-Request-Id`; errors are
+      `{"error": {"code", "message", "request_id", "details"?}}` with a stable
+      machine-readable `code`.
+    * Request bodies are strict: unknown fields are rejected (`400
+      INVALID_JSON`). Responses may gain fields: clients ignore fields and
+      enum values they do not know.
+    * Nullable fields are always present, with `null` when unset.
+    * Malformed ids answer `400 INVALID_PARAMETER` with `details.field`;
+      traces and projects outside the caller's access answer `404`, never
+      `403`, so their existence cannot be probed.
+    * The trace list is paginated with an opaque `next_cursor`, `null` on
+      the last page.
+
+    Compatibility and the checks that keep this document true are described
+    in `packages/contracts/README.md`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: The control plane of a local stack (`make dev`).
+tags:
+  - name: Ingestion
+    description: OTLP/HTTP trace export (ADR-0003).
+  - name: Traces
+    description: The trace explorer and privacy deletion.
+  - name: Review
+    description: Verified outcomes and flags (spec §15).
+security:
+  - bearerAuth: []
+  - apiKey: []
+  - internalToken: []
+
+paths:
+  /v1/traces:
+    servers:
+      - url: http://localhost:4318
+        description: The OpenTelemetry Collector of a local stack; it forwards to the trace service.
+    post:
+      operationId: exportTraces
+      tags: [Ingestion]
+      summary: Export spans (OTLP/HTTP)
+      description: |
+        An OTLP `ExportTraceServiceRequest`, as JSON or binary protobuf,
+        optionally gzip-compressed. The API key decides the organization and
+        project; it needs the `traces:write` scope.
+
+        Spans are validated one by one: a span with an invalid id, time range
+        or name is rejected and counted in `partialSuccess` while the others
+        are stored (`200`). Re-delivered spans are ignored, so retries are safe.
+        The response and every error are in the encoding of the request —
+        JSON for JSON, protobuf for protobuf.
+
+        Limits: 16 MiB on the wire, 32 MiB decompressed, 20 000 spans per
+        request (`413`); 256 attributes per span and 128 events (the rest are
+        dropped and the span is marked truncated).
+      security:
+        - apiKey: []
+        - apiKeyBearer: []
+      parameters:
+        - name: Content-Encoding
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: [gzip, identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportTraceServiceRequest'
+          application/x-protobuf:
+            schema:
+              description: A binary `opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest`.
+          application/protobuf:
+            schema:
+              description: An alias of `application/x-protobuf`.
+      responses:
+        '200':
+          description: |
+            The request was stored; rejected spans, if any, are counted in
+            `partialSuccess`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportTraceServiceResponse'
+            application/x-protobuf:
+              schema:
+                description: A binary `ExportTraceServiceResponse`.
+        '400':
+          $ref: '#/components/responses/OtlpBadRequest'
+        '401':
+          $ref: '#/components/responses/OtlpUnauthenticated'
+        '403':
+          $ref: '#/components/responses/OtlpForbidden'
+        '413':
+          $ref: '#/components/responses/OtlpTooLarge'
+        '415':
+          $ref: '#/components/responses/OtlpUnsupported'
+        '503':
+          $ref: '#/components/responses/OtlpUnavailable'
+
+  /api/v1/traces:
+    get:
+      operationId: listTraces
+      tags: [Traces]
+      summary: List traces
+      description: |
+        Traces of the projects the caller can read, newest first. Every filter
+        narrows the list.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - name: agent
+          in: query
+          schema:
+            type: string
+        - name: agent_version
+          in: query
+          schema:
+            type: string
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: release
+          in: query
+          description: The release id.
+          schema:
+            type: string
+        - name: model
+          in: query
+          description: Traces that called this model.
+          schema:
+            type: string
+        - name: tool
+          in: query
+          description: Traces that called this tool.
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TraceStatus'
+        - name: outcome
+          in: query
+          schema:
+            $ref: '#/components/schemas/OutcomeStatus'
+        - name: signal
+          in: query
+          description: Traces carrying this signal (e.g. `duplicate_side_effect`).
+          schema:
+            type: string
+        - name: policy_decision
+          in: query
+          description: Traces with a policy decision of this kind (e.g. `deny`).
+          schema:
+            type: string
+        - name: source
+          in: query
+          schema:
+            $ref: '#/components/schemas/TraceSource'
+        - name: session_id
+          in: query
+          schema:
+            type: string
+        - name: simulation_run_id
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - name: min_duration_ms
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: max_duration_ms
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: min_cost_usd
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: max_cost_usd
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: human_reviewed
+          in: query
+          schema:
+            type: boolean
+        - name: flagged
+          in: query
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{1,512}$
+      responses:
+        '200':
+          description: A page of traces.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TracePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/traces/facets:
+    get:
+      operationId: getTraceFacets
+      tags: [Traces]
+      summary: The filter options of the trace explorer
+      description: |
+        The distinct values of each filter dimension among the most recent
+        10 000 traces since `from` (default: the last 30 days), at most 50 per
+        dimension, most frequent first. `sampled` says whether the sample limit
+        was reached, so the counts cover only the most recent traces.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - $ref: '#/components/parameters/From'
+      responses:
+        '200':
+          description: The filter options.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceFacets'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/traces/{trace_id}:
+    parameters:
+      - $ref: '#/components/parameters/TraceId'
+      - $ref: '#/components/parameters/TraceProject'
+    get:
+      operationId: getTrace
+      tags: [Traces]
+      summary: Get a trace with its spans, outcome and flags
+      description: |
+        Spans are in start order. Captured content appears on a span only when
+        the project's capture policy kept it and its content retention has not
+        passed.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The trace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/AmbiguousTrace'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    delete:
+      operationId: deleteTrace
+      tags: [Traces]
+      summary: Delete a trace (privacy request)
+      description: |
+        Deletes the trace with its spans, outcome and flags, and records the
+        deletion in the audit log. Requires `settings.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '204':
+          description: The trace was deleted.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/traces/{trace_id}/outcome:
+    parameters:
+      - $ref: '#/components/parameters/TraceId'
+      - $ref: '#/components/parameters/TraceProject'
+    post:
+      operationId: recordOutcome
+      tags: [Review]
+      summary: Record the outcome of a trace
+      description: |
+        Records — or replaces — the verified outcome of the trace. People
+        need `review.write`; API keys (SDK outcome callbacks) need
+        `traces:write`. An outcome is `verified` only with a verification
+        source: an agent's final answer alone is not verification. When the
+        agent claimed a status the verification contradicts, the outcome and
+        the trace carry `contradiction`.
+
+        `verification_source` defaults to `human_review` for people and
+        `unavailable` for API keys and services.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordOutcomeRequest'
+      responses:
+        '200':
+          description: The stored outcome.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Outcome'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/traces/{trace_id}/flag:
+    parameters:
+      - $ref: '#/components/parameters/TraceId'
+      - $ref: '#/components/parameters/TraceProject'
+    post:
+      operationId: flagTrace
+      tags: [Review]
+      summary: Flag a trace
+      description: |
+        Marks the trace for review — an incident, negative feedback or a
+        manual flag — with a reason; the regression miner turns flagged
+        traces into candidate regression cases. Requires `review.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlagRequest'
+      responses:
+        '201':
+          description: The flag.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/trace-stats:
+    get:
+      operationId: getTraceStats
+      tags: [Traces]
+      summary: Trace statistics for dashboards
+      description: |
+        Aggregates over the traces started in `[from, to)` (default: the last
+        7 days). A trace counts as an error when its status is `ERROR` or its
+        outcome is `FAILURE`. The `by_*` groups hold the 20 largest groups
+        (`by_outcome` all of them, `NONE` for traces without an outcome).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+      responses:
+        '200':
+          description: The statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceStatsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Through the control plane, a session token (dev login), an OIDC access token or an API key.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-AgentTwin-Api-Key
+      description: A project API key.
+    apiKeyBearer:
+      type: http
+      scheme: bearer
+      description: A project API key, sent as a bearer token.
+    internalToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A short-lived internal token minted by another AgentTwin service — or
+        by the control plane when it forwards a request — for the principal it
+        acts for (audience `trace-service`, ADR-0009).
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        One key per user action (ADR-0019), applied by the control plane. A
+        repeat of the same request returns the stored response with
+        `Idempotent-Replayed: true`; the same key with a different request
+        answers `422`; while the first request runs, `409`. Keys expire after
+        24 hours.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9._:-]{8,128}$
+    Organization:
+      name: X-AgentTwin-Org
+      in: header
+      required: false
+      description: The organization to act in, for credentials that belong to several.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ProjectFilter:
+      name: project_id
+      in: query
+      description: |
+        Restricts the result to one project (default: every project the caller
+        can read). A malformed id answers `400 INVALID_FILTER`, a project
+        outside the caller's access `404`.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    TraceProject:
+      name: project_id
+      in: query
+      description: |
+        The project of the trace. Needed only when the same trace id exists in
+        several projects of the organization (otherwise `409
+        AMBIGUOUS_TRACE`).
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    TraceId:
+      name: trace_id
+      in: path
+      required: true
+      description: 32 hex characters (the OpenTelemetry trace id); matched case-insensitively.
+      schema:
+        type: string
+        pattern: ^[0-9a-fA-F]{32}$
+    From:
+      name: from
+      in: query
+      description: Only traces started at or after this time.
+      schema:
+        $ref: '#/components/schemas/Timestamp'
+    To:
+      name: to
+      in: query
+      description: Only traces started before this time.
+      schema:
+        $ref: '#/components/schemas/Timestamp'
+
+  headers:
+    IdempotentReplayed:
+      description: '`true` when the response is the stored answer to an earlier request with the same `Idempotency-Key`.'
+      schema:
+        type: string
+        enum: ['true']
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: string
+
+  responses:
+    OtlpBadRequest:
+      description: The body is not a valid OTLP export request (malformed JSON or protobuf, or invalid gzip).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OtlpStatus'
+        application/x-protobuf:
+          schema:
+            description: A binary `google.rpc.Status`.
+    OtlpUnauthenticated:
+      description: The API key is missing, unknown, revoked or expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OtlpStatus'
+        application/x-protobuf:
+          schema:
+            description: A binary `google.rpc.Status`.
+    OtlpForbidden:
+      description: The API key lacks the `traces:write` scope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OtlpStatus'
+        application/x-protobuf:
+          schema:
+            description: A binary `google.rpc.Status`.
+    OtlpTooLarge:
+      description: The request is larger than the limits allow; split it into smaller exports.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OtlpStatus'
+        application/x-protobuf:
+          schema:
+            description: A binary `google.rpc.Status`.
+    OtlpUnsupported:
+      description: The `Content-Type` is not `application/json` or `application/x-protobuf`, or the `Content-Encoding` is not `gzip`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OtlpStatus'
+        application/x-protobuf:
+          schema:
+            description: A binary `google.rpc.Status`.
+    OtlpUnavailable:
+      description: |
+        Ingestion is at capacity, trace storage is unavailable, or the API key
+        cannot be verified right now. Retry after `Retry-After` seconds (OTLP
+        exporters do this on their own).
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OtlpStatus'
+        application/x-protobuf:
+          schema:
+            description: A binary `google.rpc.Status`.
+    BadRequest:
+      description: |
+        The request is invalid. `INVALID_PARAMETER` (a malformed id or limit;
+        `details.field`), `INVALID_FILTER` (`details.field`), `INVALID_CURSOR`,
+        `INVALID_JSON` (a malformed body or an unknown field;
+        `details.reason`), `EMPTY_BODY`, `INVALID_IDEMPOTENCY_KEY` or an
+        operation-specific code (`INVALID_OUTCOME`, `INVALID_FLAG`; both with
+        `details.field`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: No valid credential (`UNAUTHENTICATED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The credential lacks the permission (`FORBIDDEN`; `details.required_permission`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The trace does not exist, or it or the project is outside the caller's access (`NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    AmbiguousTrace:
+      description: The trace id exists in several projects; pass `project_id` (`AMBIGUOUS_TRACE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: |
+        The trace id exists in several projects; pass `project_id`
+        (`AMBIGUOUS_TRACE`) — or the first request with this `Idempotency-Key`
+        is still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: The request body is too large (`PAYLOAD_TOO_LARGE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsupportedMediaType:
+      description: The body is not `application/json` (`UNSUPPORTED_MEDIA_TYPE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyKeyReused:
+      description: The `Idempotency-Key` was used for a different request (`IDEMPOTENCY_KEY_REUSED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests (`RATE_LIMITED`).
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Internal:
+      description: An unexpected error (`INTERNAL`); quote the `request_id`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UpstreamUnavailable:
+      description: The trace service is not reachable from the control plane (`UPSTREAM_UNAVAILABLE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: The trace service is not configured on this control plane (`SERVICE_NOT_CONFIGURED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    TraceId:
+      type: string
+      description: The OpenTelemetry trace id, 32 lower-case hex characters.
+      pattern: ^[0-9a-f]{32}$
+    SpanId:
+      type: string
+      description: The OpenTelemetry span id, 16 lower-case hex characters.
+      pattern: ^[0-9a-f]{16}$
+    Actor:
+      type: string
+      description: Who acted, `user:<id>`, `apikey:<id>` or `service:<name>`.
+      examples: ['user:0190f3b4-0000-7000-8000-000000000001']
+    TraceStatus:
+      type: string
+      description: The status of the root span (`UNSET` until it arrives).
+      enum: [OK, ERROR, UNSET]
+    OutcomeStatus:
+      type: string
+      enum: [SUCCESS, PARTIAL, FAILURE, UNKNOWN]
+    VerificationSource:
+      type: string
+      description: |
+        What verified the outcome. `unavailable` means nothing did: the
+        outcome is then never `verified`.
+      enum: [state_assertion, tool_twin_state, tool_result, external_callback, human_review, semantic_judge, unavailable]
+    TraceSource:
+      type: string
+      description: What produced the trace (the `agenttwin.source` attribute; `production` when absent).
+      enum: [production, simulation, replay, eval, test]
+    ContentMode:
+      type: string
+      description: The capture policy the trace was stored under (ADR-0012).
+      enum: ['off', redacted, full]
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable (e.g. `AMBIGUOUS_TRACE`).
+              pattern: ^[A-Z][A-Z0-9_]*$
+            message:
+              type: string
+              description: For people; may change.
+            request_id:
+              type: string
+              description: Equals the `X-Request-Id` response header.
+            details:
+              type: object
+              description: Code-specific context (field names, problems).
+
+    # ---------------------------------------------------------------- OTLP
+    ExportTraceServiceRequest:
+      type: object
+      description: |
+        The OTLP/JSON encoding of `ExportTraceServiceRequest`: lowerCamelCase
+        keys, hex trace and span ids, 64-bit integers as decimal strings and
+        enums as integers (or their names). As OTLP/JSON requires, fields the
+        service does not read are ignored; the objects are open. Only what
+        the service reads is described.
+      additionalProperties: true
+      properties:
+        resourceSpans:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceSpans'
+    ResourceSpans:
+      type: object
+      additionalProperties: true
+      properties:
+        resource:
+          type: object
+          additionalProperties: true
+          properties:
+            attributes:
+              description: Resource attributes (`service.name`, `agenttwin.agent.name`, `deployment.environment.name`, …).
+              type: array
+              items:
+                $ref: '#/components/schemas/KeyValue'
+        scopeSpans:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeSpans'
+    ScopeSpans:
+      type: object
+      additionalProperties: true
+      properties:
+        scope:
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+        spans:
+          type: array
+          items:
+            $ref: '#/components/schemas/OtlpSpan'
+    OtlpSpan:
+      type: object
+      description: |
+        One span. A span with a missing or invalid `traceId` or `spanId`, an
+        empty `name`, or an end before its start is rejected on its own (see
+        `partialSuccess`); the request is not.
+      additionalProperties: true
+      properties:
+        traceId:
+          type: string
+          description: 32 hex characters, not all zero.
+        spanId:
+          type: string
+          description: 16 hex characters, not all zero.
+        parentSpanId:
+          type: string
+          description: Empty (or absent) for a root span.
+        name:
+          type: string
+        kind:
+          description: The OTel span kind, `0`–`5` or its name (`SPAN_KIND_SERVER`, …).
+        startTimeUnixNano:
+          description: A decimal string (or a number) of nanoseconds since the Unix epoch.
+        endTimeUnixNano:
+          description: A decimal string (or a number) of nanoseconds since the Unix epoch.
+        attributes:
+          description: |
+            Span attributes — the OpenTelemetry GenAI semantic conventions and
+            the `agenttwin.*` attributes (ADR-0003). Captured content
+            (`gen_ai.input.messages`, …) is kept only as the project's capture
+            policy allows.
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyValue'
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              timeUnixNano:
+                description: Nanoseconds since the Unix epoch; an event without a valid time is dropped.
+              name:
+                type: string
+              attributes:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KeyValue'
+        status:
+          type: object
+          additionalProperties: true
+          properties:
+            code:
+              description: '`0` unset, `1` ok, `2` error (or the names `STATUS_CODE_*`).'
+            message:
+              type: string
+    KeyValue:
+      type: object
+      additionalProperties: true
+      properties:
+        key:
+          type: string
+        value:
+          description: |
+            An OTLP `AnyValue`: one of `stringValue`, `boolValue`, `intValue`
+            (a decimal string or a number), `doubleValue`, `bytesValue`
+            (base64), `arrayValue` (`{"values": [AnyValue]}`) or `kvlistValue`
+            (`{"values": [KeyValue]}`). Values nested deeper than 8 levels are
+            dropped.
+    ExportTraceServiceResponse:
+      type: object
+      description: The OTLP/JSON `ExportTraceServiceResponse`; `{}` when every span was stored.
+      properties:
+        partialSuccess:
+          type: object
+          required: [rejectedSpans, errorMessage]
+          properties:
+            rejectedSpans:
+              type: string
+              description: The number of rejected spans (an int64, encoded as a decimal string).
+              pattern: ^[1-9][0-9]*$
+            errorMessage:
+              type: string
+              description: The first reasons, `; `-separated.
+    OtlpStatus:
+      type: object
+      description: The OTLP/JSON encoding of `google.rpc.Status`.
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: |
+            A `google.rpc.Code`: `3` INVALID_ARGUMENT (`400`, `415`), `16`
+            UNAUTHENTICATED, `7` PERMISSION_DENIED, `8` RESOURCE_EXHAUSTED
+            (`413`), `14` UNAVAILABLE (`503`). Like OTLP clients, decide on the
+            HTTP status, not on this code.
+          minimum: 0
+          maximum: 16
+        message:
+          type: string
+
+    # ---------------------------------------------------------------- traces
+    Trace:
+      type: object
+      required:
+        - project_id
+        - trace_id
+        - organization_id
+        - environment
+        - agent_name
+        - agent_version
+        - session_id
+        - release_id
+        - commit_sha
+        - source
+        - simulation_run_id
+        - scenario_id
+        - root_span_id
+        - root_name
+        - status
+        - started_at
+        - ended_at
+        - duration_ms
+        - span_count
+        - model_call_count
+        - tool_call_count
+        - error_count
+        - retry_count
+        - input_tokens
+        - output_tokens
+        - cost_usd
+        - models
+        - tools
+        - policy_decisions
+        - signals
+        - prompt_hash
+        - semconv_version
+        - sdk_name
+        - sdk_version
+        - content_mode
+        - content_dropped
+        - truncated
+        - outcome_status
+        - outcome_verified
+        - human_reviewed
+        - flagged
+        - summary
+        - finalized
+        - content_purged
+        - expires_at
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        trace_id:
+          $ref: '#/components/schemas/TraceId'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        environment:
+          type: string
+          description: The deployment environment; `unknown` when no span named one.
+        agent_name:
+          type: [string, 'null']
+        agent_version:
+          type: [string, 'null']
+        session_id:
+          type: [string, 'null']
+        release_id:
+          type: [string, 'null']
+        commit_sha:
+          type: [string, 'null']
+        source:
+          $ref: '#/components/schemas/TraceSource'
+        simulation_run_id:
+          type: [string, 'null']
+          description: The simulation run the trace belongs to (`source` `simulation`).
+        scenario_id:
+          type: [string, 'null']
+        root_span_id:
+          description: '`null` until the root span arrives.'
+          anyOf:
+            - $ref: '#/components/schemas/SpanId'
+            - type: 'null'
+        root_name:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/TraceStatus'
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        duration_ms:
+          type: [number, 'null']
+          minimum: 0
+          description: Set when the trace is finalized.
+        span_count:
+          type: integer
+          minimum: 0
+        model_call_count:
+          type: integer
+          minimum: 0
+        tool_call_count:
+          type: integer
+          minimum: 0
+        error_count:
+          type: integer
+          minimum: 0
+        retry_count:
+          type: integer
+          minimum: 0
+        input_tokens:
+          type: integer
+          minimum: 0
+        output_tokens:
+          type: integer
+          minimum: 0
+        cost_usd:
+          type: [number, 'null']
+          minimum: 0
+          description: '`null` when no model call reported a cost and no price is configured for its model.'
+        models:
+          type: array
+          items:
+            type: string
+        tools:
+          type: array
+          items:
+            type: string
+        policy_decisions:
+          type: array
+          items:
+            type: string
+        signals:
+          type: array
+          description: |
+            Deterministic failure signals for the explorer and the regression
+            miner (e.g. `error`, `duplicate_side_effect`, `contradiction`,
+            `timeout_after_mutation`, `outcome_failure`). New signals may be
+            added; clients show unknown ones as they are.
+          items:
+            type: string
+        prompt_hash:
+          type: [string, 'null']
+        semconv_version:
+          type: string
+          description: The GenAI semantic-convention version the spans were read as (`none` when unknown).
+        sdk_name:
+          type: [string, 'null']
+        sdk_version:
+          type: [string, 'null']
+        content_mode:
+          $ref: '#/components/schemas/ContentMode'
+        content_dropped:
+          type: boolean
+          description: Captured content was dropped by the capture policy.
+        truncated:
+          type: boolean
+          description: Attributes, events or identifiers were cut by the ingestion limits.
+        outcome_status:
+          description: The outcome, reported on a span or recorded through the API.
+          anyOf:
+            - $ref: '#/components/schemas/OutcomeStatus'
+            - type: 'null'
+        outcome_verified:
+          type: [boolean, 'null']
+        human_reviewed:
+          type: boolean
+        flagged:
+          type: boolean
+        summary:
+          $ref: '#/components/schemas/TraceSummary'
+        finalized:
+          type: boolean
+          description: |
+            The trace settled and its summary was computed. A late span makes
+            the service compute the summary again.
+        content_purged:
+          type: boolean
+          description: The content retention passed and captured content was removed.
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+      if:
+        properties:
+          finalized:
+            const: true
+      then:
+        properties:
+          summary:
+            required:
+              - agent
+              - outcome
+              - tools
+              - errors
+              - violations
+              - policy_decisions
+              - step_count
+              - retry_count
+              - cost_usd
+              - cost_known
+              - duration_ms
+              - model
+              - prompt_hash
+              - tool_sequence_sketch
+    TraceSummary:
+      type: object
+      description: |
+        The deterministic structured summary of the trace (spec §45); the same
+        object `trace.ingested.v1` publishes. It is `{}` until the trace is
+        finalized, and complete afterwards; an outcome recorded before that
+        shows as `outcome` and `outcome_verified` only.
+      properties:
+        agent:
+          type: string
+        agent_version:
+          type: string
+        outcome:
+          anyOf:
+            - $ref: '#/components/schemas/OutcomeStatus'
+            - type: 'null'
+        outcome_verified:
+          type: boolean
+        tools:
+          type: array
+          description: The tools called, in first-call order.
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: string
+        violations:
+          type: array
+          description: Rule violations (e.g. `retry_without_idempotency_key`).
+          items:
+            type: string
+        policy_decisions:
+          type: array
+          items:
+            type: string
+        step_count:
+          type: integer
+          minimum: 0
+        retry_count:
+          type: integer
+          minimum: 0
+        cost_usd:
+          type: number
+          minimum: 0
+        cost_known:
+          type: boolean
+        duration_ms:
+          type: number
+          minimum: 0
+        model:
+          type: [string, 'null']
+        prompt_hash:
+          type: [string, 'null']
+        final_state_diff:
+          type: object
+          description: A state change the agent adapter or tool twin reported (key → `[before, after]`).
+        failing_tool:
+          type: string
+        last_successful_step:
+          type: string
+        error_type:
+          type: string
+        tool_sequence_sketch:
+          type: string
+          description: The tool calls as a short sequence (e.g. `lookup_order→refund_payment×2`).
+    TracePage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trace'
+        next_cursor:
+          type: [string, 'null']
+          minLength: 1
+          description: The cursor of the next page; `null` on the last page.
+    TraceDetail:
+      type: object
+      required: [trace, spans, outcome, flags]
+      properties:
+        trace:
+          $ref: '#/components/schemas/Trace'
+        spans:
+          type: array
+          description: The spans in start order (at most 20 000).
+          items:
+            $ref: '#/components/schemas/Span'
+        outcome:
+          anyOf:
+            - $ref: '#/components/schemas/Outcome'
+            - type: 'null'
+        flags:
+          type: array
+          description: Oldest first.
+          items:
+            $ref: '#/components/schemas/Flag'
+    Span:
+      type: object
+      required:
+        - span_id
+        - parent_span_id
+        - name
+        - kind
+        - status
+        - status_message
+        - started_at
+        - ended_at
+        - duration_ms
+        - tool_name
+        - tool_risk
+        - model
+        - policy_decision
+        - attributes
+        - events
+        - semconv_version
+      properties:
+        span_id:
+          $ref: '#/components/schemas/SpanId'
+        parent_span_id:
+          anyOf:
+            - $ref: '#/components/schemas/SpanId'
+            - type: 'null'
+        name:
+          type: string
+          maxLength: 512
+        kind:
+          type: string
+          description: The normalized kind, read from the semantic conventions.
+          enum: [agent, model, tool, retrieval, policy, outcome, http, mcp, other]
+        status:
+          $ref: '#/components/schemas/TraceStatus'
+        status_message:
+          type: [string, 'null']
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        ended_at:
+          $ref: '#/components/schemas/Timestamp'
+        duration_ms:
+          type: number
+          minimum: 0
+        tool_name:
+          type: [string, 'null']
+        tool_risk:
+          type: [string, 'null']
+        model:
+          type: [string, 'null']
+          description: The response model, or the requested one.
+        policy_decision:
+          type: [string, 'null']
+        attributes:
+          $ref: '#/components/schemas/SpanAttributes'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpanEvent'
+        content:
+          $ref: '#/components/schemas/SpanContent'
+        semconv_version:
+          type: string
+    SpanAttributes:
+      type: object
+      description: |
+        The normalized facts of the span (ADR-0003): the service's own names,
+        independent of the semantic-convention version the span was written
+        with. Only the facts the span carried are present.
+      properties:
+        operation:
+          type: string
+        agent_name:
+          type: string
+        agent_version:
+          type: string
+        agent_id:
+          type: string
+        session_id:
+          type: string
+        environment:
+          type: string
+        source:
+          type: string
+        release_id:
+          type: string
+        commit_sha:
+          type: string
+        provider:
+          type: string
+        request_model:
+          type: string
+        response_model:
+          type: string
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        temperature:
+          type: number
+        max_tokens:
+          type: integer
+        finish_reasons:
+          type: array
+          items:
+            type: string
+        cost_usd:
+          type: number
+        prompt_hash:
+          type: string
+        prompt_version:
+          type: string
+        tool_name:
+          type: string
+        tool_version:
+          type: string
+        tool_call_id:
+          type: string
+        tool_risk:
+          type: string
+        tool_args_hash:
+          type: string
+        tool_result_status:
+          type: string
+        idempotency_key_hash:
+          type: string
+        attempt:
+          type: integer
+        retrieval_source:
+          type: string
+        document_count:
+          type: integer
+        error_type:
+          type: string
+        exception_type:
+          type: string
+        exception_message:
+          type: string
+        policy_decision:
+          type: string
+        policy_name:
+          type: string
+        policy_version:
+          type: string
+        policy_rule:
+          type: string
+        outcome_status:
+          type: string
+        outcome_claimed:
+          type: string
+        business_outcome:
+          type: string
+        outcome_verified:
+          type: boolean
+        verification_source:
+          type: string
+        http_method:
+          type: string
+        http_host:
+          type: string
+        http_status:
+          type: integer
+        mcp_method:
+          type: string
+        mcp_server:
+          type: string
+        simulation_run_id:
+          type: string
+        scenario_id:
+          type: string
+        final_state_diff:
+          type: object
+          description: A state change (key → `[before, after]`).
+        extra:
+          type: object
+          description: The remaining non-content attributes, bounded and sanitized.
+    SpanEvent:
+      type: object
+      required: [name, time]
+      properties:
+        name:
+          type: string
+        time:
+          $ref: '#/components/schemas/Timestamp'
+        attributes:
+          type: object
+    SpanContent:
+      type: object
+      description: |
+        Captured content, present only when the project's capture policy
+        (ADR-0012) kept it and its content retention has not passed. In
+        `redacted` mode sensitive values appear masked (`[REDACTED:email]`).
+      properties:
+        input:
+          type: string
+        output:
+          type: string
+        system_instructions:
+          type: string
+        tool_args:
+          type: string
+        tool_result:
+          type: string
+    TraceFacets:
+      type: object
+      required: [from, facets, sampled]
+      properties:
+        from:
+          $ref: '#/components/schemas/Timestamp'
+        facets:
+          type: object
+          required: [agent, agent_version, environment, release, source, status, outcome, model, tool, signal, policy_decision]
+          properties:
+            agent:
+              $ref: '#/components/schemas/FacetValues'
+            agent_version:
+              $ref: '#/components/schemas/FacetValues'
+            environment:
+              $ref: '#/components/schemas/FacetValues'
+            release:
+              $ref: '#/components/schemas/FacetValues'
+            source:
+              $ref: '#/components/schemas/FacetValues'
+            status:
+              $ref: '#/components/schemas/FacetValues'
+            outcome:
+              $ref: '#/components/schemas/FacetValues'
+            model:
+              $ref: '#/components/schemas/FacetValues'
+            tool:
+              $ref: '#/components/schemas/FacetValues'
+            signal:
+              $ref: '#/components/schemas/FacetValues'
+            policy_decision:
+              $ref: '#/components/schemas/FacetValues'
+        sampled:
+          type: boolean
+    FacetValues:
+      type: array
+      description: The values of one dimension, most frequent first (at most 50).
+      maxItems: 50
+      items:
+        type: object
+        required: [value, count]
+        properties:
+          value:
+            type: string
+          count:
+            type: integer
+            minimum: 1
+    TraceStatsResponse:
+      type: object
+      required: [from, to, stats]
+      properties:
+        from:
+          $ref: '#/components/schemas/Timestamp'
+        to:
+          $ref: '#/components/schemas/Timestamp'
+        stats:
+          $ref: '#/components/schemas/TraceStats'
+    TraceStats:
+      type: object
+      required:
+        - total
+        - errors
+        - error_rate
+        - p50_ms
+        - p95_ms
+        - cost_usd
+        - by_outcome
+        - by_signal
+        - by_tool
+        - by_agent_version
+        - unverified_outcomes
+        - contradictions
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        errors:
+          type: integer
+          minimum: 0
+        error_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        p50_ms:
+          type: [number, 'null']
+          description: '`null` when no trace in the range has a duration.'
+        p95_ms:
+          type: [number, 'null']
+        cost_usd:
+          type: number
+          minimum: 0
+        by_outcome:
+          $ref: '#/components/schemas/Counts'
+        by_signal:
+          $ref: '#/components/schemas/Counts'
+        by_tool:
+          $ref: '#/components/schemas/Counts'
+        by_agent_version:
+          $ref: '#/components/schemas/Counts'
+        unverified_outcomes:
+          type: integer
+          minimum: 0
+          description: Traces with an outcome that is not verified.
+        contradictions:
+          type: integer
+          minimum: 0
+    Counts:
+      type: object
+      additionalProperties:
+        type: integer
+        minimum: 1
+
+    # ---------------------------------------------------------------- review
+    RecordOutcomeRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/OutcomeStatus'
+        business_outcome:
+          type: string
+          maxLength: 200
+          description: What the outcome means for the business (e.g. `refund_issued`).
+        verified:
+          type: boolean
+          default: false
+        verification_source:
+          $ref: '#/components/schemas/VerificationSource'
+        claimed_status:
+          description: What the agent claimed, if it claimed anything.
+          $ref: '#/components/schemas/OutcomeStatus'
+        expected_state:
+          type: [object, 'null']
+          description: The state the verification expected.
+        actual_state:
+          type: [object, 'null']
+          description: The state it found.
+        notes:
+          type: string
+          maxLength: 4000
+    Outcome:
+      type: object
+      required:
+        - status
+        - business_outcome
+        - verified
+        - verification_source
+        - claimed_status
+        - contradiction
+        - notes
+        - source
+        - recorded_by
+        - recorded_at
+      properties:
+        status:
+          $ref: '#/components/schemas/OutcomeStatus'
+        business_outcome:
+          type: [string, 'null']
+        verified:
+          type: boolean
+        verification_source:
+          $ref: '#/components/schemas/VerificationSource'
+        claimed_status:
+          anyOf:
+            - $ref: '#/components/schemas/OutcomeStatus'
+            - type: 'null'
+        contradiction:
+          type: boolean
+          description: The agent claimed a status the verification disproved.
+        expected_state:
+          type: object
+          description: Present when it was recorded.
+        actual_state:
+          type: object
+          description: Present when it was recorded.
+        notes:
+          type: [string, 'null']
+        source:
+          type: string
+          description: '`span` when an outcome span reported it, `api` when it was recorded through this API.'
+          enum: [span, api]
+        recorded_by:
+          $ref: '#/components/schemas/Actor'
+        recorded_at:
+          $ref: '#/components/schemas/Timestamp'
+    FlagRequest:
+      type: object
+      required: [reason]
+      properties:
+        kind:
+          $ref: '#/components/schemas/FlagKind'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Why; surrounding whitespace is removed and at least one other character must remain.
+    FlagKind:
+      type: string
+      default: manual
+      enum: [incident, negative_feedback, manual]
+    Flag:
+      type: object
+      required: [id, kind, reason, flagged_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          $ref: '#/components/schemas/FlagKind'
+        reason:
+          type: string
+        flagged_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'

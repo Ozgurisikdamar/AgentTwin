@@ -5,6 +5,7 @@ package authn
 import (
 	"context"
 	"slices"
+	"strings"
 )
 
 // Role is an organization membership role.
@@ -125,12 +126,16 @@ func (p Principal) Can(perm Permission) bool {
 	}
 }
 
-// CanAccessProject reports whether the principal may touch projectID.
+// CanAccessProject reports whether the principal may touch projectID. Project
+// ids are UUIDs, which are case-insensitive (RFC 9562): a request may name a
+// project in either case.
 func (p Principal) CanAccessProject(projectID string) bool {
 	if projectID == "" {
 		return false
 	}
-	return p.AllProjects || slices.Contains(p.ProjectIDs, projectID)
+	return p.AllProjects || slices.ContainsFunc(p.ProjectIDs, func(id string) bool {
+		return strings.EqualFold(id, projectID)
+	})
 }
 
 type principalKey struct{}

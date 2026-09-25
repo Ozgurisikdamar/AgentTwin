@@ -7,11 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -23,13 +25,17 @@ import (
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/Ozgurisikdamar/AgentTwin/packages/contracts"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/db"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/events"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/ids"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/openapicheck"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/testutil"
 	"github.com/Ozgurisikdamar/AgentTwin/services/trace-service/internal/api"
 	"github.com/Ozgurisikdamar/AgentTwin/services/trace-service/internal/finalizer"
@@ -40,6 +46,30 @@ import (
 )
 
 const internalSecret = "trace-test-internal-secret-0123456789abcdef"
+
+// contract is the trace API document every exchange of these tests is held
+// to (ADR-0021).
+var contract = func() *openapicheck.Contract {
+	c, err := openapicheck.Load(contracts.OpenAPI, "openapi/trace-service.openapi.yaml")
+	if err != nil {
+		panic(err)
+	}
+	return c
+}()
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	code := m.Run()
+	// Coverage is only meaningful for a full run against real infrastructure.
+	full := os.Getenv("AGENTTWIN_TEST_DATABASE_URL") != "" && flag.Lookup("test.run").Value.String() == ""
+	if code == 0 && full {
+		if missing := contract.Uncovered(); len(missing) > 0 {
+			fmt.Fprintf(os.Stderr, "trace-service contract: no checked successful exchange for %s\n", strings.Join(missing, ", "))
+			code = 1
+		}
+	}
+	os.Exit(code)
+}
 
 var (
 	orgA     = ids.New()
@@ -98,7 +128,9 @@ func newHarness(t *testing.T) *harness {
 	h.api.Init(4)
 	mux := http.NewServeMux()
 	h.api.Routes(mux)
-	h.srv = httptest.NewServer(httpx.Chain(mux, httpx.RequestID()))
+	h.srv = httptest.NewServer(contract.Checking(httpx.Chain(mux, httpx.RequestID()), func(err error) {
+		t.Errorf("the trace service broke its contract:\n%v", err)
+	}))
 	t.Cleanup(h.srv.Close)
 	h.fin = &finalizer.Finalizer{Pool: pool, Store: st, Settle: 0, IncompleteAfter: time.Hour}
 	return h
@@ -852,6 +884,222 @@ func TestHostileAttributesAreBoundedAndNormalized(t *testing.T) {
 	}
 	if n := h.finalizeAll(); n != 1 {
 		t.Fatalf("finalizer stuck after hostile trace: %d", n)
+	}
+}
+
+// OTLP/HTTP answers in the encoding of the request, errors included, and an
+// encoding the endpoint does not take is 415, not 400 (ADR-0021).
+func TestOTLPEncodingsAndErrors(t *testing.T) {
+	h := newHarness(t)
+	with := func(extra map[string]string) map[string]string {
+		out := map[string]string{"X-AgentTwin-Api-Key": "atk_aaaaaaaa_ingest"}
+		for k, v := range extra {
+			out[k] = v
+		}
+		return out
+	}
+	read := func(res *http.Response) []byte {
+		defer func() { _ = res.Body.Close() }()
+		b, _ := io.ReadAll(res.Body)
+		return b
+	}
+	// application/protobuf is an alias: the answer is protobuf, not JSON.
+	tid, _, root := candidateSpans("alias")
+	req := &coltracepb.ExportTraceServiceRequest{ResourceSpans: []*tracepb.ResourceSpans{{ScopeSpans: []*tracepb.ScopeSpans{{Spans: []*tracepb.Span{
+		{TraceId: mustHex(tid), SpanId: mustHex(root.id), Name: "agent.run", StartTimeUnixNano: uint64(baseTime.UnixNano()), EndTimeUnixNano: uint64(baseTime.Add(time.Second).UnixNano())},
+	}}}}}}
+	b, _ := proto.Marshal(req)
+	res := h.post("/v1/traces", b, with(map[string]string{"Content-Type": "application/protobuf"}))
+	body := read(res)
+	var ok coltracepb.ExportTraceServiceResponse
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "application/x-protobuf" || proto.Unmarshal(body, &ok) != nil {
+		t.Fatalf("application/protobuf export: %d %s %q", res.StatusCode, res.Header.Get("Content-Type"), body)
+	}
+	// A protobuf request gets a protobuf google.rpc.Status.
+	res = h.post("/v1/traces", []byte("\xff\xff not protobuf"), with(map[string]string{"Content-Type": "application/x-protobuf"}))
+	body = read(res)
+	var st spb.Status
+	if res.StatusCode != 400 || res.Header.Get("Content-Type") != "application/x-protobuf" || proto.Unmarshal(body, &st) != nil ||
+		codes.Code(st.GetCode()) != codes.InvalidArgument || st.GetMessage() == "" {
+		t.Fatalf("protobuf error: %d %s %v", res.StatusCode, res.Header.Get("Content-Type"), st.String())
+	}
+	res = h.post("/v1/traces", b, map[string]string{"Content-Type": "application/x-protobuf"})
+	body = read(res)
+	if res.StatusCode != 401 || proto.Unmarshal(body, &st) != nil || codes.Code(st.GetCode()) != codes.Unauthenticated {
+		t.Fatalf("protobuf 401: %d %v", res.StatusCode, st.String())
+	}
+	// Encodings the endpoint does not take are 415, in the request's encoding.
+	for _, c := range []struct {
+		name string
+		hdr  map[string]string
+	}{
+		{"text/plain", with(map[string]string{"Content-Type": "text/plain"})},
+		{"brotli", with(map[string]string{"Content-Encoding": "br"})},
+	} {
+		res := h.post("/v1/traces", []byte("{}"), c.hdr)
+		var out map[string]any
+		_ = json.Unmarshal(read(res), &out)
+		if res.StatusCode != 415 || out["code"] != float64(codes.InvalidArgument) {
+			t.Errorf("%s: %d %v", c.name, res.StatusCode, out)
+		}
+	}
+	// Invalid gzip is a bad request, not an unsupported encoding.
+	res = h.post("/v1/traces", []byte("{}"), with(map[string]string{"Content-Encoding": "gzip"}))
+	if _ = read(res); res.StatusCode != 400 {
+		t.Fatalf("invalid gzip: %d", res.StatusCode)
+	}
+}
+
+// Malformed ids and filters are 400 with the field, whatever the caller may
+// access; a well-formed id outside the caller's access is 404.
+func TestQueryValidation(t *testing.T) {
+	h := newHarness(t)
+	tid, children, root := candidateSpans("valid")
+	if code, _ := h.ingest("atk_aaaaaaaa_ingest", otlpJSON(tid, demoResource, append(children, root)...)); code != 200 {
+		t.Fatal("ingest")
+	}
+	h.finalizeAll()
+	scoped := authn.Principal{OrgID: orgA, Actor: "apikey:x", Role: authn.RoleAPIKey, ProjectIDs: []string{projA2}, Scopes: []authn.Scope{authn.ScopeRead}}
+	for _, c := range []struct {
+		p           authn.Principal
+		path        string
+		status      int
+		code, field string
+	}{
+		{engineerA, "/api/v1/traces/not-hex", 400, "INVALID_PARAMETER", "trace_id"},
+		{engineerA, "/api/v1/traces/" + tid + "?project_id=nope", 400, "INVALID_PARAMETER", "project_id"},
+		{scoped, "/api/v1/traces/" + tid + "?project_id=nope", 400, "INVALID_PARAMETER", "project_id"},
+		{scoped, "/api/v1/traces/" + tid + "?project_id=" + projA, 404, "NOT_FOUND", ""},
+		{engineerA, "/api/v1/traces?project_id=nope", 400, "INVALID_FILTER", "project_id"},
+		{scoped, "/api/v1/traces?project_id=nope", 400, "INVALID_FILTER", "project_id"},
+		{scoped, "/api/v1/traces?project_id=" + projA, 404, "NOT_FOUND", ""},
+		{scoped, "/api/v1/trace-stats?project_id=nope", 400, "INVALID_FILTER", "project_id"},
+		{scoped, "/api/v1/traces/facets?project_id=nope", 400, "INVALID_FILTER", "project_id"},
+		{engineerA, "/api/v1/traces?outcome=GREAT", 400, "INVALID_FILTER", "outcome"},
+		{engineerA, "/api/v1/traces?source=prod", 400, "INVALID_FILTER", "source"},
+		{engineerA, "/api/v1/traces?min_cost_usd=-1&max_duration_ms=x", 400, "INVALID_FILTER", "max_duration_ms"},
+		{engineerA, "/api/v1/trace-stats?from=" + baseTime.Format(time.RFC3339) + "&to=" + baseTime.Add(-time.Hour).Format(time.RFC3339), 400, "INVALID_FILTER", "from"},
+	} {
+		code, body := h.as(c.p, "GET", c.path, nil)
+		e, _ := body["error"].(map[string]any)
+		details, _ := e["details"].(map[string]any)
+		field, _ := details["field"].(string)
+		if code != c.status || e["code"] != c.code || field != c.field {
+			t.Errorf("%s: %d %v %q, want %d %s %q", c.path, code, e["code"], field, c.status, c.code, c.field)
+		}
+	}
+	// A project id is a UUID whatever its case: a key scoped to the project
+	// reads it in upper case too.
+	own := authn.Principal{OrgID: orgA, Actor: "apikey:own", Role: authn.RoleAPIKey, ProjectIDs: []string{projA}, Scopes: []authn.Scope{authn.ScopeRead}}
+	for _, path := range []string{"/api/v1/traces/" + tid + "?project_id=", "/api/v1/traces?project_id="} {
+		if code, body := h.as(own, "GET", path+strings.ToUpper(projA), nil); code != 200 {
+			t.Errorf("%s<upper-case id>: %d %v", path, code, body)
+		}
+	}
+	// Enumerated filters take the documented values, exactly.
+	_, detail := h.as(engineerA, "GET", "/api/v1/traces/"+tid, nil)
+	tr := detail["trace"].(map[string]any)
+	for _, f := range []struct{ name, field string }{{"source", "source"}, {"outcome", "outcome_status"}, {"status", "status"}} {
+		name, value := f.name, tr[f.field].(string)
+		if code, body := h.as(engineerA, "GET", "/api/v1/traces?"+name+"="+value, nil); code != 200 || len(body["items"].([]any)) != 1 {
+			t.Errorf("%s=%s: %d %v", name, value, code, body)
+		}
+		other := strings.ToLower(value)
+		if other == value {
+			other = strings.ToUpper(value)
+		}
+		if code, _ := h.as(engineerA, "GET", "/api/v1/traces?"+name+"="+other, nil); code != 400 {
+			t.Errorf("%s=%s: %d, want 400", name, other, code)
+		}
+	}
+	if code, _ := h.as(engineerA, "POST", "/api/v1/traces/"+tid+"/outcome", map[string]any{"status": "failure"}); code != 400 {
+		t.Errorf("a lower-case outcome status: %d, want 400", code)
+	}
+	// The last page has a null cursor, not an empty one.
+	if code, body := h.as(engineerA, "GET", "/api/v1/traces", nil); code != 200 || body["next_cursor"] != nil {
+		t.Fatalf("last page: %d next_cursor=%#v", code, body["next_cursor"])
+	}
+}
+
+// Outcome and flag limits count characters, as the document (JSON Schema)
+// and the database do, not bytes; recorded states are objects.
+func TestOutcomeAndFlagLimits(t *testing.T) {
+	h := newHarness(t)
+	tid, children, root := candidateSpans("limits")
+	children = children[:4] // no outcome span
+	if code, _ := h.ingest("atk_aaaaaaaa_ingest", otlpJSON(tid, demoResource, append(children, root)...)); code != 200 {
+		t.Fatal("ingest")
+	}
+	path := "/api/v1/traces/" + tid
+	for _, c := range []struct {
+		body   map[string]any
+		status int
+		field  string
+	}{
+		{map[string]any{"status": "FAILURE", "expected_state": []any{1}}, 400, "expected_state"},
+		{map[string]any{"status": "FAILURE", "actual_state": "state"}, 400, "actual_state"},
+		{map[string]any{"status": "FAILURE", "business_outcome": strings.Repeat("x", 201)}, 400, "business_outcome"},
+		{map[string]any{"status": "FAILURE", "notes": strings.Repeat("ş", 4001)}, 400, "notes"},
+		// 4000 two-byte characters are 8000 bytes: within the limit.
+		{map[string]any{"status": "FAILURE", "notes": strings.Repeat("ş", 4000), "business_outcome": strings.Repeat("ğ", 200),
+			"expected_state": nil, "actual_state": map[string]any{"refund_count": 2}}, 200, ""},
+	} {
+		code, body := h.as(engineerA, "POST", path+"/outcome", c.body)
+		e, _ := body["error"].(map[string]any)
+		details, _ := e["details"].(map[string]any)
+		if field, _ := details["field"].(string); code != c.status || field != c.field {
+			t.Errorf("outcome %v: %d %v, want %d %q", c.body["status"], code, body, c.status, c.field)
+		}
+	}
+	if code, body := h.as(engineerA, "POST", path+"/flag", map[string]any{"reason": strings.Repeat("ş", 2000)}); code != 201 || body["kind"] != "manual" {
+		t.Fatalf("a 2000-character reason: %d %v", code, body)
+	}
+	if code, _ := h.as(engineerA, "POST", path+"/flag", map[string]any{"reason": strings.Repeat("ş", 2001)}); code != 400 {
+		t.Fatalf("a 2001-character reason: %d", code)
+	}
+	if code, _ := h.as(engineerA, "POST", path+"/flag", map[string]any{"reason": "   "}); code != 400 {
+		t.Fatalf("a blank reason: %d", code)
+	}
+}
+
+// Numeric facts arrive as untrusted attributes, strings included. A
+// non-finite number cannot be stored as JSON: it must not fail the export —
+// a retryable 503 the collector would repeat for the whole batch — and
+// negative counts and costs must not reach the aggregates.
+func TestNonFiniteAndNegativeNumbersAreDropped(t *testing.T) {
+	h := newHarness(t)
+	tid := hexID(32, "numbers")
+	root := hexID(16, "numbersr")
+	spans := []spec{
+		{id: hexID(16, "numbersm"), parent: root, name: "chat m", offsetMS: 5, durMS: 5, status: 1, attrs: map[string]any{
+			"gen_ai.operation.name": "chat", "gen_ai.request.model": "m", "gen_ai.usage.input_tokens": -900,
+			"gen_ai.usage.output_tokens": "-40", "agenttwin.cost.usd": "NaN", "gen_ai.request.temperature": "Infinity",
+			"gen_ai.request.max_tokens": -1}},
+		{id: hexID(16, "numberst"), parent: root, name: "execute_tool t", offsetMS: 20, durMS: 5, status: 1, attrs: map[string]any{
+			"gen_ai.tool.name": "t", "agenttwin.cost.usd": -3.5, "agenttwin.tool.attempt": -2}},
+		{id: root, name: "agent.run", durMS: 50, status: 1, attrs: map[string]any{"agenttwin.span.kind": "agent"}},
+	}
+	if code, body := h.ingest("atk_aaaaaaaa_ingest", otlpJSON(tid, demoResource, spans...)); code != 200 {
+		t.Fatalf("export with non-finite and negative numbers: %d %v", code, body)
+	}
+	if n := h.finalizeAll(); n != 1 {
+		t.Fatalf("finalized %d, want 1", n)
+	}
+	code, detail := h.as(engineerA, "GET", "/api/v1/traces/"+tid, nil)
+	if code != 200 {
+		t.Fatalf("detail: %d %v", code, detail)
+	}
+	tr := detail["trace"].(map[string]any)
+	if tr["input_tokens"].(float64) != 0 || tr["output_tokens"].(float64) != 0 || tr["cost_usd"] != nil {
+		t.Fatalf("negative or non-finite numbers reached the aggregates: tokens=%v/%v cost=%v", tr["input_tokens"], tr["output_tokens"], tr["cost_usd"])
+	}
+	for _, sp := range detail["spans"].([]any) {
+		attrs := sp.(map[string]any)["attributes"].(map[string]any)
+		for _, k := range []string{"input_tokens", "output_tokens", "cost_usd", "temperature", "max_tokens", "attempt"} {
+			if v, ok := attrs[k]; ok {
+				t.Errorf("span %v kept %s=%v", sp.(map[string]any)["name"], k, v)
+			}
+		}
 	}
 }
 

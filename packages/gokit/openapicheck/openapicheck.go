@@ -21,9 +21,11 @@ package openapicheck
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -51,11 +53,17 @@ var (
 	annotations = map[string]bool{"description": true, "summary": true, "title": true, "example": true, "examples": true, "deprecated": true}
 	// Keywords whose values are data, not schemas.
 	dataKeywords = map[string]bool{"enum": true, "const": true, "default": true, "example": true, "examples": true}
-	schemaMaps   = []string{"properties", "patternProperties", "$defs", "dependentSchemas"}
+	schemaMaps   = []string{"properties", "patternProperties", "$defs"}
 	schemaValues = []string{
 		"items", "additionalProperties", "unevaluatedProperties", "unevaluatedItems",
-		"contains", "propertyNames", "not", "if", "then", "else",
+		"contains", "propertyNames",
 	}
+	// Subschemas that add to the object they sit in: their properties count
+	// as declared by it, so they are not closed at their own top level. `if`
+	// and `not` are conditions and are left as written: closing one would
+	// change what it matches.
+	inPlaceValues   = []string{"then", "else"}
+	inPlaceMaps     = []string{"dependentSchemas"}
 	embeddedName    = regexp.MustCompile(`^([a-z][a-z0-9-]*\.v[0-9]+)(?:#/\$defs/([A-Za-z][A-Za-z0-9_]*))?$`)
 	uuidPattern     = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	dateTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
@@ -80,6 +88,9 @@ type Operation struct {
 	params   []map[string]any
 	segments []string
 }
+
+// webhook reports whether op is a call the service makes rather than serves.
+func (op *Operation) webhook() bool { return strings.HasPrefix(op.Path, "webhook:") }
 
 // Contract is a loaded OpenAPI 3.1 document.
 type Contract struct {
@@ -264,7 +275,7 @@ func (c *Contract) Operations() []*Operation { return append([]*Operation(nil), 
 func (c *Contract) Routes() []string {
 	var out []string
 	for _, op := range c.ops {
-		if !strings.HasPrefix(op.Path, "webhook:") {
+		if !op.webhook() {
 			out = append(out, op.Method+" "+op.Path)
 		}
 	}
@@ -288,7 +299,7 @@ func (c *Contract) Find(method, p string) (*Operation, map[string]string, bool) 
 	var bestValues map[string]string
 	bestScore := -1
 	for _, op := range c.ops {
-		if op.Method != strings.ToUpper(method) || strings.HasPrefix(op.Path, "webhook:") || len(op.segments) != len(got) {
+		if op.Method != strings.ToUpper(method) || op.webhook() || len(op.segments) != len(got) {
 			continue
 		}
 		values := map[string]string{}
@@ -445,9 +456,11 @@ func (c *Contract) inline(node any, stack []string) (any, error) {
 
 // Strictify returns a copy of schema in which objects that declare
 // properties reject undeclared ones (unevaluatedProperties: false), unless the
-// schema says otherwise. The members of an allOf are exempt at their top
-// level: the composition as a whole is closed instead, so the properties of
-// every member count as declared.
+// schema says otherwise. The members of an allOf — like then, else and
+// dependentSchemas, which also add to the object they sit in — are exempt at
+// their top level: the object as a whole is closed instead, so their
+// properties count as declared. if and not are conditions and are left as
+// written.
 func Strictify(schema any) any { return strictify(schema, false) }
 
 func strictify(schema any, member bool) any {
@@ -471,6 +484,20 @@ func strictify(schema any, member bool) any {
 	for _, key := range schemaValues {
 		if sub, ok := out[key].(map[string]any); ok {
 			out[key] = strictify(sub, false)
+		}
+	}
+	for _, key := range inPlaceValues {
+		if sub, ok := out[key].(map[string]any); ok {
+			out[key] = strictify(sub, true)
+		}
+	}
+	for _, key := range inPlaceMaps {
+		if sub, ok := out[key].(map[string]any); ok {
+			strict := make(map[string]any, len(sub))
+			for name, s := range sub {
+				strict[name] = strictify(s, true)
+			}
+			out[key] = strict
 		}
 	}
 	for _, key := range []string{"prefixItems", "anyOf", "oneOf"} {
@@ -619,15 +646,23 @@ var vocabulary = &jsonschema.Vocabulary{
 
 // ---------------------------------------------------------------- schemas
 
-func newCompiler() *jsonschema.Compiler {
+// newCompiler compiles the schemas of values the service reads (reads) or
+// writes: UUIDs are case-insensitive on input and lower-case on output
+// (RFC 9562), so a service writes the canonical form and accepts either.
+func newCompiler(reads bool) *jsonschema.Compiler {
 	comp := jsonschema.NewCompiler()
 	comp.DefaultDraft(jsonschema.Draft2020)
 	comp.AssertFormat()
 	comp.RegisterVocabulary(vocabulary)
 	comp.AssertVocabs()
-	// The canonical lower-case, hyphenated form is what every service writes.
 	comp.RegisterFormat(&jsonschema.Format{Name: "uuid", Validate: func(v any) error {
-		if s, ok := v.(string); ok && !uuidPattern.MatchString(s) {
+		s, ok := v.(string)
+		switch {
+		case !ok:
+			return nil
+		case reads && !uuidPattern.MatchString(strings.ToLower(s)):
+			return errors.New("not a hyphenated UUID")
+		case !reads && !uuidPattern.MatchString(s):
 			return errors.New("not a canonical (lower-case) UUID")
 		}
 		return nil
@@ -657,7 +692,10 @@ func newCompiler() *jsonschema.Compiler {
 	return comp
 }
 
-func (c *Contract) schema(key string, schema any) (*jsonschema.Schema, error) {
+func (c *Contract) schema(key string, reads bool, schema any) (*jsonschema.Schema, error) {
+	if reads {
+		key += "|reads"
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if s, ok := c.compiled[key]; ok {
@@ -668,7 +706,7 @@ func (c *Contract) schema(key string, schema any) (*jsonschema.Schema, error) {
 		return nil, err
 	}
 	strict := strictify(inlined, false)
-	comp := newCompiler()
+	comp := newCompiler(reads)
 	loc := fmt.Sprintf("mem:///%s/%d.json", url.PathEscape(c.Name), len(c.compiled))
 	if err := comp.AddResource(loc, strict); err != nil {
 		return nil, err
@@ -832,8 +870,11 @@ func (c *Contract) problems(err error) []string {
 	return out
 }
 
-func (c *Contract) validate(key string, schema any, instance any) []string {
-	s, err := c.schema(key, schema)
+// validate checks instance against schema; reads says the service reads the
+// value (a request of an operation, the answer to a webhook call) rather than
+// writes it.
+func (c *Contract) validate(key string, reads bool, schema any, instance any) []string {
+	s, err := c.schema(key, reads, schema)
 	if err != nil {
 		return []string{"  the contract's schema does not compile: " + err.Error()}
 	}
@@ -846,7 +887,7 @@ func (c *Contract) validate(key string, schema any, instance any) []string {
 // CheckSchema checks a value against a component schema (#/components/schemas/<name>).
 func (c *Contract) CheckSchema(name string, instance any) error {
 	ref := "#/components/schemas/" + strings.ReplaceAll(strings.ReplaceAll(name, "~", "~0"), "/", "~1")
-	if p := c.validate("schema:"+name, map[string]any{"$ref": ref}, normalize(instance)); p != nil {
+	if p := c.validate("schema:"+name, false, map[string]any{"$ref": ref}, normalize(instance)); p != nil {
 		return violation("%s: not a valid %s:\n%s", c.Name, name, strings.Join(p, "\n"))
 	}
 	return nil
@@ -882,7 +923,7 @@ func (c *Contract) responseFor(op *Operation, status int) (string, map[string]an
 	return "", nil, false
 }
 
-func (c *Contract) checkBody(where string, content any, contentType string, body []byte, key string) error {
+func (c *Contract) checkBody(where string, content any, contentType string, body []byte, key string, reads bool) error {
 	media := asMap(content)
 	if len(media) == 0 {
 		if len(bytes.TrimSpace(body)) > 0 {
@@ -911,7 +952,7 @@ func (c *Contract) checkBody(where string, content any, contentType string, body
 	if err != nil {
 		return violation("%s: the body is not JSON (%v)", where, err)
 	}
-	if p := c.validate(key, schema, instance); p != nil {
+	if p := c.validate(key, reads, schema, instance); p != nil {
 		return violation("%s does not match the contract:\n%s", where, strings.Join(p, "\n"))
 	}
 	return nil
@@ -922,7 +963,7 @@ func (c *Contract) checkResponseOf(op *Operation, status int, contentType string
 	if !ok {
 		return violation("%s: %s answered %d, which is not documented", c.Name, op.ID, status)
 	}
-	return c.checkBody(fmt.Sprintf("%s: %s %d response", c.Name, op.ID, status), response["content"], contentType, body, op.ID+"|response|"+key)
+	return c.checkBody(fmt.Sprintf("%s: %s %d response", c.Name, op.ID, status), response["content"], contentType, body, op.ID+"|response|"+key, op.webhook())
 }
 
 // coerce reads a parameter value as the type its schema declares.
@@ -976,7 +1017,7 @@ func (c *Contract) checkParameters(op *Operation, location string, given map[str
 		}
 		for _, raw := range given[name] {
 			key := op.ID + "|" + location + "|" + strings.ToLower(name)
-			if p := c.validate(key, schema, coerce(raw, asMap(inlined))); p != nil {
+			if p := c.validate(key, true, schema, coerce(raw, asMap(inlined))); p != nil {
 				return violation("%s: %s %s parameter %q=%q:\n%s", c.Name, op.ID, location, name, raw, strings.Join(p, "\n"))
 			}
 		}
@@ -1041,7 +1082,7 @@ func (c *Contract) checkRequestOf(op *Operation, pathValues map[string]string, q
 		}
 		return nil
 	}
-	return c.checkBody(fmt.Sprintf("%s: %s request", c.Name, op.ID), requestBody["content"], contentType, body, op.ID+"|request")
+	return c.checkBody(fmt.Sprintf("%s: %s request", c.Name, op.ID), requestBody["content"], contentType, body, op.ID+"|request", !op.webhook())
 }
 
 func (c *Contract) record(op *Operation, status int) {
@@ -1078,15 +1119,22 @@ func (c *Contract) CheckRequest(method, p string, query url.Values, header http.
 
 // CheckExchange checks a response and — when the server accepted the request
 // (2xx) — the request as well; a passing exchange is recorded for Uncovered.
+// Bodies are the bytes on the wire: a content coding (gzip) is undone first.
 func (c *Contract) CheckExchange(r *http.Request, requestBody []byte, status int, header http.Header, body []byte) error {
 	op, values, err := c.operation(r.Method, r.URL.Path)
 	if err != nil {
 		return err
 	}
+	if body, err = decoded(header.Get("Content-Encoding"), body); err != nil {
+		return violation("%s: %s %d response: %v", c.Name, op.ID, status, err)
+	}
 	if err := c.checkResponseOf(op, status, header.Get("Content-Type"), body); err != nil {
 		return err
 	}
 	if status >= 200 && status < 300 {
+		if requestBody, err = decoded(r.Header.Get("Content-Encoding"), requestBody); err != nil {
+			return violation("%s: %s request: %v", c.Name, op.ID, err)
+		}
 		if err := c.checkRequestOf(op, values, r.URL.Query(), r.Header, r.Header.Get("Content-Type"), requestBody); err != nil {
 			return err
 		}
@@ -1094,6 +1142,98 @@ func (c *Contract) CheckExchange(r *http.Request, requestBody []byte, status int
 	c.record(op, status)
 	return nil
 }
+
+// maxDecoded bounds a decoded body.
+const maxDecoded = 64 << 20
+
+// decoded undoes a content coding: a schema describes the representation,
+// not its coding on the wire.
+func decoded(coding string, body []byte) ([]byte, error) {
+	switch strings.ToLower(strings.TrimSpace(coding)) {
+	case "", "identity":
+		return body, nil
+	case "gzip", "x-gzip":
+		zr, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("the body is not valid gzip (%w)", err)
+		}
+		defer func() { _ = zr.Close() }()
+		out, err := io.ReadAll(io.LimitReader(zr, maxDecoded+1))
+		switch {
+		case err != nil:
+			return nil, fmt.Errorf("the body is not valid gzip (%w)", err)
+		case len(out) > maxDecoded:
+			return nil, fmt.Errorf("the decoded body is larger than %d bytes", maxDecoded)
+		}
+		return out, nil
+	}
+	return nil, fmt.Errorf("content coding %q cannot be checked", coding)
+}
+
+// Checking wraps a server's handler so that every exchange on a documented
+// operation is checked with CheckExchange; a violation goes to report, which
+// runs on the serving goroutine. The request body is recorded as the handler
+// reads it, so a streaming handler keeps streaming; after an accepted (2xx)
+// request the rest is read as well, to check the body whole. Requests on
+// undocumented paths pass through unchecked.
+func (c *Contract) Checking(next http.Handler, report func(error)) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, _, ok := c.Find(r.Method, r.URL.Path); !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		var requestBody bytes.Buffer
+		body := r.Body
+		r.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.TeeReader(body, &requestBody), body}
+		rec := &recorder{ResponseWriter: w}
+		next.ServeHTTP(rec, r)
+		status := rec.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		if status >= 200 && status < 300 {
+			_, _ = io.Copy(&requestBody, io.LimitReader(body, maxDecoded))
+		}
+		if err := c.CheckExchange(r, requestBody.Bytes(), status, w.Header(), rec.body.Bytes()); err != nil {
+			report(err)
+		}
+	})
+}
+
+// recorder keeps what a handler answers while passing it on.
+type recorder struct {
+	http.ResponseWriter
+	status int
+	body   bytes.Buffer
+}
+
+func (r *recorder) WriteHeader(code int) {
+	if r.status == 0 && code >= 200 {
+		r.status = code
+	}
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *recorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	r.body.Write(b)
+	return r.ResponseWriter.Write(b)
+}
+
+// Flush passes a flush on, for handlers that stream.
+func (r *recorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap gives http.ResponseController the underlying writer.
+func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 // CheckWebhook checks a call made to a documented webhook: always the
 // request, the response when there is one (status 0: no response).

@@ -135,6 +135,9 @@ def test_rbac_matrix() -> None:
     assert not trace_key.can(Permission.SIMULATION_RUN) and trace_key.can(Permission.TRACE_WRITE)
     assert viewer.can_access_project(PROJ) and not viewer.can_access_project("other")
     assert reviewer.can_access_project("anything") and not reviewer.can_access_project("")
+    # Project ids are UUIDs: case-insensitive, and nothing more lenient.
+    assert viewer.can_access_project(PROJ.upper())
+    assert not viewer.can_access_project(PROJ[:35]) and not viewer.can_access_project(f" {PROJ}")
 
 
 def test_rbac_matrix_matches_go(go_parity: Callable[[list[dict[str, Any]]], list[dict[str, Any]]]) -> None:

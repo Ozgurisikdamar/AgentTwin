@@ -170,9 +170,12 @@ class Principal:
         return perm in ROLE_PERMISSIONS.get(self.role, frozenset())
 
     def can_access_project(self, project_id: str) -> bool:
+        """Project ids are UUIDs, which are case-insensitive (RFC 9562): a
+        request may name a project in either case."""
         if not project_id:
             return False
-        return self.all_projects or project_id in self.project_ids
+        wanted = project_id.lower()
+        return self.all_projects or any(p.lower() == wanted for p in self.project_ids)
 
 
 def service_principal(service: str, org_id: str, *project_ids: str) -> Principal:

@@ -4,19 +4,25 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
@@ -101,20 +107,33 @@ func (s *Server) Init(maxConcurrent int) {
 	}
 }
 
+// Router is what routes are registered on (an http.ServeMux; a recorder in
+// the test that holds them to the API contract).
+type Router interface {
+	Handle(pattern string, handler http.Handler)
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
+
 // Routes registers all routes. Ingestion authenticates API keys itself; the
-// rest requires an internal JWT.
-func (s *Server) Routes(mux *http.ServeMux) {
+// query routes require an internal JWT.
+func (s *Server) Routes(mux Router) {
 	mux.HandleFunc("POST /v1/traces", s.ingest)
 	internal := http.NewServeMux()
-	h := httpx.Handle
-	internal.HandleFunc("GET /api/v1/traces", h(s.list))
-	internal.HandleFunc("GET /api/v1/traces/facets", h(s.facets))
-	internal.HandleFunc("GET /api/v1/traces/{trace_id}", h(s.detail))
-	internal.HandleFunc("DELETE /api/v1/traces/{trace_id}", h(s.delete))
-	internal.HandleFunc("POST /api/v1/traces/{trace_id}/outcome", h(s.recordOutcome))
-	internal.HandleFunc("POST /api/v1/traces/{trace_id}/flag", h(s.flag))
-	internal.HandleFunc("GET /api/v1/trace-stats", h(s.stats))
+	s.QueryRoutes(internal)
 	mux.Handle("/api/", httpx.Chain(internal, authn.RequireInternal(s.Tokens, "trace-service")))
+}
+
+// QueryRoutes registers the trace explorer, outcome and flag routes; Routes
+// mounts them behind the internal token check.
+func (s *Server) QueryRoutes(mux Router) {
+	h := httpx.Handle
+	mux.HandleFunc("GET /api/v1/traces", h(s.list))
+	mux.HandleFunc("GET /api/v1/traces/facets", h(s.facets))
+	mux.HandleFunc("GET /api/v1/traces/{trace_id}", h(s.detail))
+	mux.HandleFunc("DELETE /api/v1/traces/{trace_id}", h(s.delete))
+	mux.HandleFunc("POST /api/v1/traces/{trace_id}/outcome", h(s.recordOutcome))
+	mux.HandleFunc("POST /api/v1/traces/{trace_id}/flag", h(s.flag))
+	mux.HandleFunc("GET /api/v1/trace-stats", h(s.stats))
 }
 
 // ---------------------------------------------------------------- ingestion
@@ -126,13 +145,38 @@ func apiKeyFrom(r *http.Request) string {
 	return authn.BearerToken(r)
 }
 
-// otlpError writes an OTLP-style error: JSON body with a Status message. Status
-// codes follow OTLP/HTTP retry semantics (429/502/503/504 are retryable).
-func otlpError(w http.ResponseWriter, status int, msg string) {
+// grpcCodes are the google.rpc.Code values of the HTTP statuses ingestion
+// answers (the mapping of google/rpc/code.proto); any other is UNKNOWN.
+var grpcCodes = map[int]codes.Code{
+	http.StatusBadRequest:            codes.InvalidArgument,
+	http.StatusUnauthorized:          codes.Unauthenticated,
+	http.StatusForbidden:             codes.PermissionDenied,
+	http.StatusRequestEntityTooLarge: codes.ResourceExhausted,
+	http.StatusUnsupportedMediaType:  codes.InvalidArgument,
+	http.StatusTooManyRequests:       codes.ResourceExhausted,
+	http.StatusInternalServerError:   codes.Internal,
+	http.StatusServiceUnavailable:    codes.Unavailable,
+}
+
+// otlpError writes an OTLP/HTTP error: a google.rpc.Status in the encoding of
+// the request — protobuf for a protobuf request, JSON otherwise. Statuses
+// follow OTLP/HTTP retry semantics (503 is retryable, with Retry-After).
+func otlpError(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	if status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests {
 		w.Header().Set("Retry-After", "2")
 	}
-	httpx.WriteJSON(w, status, map[string]any{"code": status, "message": msg})
+	code, ok := grpcCodes[status]
+	if !ok {
+		code = codes.Unknown
+	}
+	if otlp.Protobuf(r.Header.Get("Content-Type")) {
+		b, _ := proto.Marshal(&spb.Status{Code: int32(code), Message: msg}) //nolint:gosec // gRPC codes are 0..16
+		w.Header().Set("Content-Type", "application/x-protobuf")
+		w.WriteHeader(status)
+		_, _ = w.Write(b)
+		return
+	}
+	httpx.WriteJSON(w, status, map[string]any{"code": int(code), "message": msg})
 }
 
 func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
@@ -146,24 +190,29 @@ func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
 	key := apiKeyFrom(r)
 	if key == "" {
 		outcome = "unauthenticated"
-		otlpError(w, http.StatusUnauthorized, "missing API key (X-AgentTwin-Api-Key header)")
+		otlpError(w, r, http.StatusUnauthorized, "missing API key (X-AgentTwin-Api-Key header)")
 		return
 	}
 	info, err := s.Keys.Verify(r.Context(), key)
 	switch {
 	case errors.Is(err, keys.ErrInvalid):
 		outcome = "unauthenticated"
-		otlpError(w, http.StatusUnauthorized, "invalid, revoked or expired API key")
+		otlpError(w, r, http.StatusUnauthorized, "invalid, revoked or expired API key")
 		return
 	case err != nil:
 		outcome = "auth_unavailable"
 		s.Log.WarnContext(r.Context(), "api key verification unavailable", "error", err.Error())
-		otlpError(w, http.StatusServiceUnavailable, "API key verification temporarily unavailable")
+		otlpError(w, r, http.StatusServiceUnavailable, "API key verification temporarily unavailable")
 		return
 	}
 	if !info.Principal().Can(authn.PermTraceWrite) {
 		outcome = "forbidden"
-		otlpError(w, http.StatusForbidden, "API key lacks the traces:write scope")
+		otlpError(w, r, http.StatusForbidden, "API key lacks the traces:write scope")
+		return
+	}
+	if err := otlp.CheckContentType(r.Header.Get("Content-Type")); err != nil {
+		outcome = "unsupported"
+		otlpError(w, r, http.StatusUnsupportedMediaType, err.Error())
 		return
 	}
 	select {
@@ -171,33 +220,36 @@ func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
 		defer func() { <-s.semaphore }()
 	default:
 		outcome = "overloaded"
-		otlpError(w, http.StatusServiceUnavailable, "trace ingestion is at capacity; retry")
+		otlpError(w, r, http.StatusServiceUnavailable, "trace ingestion is at capacity; retry")
 		return
 	}
 	s.Metrics.InFlight.Inc()
 	defer s.Metrics.InFlight.Dec()
 
 	body, err := otlp.ReadBody(http.MaxBytesReader(w, r.Body, s.MaxBody), r.Header.Get("Content-Encoding"), s.Limits.MaxDecompressedBytes)
-	if err != nil {
-		outcome = "too_large"
-		status := http.StatusRequestEntityTooLarge
-		var mbe *http.MaxBytesError
-		if !errors.Is(err, otlp.ErrTooLarge) && !errors.As(err, &mbe) {
-			status, outcome = http.StatusBadRequest, "bad_request"
+	if err == nil {
+		var res otlp.Result
+		if res, err = otlp.Decode(body, r.Header.Get("Content-Type"), s.Limits); err == nil {
+			outcome = s.storeSpans(w, r, info, res)
+			return
 		}
-		otlpError(w, status, err.Error())
-		return
 	}
-	res, err := otlp.Decode(body, r.Header.Get("Content-Type"), s.Limits)
-	if err != nil {
-		outcome = "bad_request"
-		status := http.StatusBadRequest
-		if errors.Is(err, otlp.ErrTooLarge) {
-			status, outcome = http.StatusRequestEntityTooLarge, "too_large"
-		}
-		otlpError(w, status, err.Error())
-		return
+	status := http.StatusBadRequest
+	outcome = "bad_request"
+	var mbe *http.MaxBytesError
+	switch {
+	case errors.Is(err, otlp.ErrTooLarge), errors.As(err, &mbe):
+		status, outcome = http.StatusRequestEntityTooLarge, "too_large"
+	case errors.Is(err, otlp.ErrUnsupported):
+		status, outcome = http.StatusUnsupportedMediaType, "unsupported"
 	}
+	otlpError(w, r, status, err.Error())
+}
+
+// storeSpans normalizes and stores the decoded spans and answers the export; it
+// returns the request outcome for the metrics.
+func (s *Server) storeSpans(w http.ResponseWriter, r *http.Request, info keys.Info, res otlp.Result) string {
+	outcome := "ok"
 	mode := content.Mode(info.ContentMode)
 	if !content.Valid(mode) {
 		mode = content.Off
@@ -218,10 +270,9 @@ func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
 	}
 	inserted, err := s.Store.Ingest(r.Context(), tgt, spans, s.Now())
 	if err != nil {
-		outcome = "store_error"
 		s.Log.ErrorContext(r.Context(), "trace ingest failed", "error", err.Error(), "spans", len(spans))
-		otlpError(w, http.StatusServiceUnavailable, "trace storage temporarily unavailable; retry")
-		return
+		otlpError(w, r, http.StatusServiceUnavailable, "trace storage temporarily unavailable; retry")
+		return "store_error"
 	}
 	s.Metrics.Spans.WithLabelValues("accepted").Add(float64(inserted))
 	s.Metrics.Spans.WithLabelValues("duplicate").Add(float64(len(spans) - inserted))
@@ -230,6 +281,7 @@ func (s *Server) ingest(w http.ResponseWriter, r *http.Request) {
 		outcome = "partial"
 	}
 	writeExportResponse(w, r.Header.Get("Content-Type"), res)
+	return outcome
 }
 
 func days(n, def int) time.Duration {
@@ -247,7 +299,7 @@ func writeExportResponse(w http.ResponseWriter, contentType string, res otlp.Res
 			ErrorMessage:  strings.Join(res.Errors, "; "),
 		}
 	}
-	if strings.HasPrefix(strings.ToLower(contentType), "application/x-protobuf") {
+	if otlp.Protobuf(contentType) {
 		b, _ := proto.Marshal(resp)
 		w.Header().Set("Content-Type", "application/x-protobuf")
 		w.WriteHeader(http.StatusOK)
@@ -282,9 +334,34 @@ var validTraceID = func(s string) bool {
 func traceIDParam(r *http.Request) (string, error) {
 	id := strings.ToLower(r.PathValue("trace_id"))
 	if !validTraceID(id) {
-		return "", httpx.Invalid("INVALID_TRACE_ID", "trace_id must be 32 hex characters.", nil)
+		return "", httpx.Invalid("INVALID_PARAMETER", "trace_id must be 32 hex characters.", map[string]any{"field": "trace_id"})
 	}
 	return id, nil
+}
+
+// projectFilter reads the project_id filter of the explorer queries: a
+// malformed id is a bad filter (400), a project outside the caller's access
+// is not found (404) so its existence cannot be probed.
+func projectFilter(r *http.Request, p authn.Principal) (string, error) {
+	projectID := strings.ToLower(r.URL.Query().Get("project_id"))
+	switch {
+	case projectID == "":
+		return "", nil
+	case !ids.Valid(projectID):
+		return "", httpx.Invalid("INVALID_FILTER", "project_id must be a UUID.", map[string]any{"field": "project_id"})
+	case !p.CanAccessProject(projectID):
+		return "", httpx.ErrNotFound
+	}
+	return projectID, nil
+}
+
+// oneOf checks an enumerated filter.
+func oneOf(q url.Values, field string, values ...string) (string, error) {
+	v := q.Get(field)
+	if v == "" || slices.Contains(values, v) {
+		return v, nil
+	}
+	return "", httpx.Invalid("INVALID_FILTER", field+" must be one of "+strings.Join(values, ", ")+".", map[string]any{"field": field})
 }
 
 func parseTime(q string, field string) (*time.Time, error) {
@@ -327,20 +404,22 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) error {
 	}
 	q := r.URL.Query()
 	f := store.Filter{
-		ProjectID: q.Get("project_id"), Agent: q.Get("agent"), AgentVersion: q.Get("agent_version"),
+		Agent: q.Get("agent"), AgentVersion: q.Get("agent_version"),
 		Environment: q.Get("environment"), Release: q.Get("release"), Model: q.Get("model"), Tool: q.Get("tool"),
-		Status: strings.ToUpper(q.Get("status")), Outcome: strings.ToUpper(q.Get("outcome")), Signal: q.Get("signal"),
-		PolicyDecision: q.Get("policy_decision"), Source: q.Get("source"), SessionID: q.Get("session_id"),
+		Signal: q.Get("signal"), PolicyDecision: q.Get("policy_decision"), SessionID: q.Get("session_id"),
 		SimulationRunID: q.Get("simulation_run_id"),
 	}
-	if f.ProjectID != "" && !p.CanAccessProject(f.ProjectID) {
-		return httpx.ErrNotFound
+	if f.ProjectID, err = projectFilter(r, p); err != nil {
+		return err
 	}
-	if f.ProjectID != "" && !ids.Valid(f.ProjectID) {
-		return httpx.Invalid("INVALID_FILTER", "project_id must be a UUID.", map[string]any{"field": "project_id"})
+	if f.Status, err = oneOf(q, "status", "OK", "ERROR", "UNSET"); err != nil {
+		return err
 	}
-	if f.Status != "" && f.Status != "OK" && f.Status != "ERROR" && f.Status != "UNSET" {
-		return httpx.Invalid("INVALID_FILTER", "status must be OK, ERROR or UNSET.", map[string]any{"field": "status"})
+	if f.Outcome, err = oneOf(q, "outcome", "SUCCESS", "PARTIAL", "FAILURE", "UNKNOWN"); err != nil {
+		return err
+	}
+	if f.Source, err = oneOf(q, "source", "production", "simulation", "replay", "eval", "test"); err != nil {
+		return err
 	}
 	if f.From, err = parseTime(q.Get("from"), "from"); err != nil {
 		return err
@@ -348,8 +427,11 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) error {
 	if f.To, err = parseTime(q.Get("to"), "to"); err != nil {
 		return err
 	}
-	for field, dst := range map[string]**float64{"min_duration_ms": &f.MinDurationMS, "max_duration_ms": &f.MaxDurationMS, "min_cost_usd": &f.MinCostUSD, "max_cost_usd": &f.MaxCostUSD} {
-		if *dst, err = parseFloat(q.Get(field), field); err != nil {
+	for _, n := range []struct {
+		field string
+		dst   **float64
+	}{{"min_duration_ms", &f.MinDurationMS}, {"max_duration_ms", &f.MaxDurationMS}, {"min_cost_usd", &f.MinCostUSD}, {"max_cost_usd", &f.MaxCostUSD}} {
+		if *n.dst, err = parseFloat(q.Get(n.field), n.field); err != nil {
 			return err
 		}
 	}
@@ -373,10 +455,11 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	next := ""
+	var next *string // null on the last page
 	if len(items) == f.Limit {
 		last := items[len(items)-1]
-		next = httpx.EncodeCursor(httpx.Cursor{TS: last.StartedAt, ID: last.TraceID})
+		c := httpx.EncodeCursor(httpx.Cursor{TS: last.StartedAt, ID: last.TraceID})
+		next = &c
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next})
 	return nil
@@ -391,8 +474,11 @@ func (s *Server) lookup(r *http.Request, perm authn.Permission) (authn.Principal
 	if err != nil {
 		return p, store.Trace{}, err
 	}
-	projectID := r.URL.Query().Get("project_id")
-	if projectID != "" && (!ids.Valid(projectID) || !p.CanAccessProject(projectID)) {
+	projectID := strings.ToLower(r.URL.Query().Get("project_id"))
+	switch {
+	case projectID != "" && !ids.Valid(projectID):
+		return p, store.Trace{}, httpx.Invalid("INVALID_PARAMETER", "project_id must be a UUID.", map[string]any{"field": "project_id"})
+	case projectID != "" && !p.CanAccessProject(projectID):
 		return p, store.Trace{}, httpx.ErrNotFound
 	}
 	t, err := s.Store.Get(r.Context(), scopeOf(p), id, projectID)
@@ -476,8 +562,6 @@ func (s *Server) recordOutcome(w http.ResponseWriter, r *http.Request) error {
 	if err := httpx.DecodeJSON(w, r, &in, 256<<10); err != nil {
 		return err
 	}
-	in.Status = strings.ToUpper(in.Status)
-	in.ClaimedStatus = strings.ToUpper(in.ClaimedStatus)
 	if !outcomeStatuses[in.Status] {
 		return httpx.Invalid("INVALID_OUTCOME", "status must be SUCCESS, PARTIAL, FAILURE or UNKNOWN.", map[string]any{"field": "status"})
 	}
@@ -496,8 +580,19 @@ func (s *Server) recordOutcome(w http.ResponseWriter, r *http.Request) error {
 	if in.Verified && in.VerificationSource == "unavailable" {
 		return httpx.Invalid("INVALID_OUTCOME", "An outcome cannot be verified without a verification source; a final answer alone is not verification.", map[string]any{"field": "verified"})
 	}
-	if len(in.Notes) > 4000 {
+	if utf8.RuneCountInString(in.BusinessOutcome) > 200 {
+		return httpx.Invalid("INVALID_OUTCOME", "business_outcome must be at most 200 characters.", map[string]any{"field": "business_outcome"})
+	}
+	if utf8.RuneCountInString(in.Notes) > 4000 {
 		return httpx.Invalid("INVALID_OUTCOME", "notes must be at most 4000 characters.", map[string]any{"field": "notes"})
+	}
+	for _, st := range []struct {
+		field string
+		raw   json.RawMessage
+	}{{"expected_state", in.ExpectedState}, {"actual_state", in.ActualState}} {
+		if raw := bytes.TrimSpace(st.raw); len(raw) > 0 && raw[0] != '{' && string(raw) != "null" {
+			return httpx.Invalid("INVALID_OUTCOME", st.field+" must be an object.", map[string]any{"field": st.field})
+		}
 	}
 	contradiction := summary.Contradiction(in.ClaimedStatus, in.Status, in.Verified)
 	humanReview := in.VerificationSource == "human_review"
@@ -574,7 +669,7 @@ func (s *Server) flag(w http.ResponseWriter, r *http.Request) error {
 		return httpx.Invalid("INVALID_FLAG", "kind must be incident, negative_feedback or manual.", map[string]any{"field": "kind"})
 	}
 	in.Reason = strings.TrimSpace(in.Reason)
-	if in.Reason == "" || len(in.Reason) > 2000 {
+	if in.Reason == "" || utf8.RuneCountInString(in.Reason) > 2000 {
 		return httpx.Invalid("INVALID_FLAG", "reason is required (max 2000 characters).", map[string]any{"field": "reason"})
 	}
 	flag := store.Flag{ID: ids.New(), Kind: in.Kind, Reason: in.Reason, FlaggedBy: p.Actor, CreatedAt: s.Now().UTC()}
@@ -607,9 +702,9 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	q := r.URL.Query()
-	projectID := q.Get("project_id")
-	if projectID != "" && (!ids.Valid(projectID) || !p.CanAccessProject(projectID)) {
-		return httpx.ErrNotFound
+	projectID, err := projectFilter(r, p)
+	if err != nil {
+		return err
 	}
 	to := s.Now().UTC()
 	from := to.Add(-7 * 24 * time.Hour)
@@ -624,7 +719,7 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) error {
 		to = *t
 	}
 	if !from.Before(to) {
-		return httpx.Invalid("INVALID_FILTER", "from must be before to.", nil)
+		return httpx.Invalid("INVALID_FILTER", "from must be before to.", map[string]any{"field": "from"})
 	}
 	st, err := s.Store.Stats(r.Context(), scopeOf(p), projectID, from, to)
 	if err != nil {
@@ -641,9 +736,9 @@ func (s *Server) facets(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	q := r.URL.Query()
-	projectID := q.Get("project_id")
-	if projectID != "" && (!ids.Valid(projectID) || !p.CanAccessProject(projectID)) {
-		return httpx.ErrNotFound
+	projectID, err := projectFilter(r, p)
+	if err != nil {
+		return err
 	}
 	from := s.Now().UTC().Add(-30 * 24 * time.Hour)
 	if t, err := parseTime(q.Get("from"), "from"); err != nil {

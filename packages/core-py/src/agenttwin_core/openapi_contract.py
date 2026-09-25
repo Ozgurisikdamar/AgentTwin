@@ -24,8 +24,11 @@ from the implementation unnoticed:
 from __future__ import annotations
 
 import ast
+import gzip
+import io
 import json
 import re
+import zlib
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -57,7 +60,7 @@ METHODS = ("get", "put", "post", "delete", "patch", "head", "options", "trace")
 _ANNOTATIONS = frozenset({"description", "summary", "title", "example", "examples", "deprecated"})
 # Keywords whose values are data, not schemas.
 _DATA_KEYWORDS = frozenset({"enum", "const", "default", "example", "examples"})
-_SCHEMA_MAPS = ("properties", "patternProperties", "$defs", "dependentSchemas")
+_SCHEMA_MAPS = ("properties", "patternProperties", "$defs")
 _SCHEMA_VALUES = (
     "items",
     "additionalProperties",
@@ -65,15 +68,39 @@ _SCHEMA_VALUES = (
     "unevaluatedItems",
     "contains",
     "propertyNames",
-    "not",
-    "if",
-    "then",
-    "else",
 )
+# Subschemas that add to the object they sit in: their properties count as
+# declared by it, so they are not closed at their own top level.
+_IN_PLACE_VALUES = ("then", "else")
+_IN_PLACE_MAPS = ("dependentSchemas",)
+# `if` and `not` are conditions and are left as written: closing one would
+# change what it matches.
 _UNEXPECTED = re.compile(r"\((.+) (?:was|were) unexpected\)$")
 _EMBEDDED = re.compile(r"^([a-z][a-z0-9-]*\.v[0-9]+)(?:#/\$defs/([A-Za-z][A-Za-z0-9_]*))?$")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _DATE_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
+
+
+# Bounds a decoded body.
+_MAX_DECODED = 64 << 20
+
+
+def _decoded(coding: str | None, body: bytes) -> bytes:
+    """Undoes a content coding: a schema describes the representation, not
+    its coding on the wire."""
+    coding = (coding or "").strip().lower()
+    if coding in ("", "identity"):
+        return body
+    if coding in ("gzip", "x-gzip"):
+        try:
+            with gzip.GzipFile(fileobj=io.BytesIO(body)) as f:
+                out = f.read(_MAX_DECODED + 1)
+        except (OSError, EOFError, zlib.error) as err:
+            raise ValueError(f"the body is not valid gzip ({err})") from None
+        if len(out) > _MAX_DECODED:
+            raise ValueError(f"the decoded body is larger than {_MAX_DECODED} bytes")
+        return out
+    raise ValueError(f'content coding "{coding}" cannot be checked')
 
 
 class ContractViolation(AssertionError):
@@ -90,13 +117,21 @@ def contract_path(service: str) -> Path:
 
 # ---------------------------------------------------------------- formats
 
+# The formats of the values a service writes, and of those it reads. UUIDs
+# are case-insensitive on input and lower-case on output (RFC 9562): a service
+# writes the canonical form and accepts either.
 FORMATS = FormatChecker(formats=())
+READ_FORMATS = FormatChecker(formats=())
 
 
 @FORMATS.checks("uuid")
 def _is_uuid(value: object) -> bool:
-    # The canonical lower-case, hyphenated form is what every service writes.
     return not isinstance(value, str) or _UUID.match(value) is not None
+
+
+@READ_FORMATS.checks("uuid")
+def _is_uuid_in_any_case(value: object) -> bool:
+    return not isinstance(value, str) or _UUID.match(value.lower()) is not None
 
 
 @FORMATS.checks("date-time", raises=ValueError)
@@ -115,6 +150,10 @@ def _is_uri(value: object) -> bool:
         return True
     parts = urlsplit(value)
     return bool(parts.scheme and parts.netloc)
+
+
+READ_FORMATS.checks("date-time", raises=ValueError)(_is_date_time)
+READ_FORMATS.checks("uri")(_is_uri)
 
 
 def embedded_validator(name: str) -> Draft202012Validator:
@@ -151,9 +190,11 @@ _ContractValidator: Any = extend(  # type: ignore[no-untyped-call]
 def strictify(schema: Any, *, member: bool = False) -> Any:
     """A copy of ``schema`` in which objects that declare properties reject
     undeclared ones (``unevaluatedProperties: false``), unless the schema says
-    otherwise. The members of an ``allOf`` are exempt at their top level — the
-    composition as a whole is closed instead, so properties of every member
-    count as declared."""
+    otherwise. The members of an ``allOf`` — like ``then``, ``else`` and
+    ``dependentSchemas``, which also add to the object they sit in — are exempt
+    at their top level: the object as a whole is closed instead, so their
+    properties count as declared. ``if`` and ``not`` are conditions and are
+    left as written."""
     if not isinstance(schema, Mapping):
         return schema
     out = dict(schema)
@@ -163,6 +204,12 @@ def strictify(schema: Any, *, member: bool = False) -> Any:
     for key in _SCHEMA_VALUES:
         if isinstance(out.get(key), Mapping):
             out[key] = strictify(out[key])
+    for key in _IN_PLACE_VALUES:
+        if isinstance(out.get(key), Mapping):
+            out[key] = strictify(out[key], member=True)
+    for key in _IN_PLACE_MAPS:
+        if isinstance(out.get(key), Mapping):
+            out[key] = {name: strictify(sub, member=True) for name, sub in out[key].items()}
     if isinstance(out.get("prefixItems"), list):
         out["prefixItems"] = [strictify(sub) for sub in out["prefixItems"]]
     for key in ("anyOf", "oneOf"):
@@ -233,6 +280,11 @@ class Operation:
     @property
     def segments(self) -> tuple[str, ...]:
         return _segments(self.path)
+
+    @property
+    def webhook(self) -> bool:
+        """A call the service makes rather than serves."""
+        return self.path.startswith("webhook:")
 
 
 def _segments(path: str) -> tuple[str, ...]:
@@ -339,7 +391,7 @@ class Contract:
         segments = _segments(path)
         best: tuple[int, Operation, dict[str, str]] | None = None
         for op in self.operations.values():
-            if op.method != method.upper() or op.path.startswith("webhook:"):
+            if op.method != method.upper() or op.webhook:
                 continue
             pattern = op.segments
             if len(pattern) != len(segments):
@@ -377,11 +429,17 @@ class Contract:
                 return key, self._resolver.follow(responses[key])
         return None
 
-    def _validator(self, key: tuple[str, ...], schema: Mapping[str, Any]) -> Validator:
+    def _validator(
+        self, key: tuple[str, ...], schema: Mapping[str, Any], *, reads: bool = False
+    ) -> Validator:
+        """The validator of ``schema``; ``reads`` says the service reads the
+        value (a request of an operation, the answer to a webhook call) rather
+        than writes it."""
+        key = (*key, "reads") if reads else key
         validator = self._validators.get(key)
         if validator is None:
             strict = strictify(self._resolver.inline(schema))
-            validator = _ContractValidator(strict, format_checker=FORMATS)
+            validator = _ContractValidator(strict, format_checker=READ_FORMATS if reads else FORMATS)
             self._validators[key] = validator
         return validator
 
@@ -394,6 +452,8 @@ class Contract:
         content_type: str | None,
         body: bytes,
         key: tuple[str, ...],
+        *,
+        reads: bool,
     ) -> None:
         if not content:
             if body.strip():
@@ -413,7 +473,7 @@ class Contract:
             instance = json.loads(body)
         except ValueError as err:
             raise ContractViolation(f"{where}: the body is not JSON ({err})") from None
-        problems = _problems(self._validator(key, schema).iter_errors(instance))
+        problems = _problems(self._validator(key, schema, reads=reads).iter_errors(instance))
         if problems:
             raise ContractViolation(f"{where} does not match the contract:\n" + "\n".join(problems))
 
@@ -446,6 +506,7 @@ class Contract:
             content_type,
             body,
             (op.operation_id, "response", key),
+            reads=op.webhook,
         )
 
     def _check_parameters(
@@ -467,7 +528,7 @@ class Contract:
                     )
                 continue
             schema = param.get("schema") or {}
-            validator = self._validator((op.operation_id, location, name.lower()), schema)
+            validator = self._validator((op.operation_id, location, name.lower()), schema, reads=True)
             for raw in values:
                 problems = _problems(validator.iter_errors(_coerce(raw, self._resolver.inline(schema))))
                 if problems:
@@ -529,23 +590,29 @@ class Contract:
             content_type,
             body,
             (op.operation_id, "request"),
+            reads=not op.webhook,
         )
 
     def check_exchange(self, request: httpx.Request, response: httpx.Response) -> Operation:
-        """Checks a response (read already) and — when the server accepted the
-        request (2xx) — the request as well."""
+        """Checks a response (read already, so decoded by httpx) and — when the
+        server accepted the request (2xx) — the request as well, its content
+        coding (gzip) undone."""
         op, path_values = self._operation(request.method, request.url.path)
         self._check_response_of(
             op, response.status_code, response.headers.get("content-type"), response.content
         )
         if 200 <= response.status_code < 300:
+            try:
+                content = _decoded(request.headers.get("content-encoding"), request.content)
+            except ValueError as err:
+                raise ContractViolation(f"{self.name}: {op.operation_id} request: {err}") from None
             self._check_request_of(
                 op,
                 path_values,
                 request.url.params.multi_items(),
                 request.headers,
                 request.headers.get("content-type"),
-                request.content,
+                content,
             )
         self.seen[op.operation_id].add(response.status_code)
         return op

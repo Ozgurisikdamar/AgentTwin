@@ -106,3 +106,32 @@ func TestKindInference(t *testing.T) {
 		}
 	}
 }
+
+// Numbers are untrusted: a string attribute can spell NaN or infinity, which
+// JSON cannot store, and a count or cost can be negative. Neither is a fact.
+func TestNumbersAreFiniteAndCountsNonNegative(t *testing.T) {
+	sp := Normalize(otlp.Span{TraceID: "0af7651916cd43dd8448eb211c80319c", SpanID: "b7ad6b7169203331", Name: "chat m",
+		Start: time.Unix(1790000000, 0), End: time.Unix(1790000001, 0), Attrs: map[string]any{
+			"gen_ai.operation.name": "chat", "gen_ai.request.model": "m",
+			"gen_ai.usage.input_tokens": int64(-900), "gen_ai.usage.output_tokens": "-40", "gen_ai.request.max_tokens": int64(-1),
+			"agenttwin.cost.usd": "NaN", "gen_ai.request.temperature": "-Infinity",
+			"agenttwin.tool.attempt": int64(-2), "agenttwin.retrieval.document_count": "-3",
+		}})
+	a := sp.Attrs
+	if a.InputTokens != nil || a.OutputTokens != nil || a.MaxTokens != nil || a.CostUSD != nil || a.Temperature != nil ||
+		a.Attempt != nil || a.DocumentCount != nil {
+		t.Fatalf("invalid numbers kept: %+v", a)
+	}
+	if _, err := json.Marshal(sp); err != nil {
+		t.Fatalf("the span cannot be stored: %v", err)
+	}
+	ok := Normalize(otlp.Span{TraceID: "0af7651916cd43dd8448eb211c80319c", SpanID: "b7ad6b7169203332", Name: "chat m",
+		Start: time.Unix(1790000000, 0), End: time.Unix(1790000001, 0), Attrs: map[string]any{
+			"gen_ai.operation.name": "chat", "gen_ai.request.model": "m", "gen_ai.usage.input_tokens": "0",
+			"agenttwin.cost.usd": "0.25", "gen_ai.request.temperature": -0.5,
+		}})
+	if ok.Attrs.InputTokens == nil || *ok.Attrs.InputTokens != 0 || ok.Attrs.CostUSD == nil || *ok.Attrs.CostUSD != 0.25 ||
+		ok.Attrs.Temperature == nil || *ok.Attrs.Temperature != -0.5 {
+		t.Fatalf("valid numbers dropped: %+v", ok.Attrs)
+	}
+}

@@ -9670,5 +9670,2360 @@
         }
       }
     }
+  },
+  "trace-service": {
+    "DELETE /api/v1/traces/{trace_id}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:trace_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "204": null
+      }
+    },
+    "GET /api/v1/trace-stats": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:from": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:to": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "from",
+              "stats",
+              "to"
+            ],
+            "/stats": [
+              "by_agent_version",
+              "by_outcome",
+              "by_signal",
+              "by_tool",
+              "contradictions",
+              "cost_usd",
+              "error_rate",
+              "errors",
+              "p50_ms",
+              "p95_ms",
+              "total",
+              "unverified_outcomes"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/from": [
+              "string"
+            ],
+            "/stats": [
+              "object"
+            ],
+            "/stats/by_agent_version": [
+              "object"
+            ],
+            "/stats/by_outcome": [
+              "object"
+            ],
+            "/stats/by_signal": [
+              "object"
+            ],
+            "/stats/by_tool": [
+              "object"
+            ],
+            "/stats/contradictions": [
+              "integer"
+            ],
+            "/stats/cost_usd": [
+              "number"
+            ],
+            "/stats/error_rate": [
+              "number"
+            ],
+            "/stats/errors": [
+              "integer"
+            ],
+            "/stats/p50_ms": [
+              "null",
+              "number"
+            ],
+            "/stats/p95_ms": [
+              "null",
+              "number"
+            ],
+            "/stats/total": [
+              "integer"
+            ],
+            "/stats/unverified_outcomes": [
+              "integer"
+            ],
+            "/to": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/traces": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:agent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:agent_version": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:environment": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:flagged": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "boolean"
+              ]
+            }
+          }
+        },
+        "query:from": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:human_reviewed": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "boolean"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:max_cost_usd": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "number"
+              ]
+            }
+          }
+        },
+        "query:max_duration_ms": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "number"
+              ]
+            }
+          }
+        },
+        "query:min_cost_usd": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "number"
+              ]
+            }
+          }
+        },
+        "query:min_duration_ms": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "number"
+              ]
+            }
+          }
+        },
+        "query:model": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:outcome": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"FAILURE\"",
+                "\"PARTIAL\"",
+                "\"SUCCESS\"",
+                "\"UNKNOWN\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:policy_decision": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:release": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:session_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:signal": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:simulation_run_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:source": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"eval\"",
+                "\"production\"",
+                "\"replay\"",
+                "\"simulation\"",
+                "\"test\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:status": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"ERROR\"",
+                "\"OK\"",
+                "\"UNSET\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:to": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:tool": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ],
+            "/items/[]/outcome_status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/items/[]/source": [
+              "\"eval\"",
+              "\"production\"",
+              "\"replay\"",
+              "\"simulation\"",
+              "\"test\""
+            ],
+            "/items/[]/status": [
+              "\"ERROR\"",
+              "\"OK\"",
+              "\"UNSET\""
+            ],
+            "/items/[]/summary/outcome": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "agent_name",
+              "agent_version",
+              "commit_sha",
+              "content_dropped",
+              "content_mode",
+              "content_purged",
+              "cost_usd",
+              "duration_ms",
+              "ended_at",
+              "environment",
+              "error_count",
+              "expires_at",
+              "finalized",
+              "flagged",
+              "human_reviewed",
+              "input_tokens",
+              "model_call_count",
+              "models",
+              "organization_id",
+              "outcome_status",
+              "outcome_verified",
+              "output_tokens",
+              "policy_decisions",
+              "project_id",
+              "prompt_hash",
+              "release_id",
+              "retry_count",
+              "root_name",
+              "root_span_id",
+              "scenario_id",
+              "sdk_name",
+              "sdk_version",
+              "semconv_version",
+              "session_id",
+              "signals",
+              "simulation_run_id",
+              "source",
+              "span_count",
+              "started_at",
+              "status",
+              "summary",
+              "tool_call_count",
+              "tools",
+              "trace_id",
+              "truncated"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent_name": [
+              "null",
+              "string"
+            ],
+            "/items/[]/agent_version": [
+              "null",
+              "string"
+            ],
+            "/items/[]/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/items/[]/content_dropped": [
+              "boolean"
+            ],
+            "/items/[]/content_mode": [
+              "string"
+            ],
+            "/items/[]/content_purged": [
+              "boolean"
+            ],
+            "/items/[]/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/items/[]/duration_ms": [
+              "null",
+              "number"
+            ],
+            "/items/[]/ended_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/environment": [
+              "string"
+            ],
+            "/items/[]/error_count": [
+              "integer"
+            ],
+            "/items/[]/expires_at": [
+              "string"
+            ],
+            "/items/[]/finalized": [
+              "boolean"
+            ],
+            "/items/[]/flagged": [
+              "boolean"
+            ],
+            "/items/[]/human_reviewed": [
+              "boolean"
+            ],
+            "/items/[]/input_tokens": [
+              "integer"
+            ],
+            "/items/[]/model_call_count": [
+              "integer"
+            ],
+            "/items/[]/models": [
+              "array"
+            ],
+            "/items/[]/models/[]": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/outcome_status": [
+              "null",
+              "string"
+            ],
+            "/items/[]/outcome_verified": [
+              "boolean",
+              "null"
+            ],
+            "/items/[]/output_tokens": [
+              "integer"
+            ],
+            "/items/[]/policy_decisions": [
+              "array"
+            ],
+            "/items/[]/policy_decisions/[]": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/prompt_hash": [
+              "null",
+              "string"
+            ],
+            "/items/[]/release_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/retry_count": [
+              "integer"
+            ],
+            "/items/[]/root_name": [
+              "null",
+              "string"
+            ],
+            "/items/[]/root_span_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/sdk_name": [
+              "null",
+              "string"
+            ],
+            "/items/[]/sdk_version": [
+              "null",
+              "string"
+            ],
+            "/items/[]/semconv_version": [
+              "string"
+            ],
+            "/items/[]/session_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/signals": [
+              "array"
+            ],
+            "/items/[]/signals/[]": [
+              "string"
+            ],
+            "/items/[]/simulation_run_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/source": [
+              "string"
+            ],
+            "/items/[]/span_count": [
+              "integer"
+            ],
+            "/items/[]/started_at": [
+              "string"
+            ],
+            "/items/[]/status": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "object"
+            ],
+            "/items/[]/summary/agent": [
+              "string"
+            ],
+            "/items/[]/summary/agent_version": [
+              "string"
+            ],
+            "/items/[]/summary/cost_known": [
+              "boolean"
+            ],
+            "/items/[]/summary/cost_usd": [
+              "number"
+            ],
+            "/items/[]/summary/duration_ms": [
+              "number"
+            ],
+            "/items/[]/summary/error_type": [
+              "string"
+            ],
+            "/items/[]/summary/errors": [
+              "array"
+            ],
+            "/items/[]/summary/errors/[]": [
+              "string"
+            ],
+            "/items/[]/summary/failing_tool": [
+              "string"
+            ],
+            "/items/[]/summary/final_state_diff": [
+              "object"
+            ],
+            "/items/[]/summary/last_successful_step": [
+              "string"
+            ],
+            "/items/[]/summary/model": [
+              "null",
+              "string"
+            ],
+            "/items/[]/summary/outcome": [
+              "null",
+              "string"
+            ],
+            "/items/[]/summary/outcome_verified": [
+              "boolean"
+            ],
+            "/items/[]/summary/policy_decisions": [
+              "array"
+            ],
+            "/items/[]/summary/policy_decisions/[]": [
+              "string"
+            ],
+            "/items/[]/summary/prompt_hash": [
+              "null",
+              "string"
+            ],
+            "/items/[]/summary/retry_count": [
+              "integer"
+            ],
+            "/items/[]/summary/step_count": [
+              "integer"
+            ],
+            "/items/[]/summary/tool_sequence_sketch": [
+              "string"
+            ],
+            "/items/[]/summary/tools": [
+              "array"
+            ],
+            "/items/[]/summary/tools/[]": [
+              "string"
+            ],
+            "/items/[]/summary/violations": [
+              "array"
+            ],
+            "/items/[]/summary/violations/[]": [
+              "string"
+            ],
+            "/items/[]/tool_call_count": [
+              "integer"
+            ],
+            "/items/[]/tools": [
+              "array"
+            ],
+            "/items/[]/tools/[]": [
+              "string"
+            ],
+            "/items/[]/trace_id": [
+              "string"
+            ],
+            "/items/[]/truncated": [
+              "boolean"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/traces/facets": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:from": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "facets",
+              "from",
+              "sampled"
+            ],
+            "/facets": [
+              "agent",
+              "agent_version",
+              "environment",
+              "model",
+              "outcome",
+              "policy_decision",
+              "release",
+              "signal",
+              "source",
+              "status",
+              "tool"
+            ],
+            "/facets/agent/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/agent_version/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/environment/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/model/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/outcome/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/policy_decision/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/release/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/signal/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/source/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/status/[]": [
+              "count",
+              "value"
+            ],
+            "/facets/tool/[]": [
+              "count",
+              "value"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/facets": [
+              "object"
+            ],
+            "/facets/agent": [
+              "array"
+            ],
+            "/facets/agent/[]": [
+              "object"
+            ],
+            "/facets/agent/[]/count": [
+              "integer"
+            ],
+            "/facets/agent/[]/value": [
+              "string"
+            ],
+            "/facets/agent_version": [
+              "array"
+            ],
+            "/facets/agent_version/[]": [
+              "object"
+            ],
+            "/facets/agent_version/[]/count": [
+              "integer"
+            ],
+            "/facets/agent_version/[]/value": [
+              "string"
+            ],
+            "/facets/environment": [
+              "array"
+            ],
+            "/facets/environment/[]": [
+              "object"
+            ],
+            "/facets/environment/[]/count": [
+              "integer"
+            ],
+            "/facets/environment/[]/value": [
+              "string"
+            ],
+            "/facets/model": [
+              "array"
+            ],
+            "/facets/model/[]": [
+              "object"
+            ],
+            "/facets/model/[]/count": [
+              "integer"
+            ],
+            "/facets/model/[]/value": [
+              "string"
+            ],
+            "/facets/outcome": [
+              "array"
+            ],
+            "/facets/outcome/[]": [
+              "object"
+            ],
+            "/facets/outcome/[]/count": [
+              "integer"
+            ],
+            "/facets/outcome/[]/value": [
+              "string"
+            ],
+            "/facets/policy_decision": [
+              "array"
+            ],
+            "/facets/policy_decision/[]": [
+              "object"
+            ],
+            "/facets/policy_decision/[]/count": [
+              "integer"
+            ],
+            "/facets/policy_decision/[]/value": [
+              "string"
+            ],
+            "/facets/release": [
+              "array"
+            ],
+            "/facets/release/[]": [
+              "object"
+            ],
+            "/facets/release/[]/count": [
+              "integer"
+            ],
+            "/facets/release/[]/value": [
+              "string"
+            ],
+            "/facets/signal": [
+              "array"
+            ],
+            "/facets/signal/[]": [
+              "object"
+            ],
+            "/facets/signal/[]/count": [
+              "integer"
+            ],
+            "/facets/signal/[]/value": [
+              "string"
+            ],
+            "/facets/source": [
+              "array"
+            ],
+            "/facets/source/[]": [
+              "object"
+            ],
+            "/facets/source/[]/count": [
+              "integer"
+            ],
+            "/facets/source/[]/value": [
+              "string"
+            ],
+            "/facets/status": [
+              "array"
+            ],
+            "/facets/status/[]": [
+              "object"
+            ],
+            "/facets/status/[]/count": [
+              "integer"
+            ],
+            "/facets/status/[]/value": [
+              "string"
+            ],
+            "/facets/tool": [
+              "array"
+            ],
+            "/facets/tool/[]": [
+              "object"
+            ],
+            "/facets/tool/[]/count": [
+              "integer"
+            ],
+            "/facets/tool/[]/value": [
+              "string"
+            ],
+            "/from": [
+              "string"
+            ],
+            "/sampled": [
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/traces/{trace_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:trace_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/flags/[]/kind": [
+              "\"incident\"",
+              "\"manual\"",
+              "\"negative_feedback\""
+            ],
+            "/outcome/claimed_status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/outcome/source": [
+              "\"api\"",
+              "\"span\""
+            ],
+            "/outcome/status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/outcome/verification_source": [
+              "\"external_callback\"",
+              "\"human_review\"",
+              "\"semantic_judge\"",
+              "\"state_assertion\"",
+              "\"tool_result\"",
+              "\"tool_twin_state\"",
+              "\"unavailable\""
+            ],
+            "/spans/[]/kind": [
+              "\"agent\"",
+              "\"http\"",
+              "\"mcp\"",
+              "\"model\"",
+              "\"other\"",
+              "\"outcome\"",
+              "\"policy\"",
+              "\"retrieval\"",
+              "\"tool\""
+            ],
+            "/spans/[]/status": [
+              "\"ERROR\"",
+              "\"OK\"",
+              "\"UNSET\""
+            ],
+            "/trace/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ],
+            "/trace/outcome_status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/trace/source": [
+              "\"eval\"",
+              "\"production\"",
+              "\"replay\"",
+              "\"simulation\"",
+              "\"test\""
+            ],
+            "/trace/status": [
+              "\"ERROR\"",
+              "\"OK\"",
+              "\"UNSET\""
+            ],
+            "/trace/summary/outcome": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ]
+          },
+          "required": {
+            "/": [
+              "flags",
+              "outcome",
+              "spans",
+              "trace"
+            ],
+            "/flags/[]": [
+              "created_at",
+              "flagged_by",
+              "id",
+              "kind",
+              "reason"
+            ],
+            "/outcome": [
+              "business_outcome",
+              "claimed_status",
+              "contradiction",
+              "notes",
+              "recorded_at",
+              "recorded_by",
+              "source",
+              "status",
+              "verification_source",
+              "verified"
+            ],
+            "/spans/[]": [
+              "attributes",
+              "duration_ms",
+              "ended_at",
+              "events",
+              "kind",
+              "model",
+              "name",
+              "parent_span_id",
+              "policy_decision",
+              "semconv_version",
+              "span_id",
+              "started_at",
+              "status",
+              "status_message",
+              "tool_name",
+              "tool_risk"
+            ],
+            "/spans/[]/events/[]": [
+              "name",
+              "time"
+            ],
+            "/trace": [
+              "agent_name",
+              "agent_version",
+              "commit_sha",
+              "content_dropped",
+              "content_mode",
+              "content_purged",
+              "cost_usd",
+              "duration_ms",
+              "ended_at",
+              "environment",
+              "error_count",
+              "expires_at",
+              "finalized",
+              "flagged",
+              "human_reviewed",
+              "input_tokens",
+              "model_call_count",
+              "models",
+              "organization_id",
+              "outcome_status",
+              "outcome_verified",
+              "output_tokens",
+              "policy_decisions",
+              "project_id",
+              "prompt_hash",
+              "release_id",
+              "retry_count",
+              "root_name",
+              "root_span_id",
+              "scenario_id",
+              "sdk_name",
+              "sdk_version",
+              "semconv_version",
+              "session_id",
+              "signals",
+              "simulation_run_id",
+              "source",
+              "span_count",
+              "started_at",
+              "status",
+              "summary",
+              "tool_call_count",
+              "tools",
+              "trace_id",
+              "truncated"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/flags": [
+              "array"
+            ],
+            "/flags/[]": [
+              "object"
+            ],
+            "/flags/[]/created_at": [
+              "string"
+            ],
+            "/flags/[]/flagged_by": [
+              "string"
+            ],
+            "/flags/[]/id": [
+              "string"
+            ],
+            "/flags/[]/kind": [
+              "string"
+            ],
+            "/flags/[]/reason": [
+              "string"
+            ],
+            "/outcome": [
+              "null",
+              "object"
+            ],
+            "/outcome/actual_state": [
+              "object"
+            ],
+            "/outcome/business_outcome": [
+              "null",
+              "string"
+            ],
+            "/outcome/claimed_status": [
+              "null",
+              "string"
+            ],
+            "/outcome/contradiction": [
+              "boolean"
+            ],
+            "/outcome/expected_state": [
+              "object"
+            ],
+            "/outcome/notes": [
+              "null",
+              "string"
+            ],
+            "/outcome/recorded_at": [
+              "string"
+            ],
+            "/outcome/recorded_by": [
+              "string"
+            ],
+            "/outcome/source": [
+              "string"
+            ],
+            "/outcome/status": [
+              "string"
+            ],
+            "/outcome/verification_source": [
+              "string"
+            ],
+            "/outcome/verified": [
+              "boolean"
+            ],
+            "/spans": [
+              "array"
+            ],
+            "/spans/[]": [
+              "object"
+            ],
+            "/spans/[]/attributes": [
+              "object"
+            ],
+            "/spans/[]/attributes/agent_id": [
+              "string"
+            ],
+            "/spans/[]/attributes/agent_name": [
+              "string"
+            ],
+            "/spans/[]/attributes/agent_version": [
+              "string"
+            ],
+            "/spans/[]/attributes/attempt": [
+              "integer"
+            ],
+            "/spans/[]/attributes/business_outcome": [
+              "string"
+            ],
+            "/spans/[]/attributes/commit_sha": [
+              "string"
+            ],
+            "/spans/[]/attributes/cost_usd": [
+              "number"
+            ],
+            "/spans/[]/attributes/document_count": [
+              "integer"
+            ],
+            "/spans/[]/attributes/environment": [
+              "string"
+            ],
+            "/spans/[]/attributes/error_type": [
+              "string"
+            ],
+            "/spans/[]/attributes/exception_message": [
+              "string"
+            ],
+            "/spans/[]/attributes/exception_type": [
+              "string"
+            ],
+            "/spans/[]/attributes/extra": [
+              "object"
+            ],
+            "/spans/[]/attributes/final_state_diff": [
+              "object"
+            ],
+            "/spans/[]/attributes/finish_reasons": [
+              "array"
+            ],
+            "/spans/[]/attributes/finish_reasons/[]": [
+              "string"
+            ],
+            "/spans/[]/attributes/http_host": [
+              "string"
+            ],
+            "/spans/[]/attributes/http_method": [
+              "string"
+            ],
+            "/spans/[]/attributes/http_status": [
+              "integer"
+            ],
+            "/spans/[]/attributes/idempotency_key_hash": [
+              "string"
+            ],
+            "/spans/[]/attributes/input_tokens": [
+              "integer"
+            ],
+            "/spans/[]/attributes/max_tokens": [
+              "integer"
+            ],
+            "/spans/[]/attributes/mcp_method": [
+              "string"
+            ],
+            "/spans/[]/attributes/mcp_server": [
+              "string"
+            ],
+            "/spans/[]/attributes/operation": [
+              "string"
+            ],
+            "/spans/[]/attributes/outcome_claimed": [
+              "string"
+            ],
+            "/spans/[]/attributes/outcome_status": [
+              "string"
+            ],
+            "/spans/[]/attributes/outcome_verified": [
+              "boolean"
+            ],
+            "/spans/[]/attributes/output_tokens": [
+              "integer"
+            ],
+            "/spans/[]/attributes/policy_decision": [
+              "string"
+            ],
+            "/spans/[]/attributes/policy_name": [
+              "string"
+            ],
+            "/spans/[]/attributes/policy_rule": [
+              "string"
+            ],
+            "/spans/[]/attributes/policy_version": [
+              "string"
+            ],
+            "/spans/[]/attributes/prompt_hash": [
+              "string"
+            ],
+            "/spans/[]/attributes/prompt_version": [
+              "string"
+            ],
+            "/spans/[]/attributes/provider": [
+              "string"
+            ],
+            "/spans/[]/attributes/release_id": [
+              "string"
+            ],
+            "/spans/[]/attributes/request_model": [
+              "string"
+            ],
+            "/spans/[]/attributes/response_model": [
+              "string"
+            ],
+            "/spans/[]/attributes/retrieval_source": [
+              "string"
+            ],
+            "/spans/[]/attributes/scenario_id": [
+              "string"
+            ],
+            "/spans/[]/attributes/session_id": [
+              "string"
+            ],
+            "/spans/[]/attributes/simulation_run_id": [
+              "string"
+            ],
+            "/spans/[]/attributes/source": [
+              "string"
+            ],
+            "/spans/[]/attributes/temperature": [
+              "number"
+            ],
+            "/spans/[]/attributes/tool_args_hash": [
+              "string"
+            ],
+            "/spans/[]/attributes/tool_call_id": [
+              "string"
+            ],
+            "/spans/[]/attributes/tool_name": [
+              "string"
+            ],
+            "/spans/[]/attributes/tool_result_status": [
+              "string"
+            ],
+            "/spans/[]/attributes/tool_risk": [
+              "string"
+            ],
+            "/spans/[]/attributes/tool_version": [
+              "string"
+            ],
+            "/spans/[]/attributes/verification_source": [
+              "string"
+            ],
+            "/spans/[]/content": [
+              "object"
+            ],
+            "/spans/[]/content/input": [
+              "string"
+            ],
+            "/spans/[]/content/output": [
+              "string"
+            ],
+            "/spans/[]/content/system_instructions": [
+              "string"
+            ],
+            "/spans/[]/content/tool_args": [
+              "string"
+            ],
+            "/spans/[]/content/tool_result": [
+              "string"
+            ],
+            "/spans/[]/duration_ms": [
+              "number"
+            ],
+            "/spans/[]/ended_at": [
+              "string"
+            ],
+            "/spans/[]/events": [
+              "array"
+            ],
+            "/spans/[]/events/[]": [
+              "object"
+            ],
+            "/spans/[]/events/[]/attributes": [
+              "object"
+            ],
+            "/spans/[]/events/[]/name": [
+              "string"
+            ],
+            "/spans/[]/events/[]/time": [
+              "string"
+            ],
+            "/spans/[]/kind": [
+              "string"
+            ],
+            "/spans/[]/model": [
+              "null",
+              "string"
+            ],
+            "/spans/[]/name": [
+              "string"
+            ],
+            "/spans/[]/parent_span_id": [
+              "null",
+              "string"
+            ],
+            "/spans/[]/policy_decision": [
+              "null",
+              "string"
+            ],
+            "/spans/[]/semconv_version": [
+              "string"
+            ],
+            "/spans/[]/span_id": [
+              "string"
+            ],
+            "/spans/[]/started_at": [
+              "string"
+            ],
+            "/spans/[]/status": [
+              "string"
+            ],
+            "/spans/[]/status_message": [
+              "null",
+              "string"
+            ],
+            "/spans/[]/tool_name": [
+              "null",
+              "string"
+            ],
+            "/spans/[]/tool_risk": [
+              "null",
+              "string"
+            ],
+            "/trace": [
+              "object"
+            ],
+            "/trace/agent_name": [
+              "null",
+              "string"
+            ],
+            "/trace/agent_version": [
+              "null",
+              "string"
+            ],
+            "/trace/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/trace/content_dropped": [
+              "boolean"
+            ],
+            "/trace/content_mode": [
+              "string"
+            ],
+            "/trace/content_purged": [
+              "boolean"
+            ],
+            "/trace/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/trace/duration_ms": [
+              "null",
+              "number"
+            ],
+            "/trace/ended_at": [
+              "null",
+              "string"
+            ],
+            "/trace/environment": [
+              "string"
+            ],
+            "/trace/error_count": [
+              "integer"
+            ],
+            "/trace/expires_at": [
+              "string"
+            ],
+            "/trace/finalized": [
+              "boolean"
+            ],
+            "/trace/flagged": [
+              "boolean"
+            ],
+            "/trace/human_reviewed": [
+              "boolean"
+            ],
+            "/trace/input_tokens": [
+              "integer"
+            ],
+            "/trace/model_call_count": [
+              "integer"
+            ],
+            "/trace/models": [
+              "array"
+            ],
+            "/trace/models/[]": [
+              "string"
+            ],
+            "/trace/organization_id": [
+              "string"
+            ],
+            "/trace/outcome_status": [
+              "null",
+              "string"
+            ],
+            "/trace/outcome_verified": [
+              "boolean",
+              "null"
+            ],
+            "/trace/output_tokens": [
+              "integer"
+            ],
+            "/trace/policy_decisions": [
+              "array"
+            ],
+            "/trace/policy_decisions/[]": [
+              "string"
+            ],
+            "/trace/project_id": [
+              "string"
+            ],
+            "/trace/prompt_hash": [
+              "null",
+              "string"
+            ],
+            "/trace/release_id": [
+              "null",
+              "string"
+            ],
+            "/trace/retry_count": [
+              "integer"
+            ],
+            "/trace/root_name": [
+              "null",
+              "string"
+            ],
+            "/trace/root_span_id": [
+              "null",
+              "string"
+            ],
+            "/trace/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/trace/sdk_name": [
+              "null",
+              "string"
+            ],
+            "/trace/sdk_version": [
+              "null",
+              "string"
+            ],
+            "/trace/semconv_version": [
+              "string"
+            ],
+            "/trace/session_id": [
+              "null",
+              "string"
+            ],
+            "/trace/signals": [
+              "array"
+            ],
+            "/trace/signals/[]": [
+              "string"
+            ],
+            "/trace/simulation_run_id": [
+              "null",
+              "string"
+            ],
+            "/trace/source": [
+              "string"
+            ],
+            "/trace/span_count": [
+              "integer"
+            ],
+            "/trace/started_at": [
+              "string"
+            ],
+            "/trace/status": [
+              "string"
+            ],
+            "/trace/summary": [
+              "object"
+            ],
+            "/trace/summary/agent": [
+              "string"
+            ],
+            "/trace/summary/agent_version": [
+              "string"
+            ],
+            "/trace/summary/cost_known": [
+              "boolean"
+            ],
+            "/trace/summary/cost_usd": [
+              "number"
+            ],
+            "/trace/summary/duration_ms": [
+              "number"
+            ],
+            "/trace/summary/error_type": [
+              "string"
+            ],
+            "/trace/summary/errors": [
+              "array"
+            ],
+            "/trace/summary/errors/[]": [
+              "string"
+            ],
+            "/trace/summary/failing_tool": [
+              "string"
+            ],
+            "/trace/summary/final_state_diff": [
+              "object"
+            ],
+            "/trace/summary/last_successful_step": [
+              "string"
+            ],
+            "/trace/summary/model": [
+              "null",
+              "string"
+            ],
+            "/trace/summary/outcome": [
+              "null",
+              "string"
+            ],
+            "/trace/summary/outcome_verified": [
+              "boolean"
+            ],
+            "/trace/summary/policy_decisions": [
+              "array"
+            ],
+            "/trace/summary/policy_decisions/[]": [
+              "string"
+            ],
+            "/trace/summary/prompt_hash": [
+              "null",
+              "string"
+            ],
+            "/trace/summary/retry_count": [
+              "integer"
+            ],
+            "/trace/summary/step_count": [
+              "integer"
+            ],
+            "/trace/summary/tool_sequence_sketch": [
+              "string"
+            ],
+            "/trace/summary/tools": [
+              "array"
+            ],
+            "/trace/summary/tools/[]": [
+              "string"
+            ],
+            "/trace/summary/violations": [
+              "array"
+            ],
+            "/trace/summary/violations/[]": [
+              "string"
+            ],
+            "/trace/tool_call_count": [
+              "integer"
+            ],
+            "/trace/tools": [
+              "array"
+            ],
+            "/trace/tools/[]": [
+              "string"
+            ],
+            "/trace/trace_id": [
+              "string"
+            ],
+            "/trace/truncated": [
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/traces/{trace_id}/flag": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:trace_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/kind": [
+              "\"incident\"",
+              "\"manual\"",
+              "\"negative_feedback\""
+            ]
+          },
+          "required": {
+            "/": [
+              "reason"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/kind": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {
+            "/kind": [
+              "\"incident\"",
+              "\"manual\"",
+              "\"negative_feedback\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created_at",
+              "flagged_by",
+              "id",
+              "kind",
+              "reason"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/flagged_by": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/kind": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/traces/{trace_id}/outcome": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:trace_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/claimed_status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/verification_source": [
+              "\"external_callback\"",
+              "\"human_review\"",
+              "\"semantic_judge\"",
+              "\"state_assertion\"",
+              "\"tool_result\"",
+              "\"tool_twin_state\"",
+              "\"unavailable\""
+            ]
+          },
+          "required": {
+            "/": [
+              "status"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/actual_state": [
+              "null",
+              "object"
+            ],
+            "/business_outcome": [
+              "string"
+            ],
+            "/claimed_status": [
+              "string"
+            ],
+            "/expected_state": [
+              "null",
+              "object"
+            ],
+            "/notes": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ],
+            "/verification_source": [
+              "string"
+            ],
+            "/verified": [
+              "boolean"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/claimed_status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/source": [
+              "\"api\"",
+              "\"span\""
+            ],
+            "/status": [
+              "\"FAILURE\"",
+              "\"PARTIAL\"",
+              "\"SUCCESS\"",
+              "\"UNKNOWN\""
+            ],
+            "/verification_source": [
+              "\"external_callback\"",
+              "\"human_review\"",
+              "\"semantic_judge\"",
+              "\"state_assertion\"",
+              "\"tool_result\"",
+              "\"tool_twin_state\"",
+              "\"unavailable\""
+            ]
+          },
+          "required": {
+            "/": [
+              "business_outcome",
+              "claimed_status",
+              "contradiction",
+              "notes",
+              "recorded_at",
+              "recorded_by",
+              "source",
+              "status",
+              "verification_source",
+              "verified"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/actual_state": [
+              "object"
+            ],
+            "/business_outcome": [
+              "null",
+              "string"
+            ],
+            "/claimed_status": [
+              "null",
+              "string"
+            ],
+            "/contradiction": [
+              "boolean"
+            ],
+            "/expected_state": [
+              "object"
+            ],
+            "/notes": [
+              "null",
+              "string"
+            ],
+            "/recorded_at": [
+              "string"
+            ],
+            "/recorded_by": [
+              "string"
+            ],
+            "/source": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ],
+            "/verification_source": [
+              "string"
+            ],
+            "/verified": [
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "POST /v1/traces": {
+      "parameters": {
+        "header:content-encoding": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"gzip\"",
+                "\"identity\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/resourceSpans": [
+              "array"
+            ],
+            "/resourceSpans/[]": [
+              "object"
+            ],
+            "/resourceSpans/[]/resource": [
+              "object"
+            ],
+            "/resourceSpans/[]/resource/attributes": [
+              "array"
+            ],
+            "/resourceSpans/[]/resource/attributes/[]": [
+              "object"
+            ],
+            "/resourceSpans/[]/resource/attributes/[]/key": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans": [
+              "array"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]": [
+              "object"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/scope": [
+              "object"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/scope/name": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/scope/version": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans": [
+              "array"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]": [
+              "object"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/attributes": [
+              "array"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/attributes/[]": [
+              "object"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/attributes/[]/key": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/events": [
+              "array"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/events/[]": [
+              "object"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/events/[]/attributes": [
+              "array"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/events/[]/attributes/[]": [
+              "object"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/events/[]/attributes/[]/key": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/events/[]/name": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/name": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/parentSpanId": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/spanId": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/status": [
+              "object"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/status/message": [
+              "string"
+            ],
+            "/resourceSpans/[]/scopeSpans/[]/spans/[]/traceId": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/partialSuccess": [
+              "errorMessage",
+              "rejectedSpans"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/partialSuccess": [
+              "object"
+            ],
+            "/partialSuccess/errorMessage": [
+              "string"
+            ],
+            "/partialSuccess/rejectedSpans": [
+              "string"
+            ]
+          }
+        }
+      }
+    }
   }
 }

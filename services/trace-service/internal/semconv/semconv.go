@@ -6,6 +6,7 @@ package semconv
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"sort"
 	"strconv"
@@ -170,6 +171,23 @@ func (r *attrReader) float(keys ...string) *float64 {
 	return nil
 }
 
+// count reads a count or size: a negative value is not one, and is dropped
+// rather than let into the aggregates.
+func (r *attrReader) count(keys ...string) *int64 {
+	if n := r.int(keys...); n != nil && *n >= 0 {
+		return n
+	}
+	return nil
+}
+
+// amount reads a non-negative amount (a cost).
+func (r *attrReader) amount(keys ...string) *float64 {
+	if f := r.float(keys...); f != nil && *f >= 0 {
+		return f
+	}
+	return nil
+}
+
 func (r *attrReader) bool(keys ...string) *bool {
 	v, ok := r.get(keys...)
 	if !ok {
@@ -237,17 +255,24 @@ func toInt(v any) (int64, bool) {
 	return 0, false
 }
 
+// toFloat reads a finite number: NaN and infinities — which a string
+// attribute can spell — have no JSON encoding and would fail the whole export.
 func toFloat(v any) (float64, bool) {
+	var f float64
 	switch x := v.(type) {
 	case float64:
-		return x, true
+		f = x
 	case int64:
-		return float64(x), true
+		f = float64(x)
 	case string:
-		f, err := strconv.ParseFloat(x, 64)
-		return f, err == nil
+		var err error
+		if f, err = strconv.ParseFloat(x, 64); err != nil {
+			return 0, false
+		}
+	default:
+		return 0, false
 	}
-	return 0, false
+	return f, !math.IsNaN(f) && !math.IsInf(f, 0)
 }
 
 // NormalizeResource extracts trace-level metadata from resource attributes.
@@ -306,8 +331,8 @@ func Normalize(sp otlp.Span) model.Span {
 	// Version-specific fields.
 	if adapter != nil {
 		a.Provider = r.str(adapter.Provider...)
-		a.InputTokens = r.int(adapter.InputTokens...)
-		a.OutputTokens = r.int(adapter.OutputTokens...)
+		a.InputTokens = r.count(adapter.InputTokens...)
+		a.OutputTokens = r.count(adapter.OutputTokens...)
 		if len(adapter.Session) > 0 {
 			a.SessionID = r.str(adapter.Session...)
 		}
@@ -339,9 +364,9 @@ func Normalize(sp otlp.Span) model.Span {
 	a.RequestModel = r.str("gen_ai.request.model")
 	a.ResponseModel = r.str("gen_ai.response.model")
 	a.Temperature = r.float("gen_ai.request.temperature")
-	a.MaxTokens = r.int("gen_ai.request.max_tokens")
+	a.MaxTokens = r.count("gen_ai.request.max_tokens")
 	a.FinishReasons = r.strings("gen_ai.response.finish_reasons")
-	a.CostUSD = r.float("agenttwin.cost.usd")
+	a.CostUSD = r.amount("agenttwin.cost.usd")
 	a.PromptHash = r.str("agenttwin.prompt.hash")
 	a.PromptVersion = r.str("agenttwin.prompt.version")
 	a.ToolName = r.str("gen_ai.tool.name", "agenttwin.tool.name")
@@ -351,9 +376,9 @@ func Normalize(sp otlp.Span) model.Span {
 	a.ToolArgsHash = r.str("agenttwin.tool.args_hash")
 	a.ToolResultStatus = strings.ToLower(r.str("agenttwin.tool.result_status"))
 	a.IdempotencyKey = r.str("agenttwin.tool.idempotency_key_hash")
-	a.Attempt = r.int("agenttwin.tool.attempt")
+	a.Attempt = r.count("agenttwin.tool.attempt")
 	a.RetrievalSource = r.str("agenttwin.retrieval.source")
-	a.DocumentCount = r.int("agenttwin.retrieval.document_count")
+	a.DocumentCount = r.count("agenttwin.retrieval.document_count")
 	a.ErrorType = r.str("error.type")
 	a.PolicyDecision = strings.ToLower(r.str("agenttwin.policy.decision"))
 	a.PolicyName = r.str("agenttwin.policy.name")

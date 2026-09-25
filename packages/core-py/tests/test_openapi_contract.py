@@ -4,6 +4,7 @@ and the webhook transport."""
 
 from __future__ import annotations
 
+import gzip
 import json
 import re
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 
 import httpx
 import pytest
+from jsonschema import Draft202012Validator
 
 from agenttwin_core.openapi_contract import (
     Contract,
@@ -100,7 +102,10 @@ DOC: dict[str, Any] = {
                             "schema": {
                                 "type": "object",
                                 "required": ["n"],
-                                "properties": {"n": {"type": "integer"}},
+                                "properties": {
+                                    "n": {"type": "integer"},
+                                    "run": {"type": "string", "format": "uuid"},
+                                },
                             }
                         }
                     },
@@ -110,7 +115,13 @@ DOC: dict[str, Any] = {
                         "description": "pong",
                         "content": {
                             "application/json": {
-                                "schema": {"type": "object", "properties": {"pong": {"type": "boolean"}}}
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "pong": {"type": "boolean"},
+                                        "by": {"type": "string", "format": "uuid"},
+                                    },
+                                }
                             }
                         },
                     }
@@ -229,6 +240,40 @@ def test_strictify_closes_declared_objects_but_not_allof_members() -> None:
     assert schema["properties"]["a"] == {"type": "object", "properties": {"b": {}}}  # input untouched
 
 
+def test_conditional_and_negated_subschemas_keep_their_meaning() -> None:
+    # `then`, `else` and `dependentSchemas` add to the object they sit in:
+    # their properties count as declared by it. Closed on their own, they would
+    # reject every other property of that object; a closed `if` or `not` would
+    # invert its condition.
+    schema = strictify(
+        {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string"},
+                "done": {"type": "boolean"},
+                "detail": {"type": "object"},
+            },
+            "if": {"properties": {"done": {"const": True}}},
+            "then": {
+                "properties": {"detail": {"required": ["at"], "properties": {"at": {"type": "string"}}}}
+            },
+            "else": {"properties": {"detail": {"maxProperties": 0}}},
+            "dependentSchemas": {"kind": {"properties": {"kind": {"minLength": 1}}}},
+            "not": {"properties": {"kind": {"const": "forbidden"}}, "required": ["kind"]},
+        }
+    )
+    valid = Draft202012Validator(schema).is_valid
+    assert valid({"kind": "a", "done": True, "detail": {"at": "x"}})
+    assert valid({"kind": "a", "done": False, "detail": {}})
+    assert not valid({"kind": "a", "done": True, "detail": {}})  # `then` applies
+    assert not valid({"kind": "a", "done": False, "detail": {"at": "x"}})  # `else` applies
+    assert not valid({"kind": "", "done": False})  # `dependentSchemas` applies
+    assert not valid({"kind": "forbidden", "done": False})  # `not` keeps its meaning
+    # Nested objects stay closed, and so does the object itself.
+    assert not valid({"kind": "a", "done": True, "detail": {"at": "x", "zz": 1}})
+    assert not valid({"kind": "a", "extra": 1})
+
+
 def test_responses_are_checked_strictly_through_refs_and_allof() -> None:
     c = contract()
     respond(c, "GET", "/things", 200, {"items": [THING]})
@@ -254,6 +299,29 @@ def test_formats_are_enforced() -> None:
         with pytest.raises(ContractViolation):
             respond(c, "GET", "/things", 200, {"items": [THING | bad]})
     respond(c, "GET", "/things", 200, {"items": [THING | {"at": "2026-09-25T10:00:00+03:00"}]})
+
+
+def test_uuids_are_case_insensitive_only_where_the_service_reads_them() -> None:
+    # RFC 9562: a UUID is case-insensitive on input and lower-case on output.
+    # A service reads the parameters and body of a request made to it, and the
+    # answer to a webhook call it makes; it writes everything else.
+    c = contract()
+    upper = UUID.upper()
+    c.check_request("GET", f"/things/{upper}")
+    c.check_request("GET", "/things", headers={"X-Org": upper})
+    with pytest.raises(ContractViolation, match="path parameter 'thing_id'"):
+        c.check_request("GET", f"/things/{UUID[:35]}")
+    with pytest.raises(ContractViolation, match=rf"at /id: '{upper}' is not a 'uuid'"):
+        respond(c, "GET", f"/things/{UUID}", 200, THING | {"id": upper})
+
+    def call(run: str) -> httpx.Request:
+        return httpx.Request("POST", "http://agent/run", json={"n": 1, "run": run})
+
+    c.check_webhook("ping", call(UUID), httpx.Response(200, json={"by": upper}))
+    with pytest.raises(
+        ContractViolation, match=rf"ping request does not match(.|\n)*'{upper}' is not a 'uuid'"
+    ):
+        c.check_webhook("ping", call(upper), None)
 
 
 def test_embedded_documents_are_checked_against_their_schema() -> None:
@@ -338,6 +406,26 @@ def test_accepted_requests_must_match_the_documented_parameters_and_body() -> No
         c.check_request("POST", "/things", content_type="application/json", body=body({"name": "n", "x": 1}))
     with pytest.raises(ContractViolation, match="documents no request body"):
         c.check_request("GET", "/things", body=b"{}")
+
+
+def test_content_codings_are_undone_before_the_check() -> None:
+    # A schema describes the representation, not its coding on the wire: a
+    # gzip body is checked decoded, and a coding the checker cannot undo is a
+    # violation, not a pass.
+    c = contract()
+    created = httpx.Response(201, json=THING)
+
+    def post(raw: bytes, coding: str) -> httpx.Request:
+        headers = {"content-type": "application/json", "content-encoding": coding}
+        return httpx.Request("POST", "http://t/things", headers=headers, content=raw)
+
+    c.check_exchange(post(gzip.compress(body({"name": "n"})), "gzip"), created)
+    with pytest.raises(ContractViolation, match="Additional properties are not allowed"):
+        c.check_exchange(post(gzip.compress(body({"name": "n", "x": 1})), "gzip"), created)
+    with pytest.raises(ContractViolation, match="createThing request: the body is not valid gzip"):
+        c.check_exchange(post(body({"name": "n"}), "gzip"), created)
+    with pytest.raises(ContractViolation, match='content coding "br" cannot be checked'):
+        c.check_exchange(post(body({"name": "n"}), "br"), created)
 
 
 def test_coverage_counts_successful_answers_only() -> None:

@@ -14,7 +14,15 @@ from pydantic import BaseModel, ConfigDict
 from agenttwin_core.auth import Permission, Principal, Role, TokenService
 from agenttwin_core.logx import get_logger, setup_logging
 from agenttwin_core.telemetry import setup_metrics
-from agenttwin_core.web import Health, build_app, read_json, read_model, require_project
+from agenttwin_core.web import (
+    Health,
+    build_app,
+    read_json,
+    read_model,
+    require_project,
+    storable,
+    storable_value,
+)
 
 SECRET = "web-test-internal-secret-0123456789"
 ORG = "0190f3b4-0000-7000-8000-000000000001"
@@ -140,7 +148,70 @@ async def test_unhandled_errors_do_not_leak(client: tuple[httpx.AsyncClient, Tok
     r = await c.get("/api/v1/boom", headers=bearer(tokens))
     assert r.status_code == 500
     assert "secret internals" not in r.text
-    assert r.json()["error"]["code"] == "INTERNAL"
+    err = r.json()["error"]
+    assert err["code"] == "INTERNAL"
+    # The one id a user can quote is in the body and the header, and they agree.
+    assert err["request_id"] and err["request_id"] == r.headers["x-request-id"]
+    assert r.headers["x-content-type-options"] == "nosniff"
+    text = (await c.get("/metrics")).text
+    assert any(
+        line.startswith("agenttwin_http_requests_total{")
+        and 'route="/api/v1/boom"' in line
+        and 'status="500"' in line
+        for line in text.splitlines()
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("target", "where"),
+    [
+        ("/public/ping?q=a%00b", "query"),
+        ("/public/ping?q=%FF", "query"),
+        ("/public/ping?q=%ED%A0%80", "query"),
+        ("/public/ping?ok=1&n%00ame=1", "query"),
+        ("/api/v1/projects/a%00b/things", "path"),
+        ("/api/v1/projects/%C0%AF/things", "path"),
+    ],
+)
+async def test_text_no_column_stores_is_refused_in_path_and_query(
+    client: tuple[httpx.AsyncClient, TokenService], target: str, where: str
+) -> None:
+    c, tokens = client
+    r = await c.get(target, headers=bearer(tokens))
+    err = r.json()["error"]
+    assert r.status_code == 400 and err["code"] == "INVALID_TEXT", r.text
+    assert err["details"]["in"] == where and err["request_id"] == r.headers["x-request-id"]
+
+
+@pytest.mark.anyio
+async def test_text_no_column_stores_is_refused_in_bodies(
+    client: tuple[httpx.AsyncClient, TokenService],
+) -> None:
+    c, tokens = client
+    h = {**bearer(tokens), "Content-Type": "application/json"}
+    for body in (
+        b'{"name":"a\\u0000b"}',
+        b'{"name":"\\ud800"}',
+        b'{"n\\u0000":"a"}',
+        b'{"a":[1,{"b":"\\u0000"}]}',
+    ):
+        r = await c.post("/api/v1/raw", headers=h, content=body)
+        assert r.status_code == 400 and r.json()["error"]["code"] == "INVALID_TEXT", (body, r.text)
+        assert r.json()["error"]["details"] == {"in": "body"}
+    # Every other character is text like any other.
+    r = await c.post("/api/v1/items", headers=h, content='{"name":"çağ 注文 🙂 \\\\u0000"}'.encode())
+    assert r.status_code == 200 and r.json()["name"] == "çağ 注文 🙂 \\u0000"
+    r = await c.get("/public/ping?q=%C3%A7a%C4%9Fr%C4%B1+%E6%B3%A8&x=%27+OR+%271%27%3D%271")
+    assert r.status_code == 200
+
+
+def test_storable() -> None:
+    assert storable("çağ 注文 🙂") and storable("")
+    assert not storable("a\x00b") and not storable("\ud800")
+    assert storable_value({"a": ["b", 1, None, {"c": "d"}]})
+    assert not storable_value({"a": ["b", {"c": "d\x00"}]})
+    assert not storable_value({"k\x00": 1})
 
 
 @pytest.mark.anyio

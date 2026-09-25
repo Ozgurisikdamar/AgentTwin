@@ -5,7 +5,10 @@
 * security headers, access log and ``agenttwin_http_*`` metrics per route;
 * ``/health/live``, ``/health/ready`` (dependency checks) and ``/metrics``;
 * internal service JWT verification for ``/api`` and ``/internal`` routes;
-* bounded, strict JSON bodies (unknown fields are rejected).
+* bounded, strict JSON bodies (unknown fields are rejected);
+* text PostgreSQL cannot store (a NUL character, bytes that are not UTF-8, a
+  lone surrogate) refused with 400 ``INVALID_TEXT`` in the path, the query
+  and JSON bodies, instead of failing inside the database as a 500.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import asyncio
 import json
 import re
 import time
+import urllib.parse
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -38,11 +42,14 @@ __all__ = [
     "REQUEST_ID_HEADER",
     "Health",
     "build_app",
+    "invalid_text",
     "principal",
     "read_json",
     "read_model",
     "require",
     "require_project",
+    "storable",
+    "storable_value",
 ]
 
 REQUEST_ID_HEADER = "X-Request-Id"
@@ -83,6 +90,75 @@ def _error_response(err: APIError) -> JSONResponse:
     return JSONResponse(err.body(request_id_var.get()), status_code=err.status)
 
 
+INVALID_TEXT_MESSAGE = "Text in a request must be valid UTF-8 and cannot contain a NUL character."
+
+
+def invalid_text(where: str, parameter: str | None = None) -> APIError:
+    details: dict[str, Any] = {"in": where}
+    if parameter is not None:
+        details["parameter"] = parameter
+    return errors.invalid("INVALID_TEXT", INVALID_TEXT_MESSAGE, details)
+
+
+def _storable_bytes(raw: bytes) -> bool:
+    """Percent-decoded ``raw`` is UTF-8 without a NUL character."""
+    decoded = urllib.parse.unquote_to_bytes(raw)
+    if b"\x00" in decoded:
+        return False
+    try:
+        decoded.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def storable(text: str) -> bool:
+    """A string PostgreSQL stores: no NUL character and no lone surrogate
+    (which JSON's ``\\ud800`` escape produces and UTF-8 cannot encode)."""
+    if "\x00" in text:
+        return False
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def storable_value(value: Any) -> bool:
+    """Every string of a decoded JSON value, keys included, is ``storable``."""
+    stack = [value]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, str):
+            if not storable(v):
+                return False
+        elif isinstance(v, dict):
+            for k, e in v.items():
+                if isinstance(k, str) and not storable(k):
+                    return False
+                stack.append(e)
+        elif isinstance(v, list):
+            stack.extend(v)
+    return True
+
+
+def _unstorable_request_text(scope: Scope) -> APIError | None:
+    raw_path = scope.get("raw_path")
+    if isinstance(raw_path, bytes):
+        # Some clients' ASGI adapters (httpx's) put the query in raw_path too.
+        if not _storable_bytes(raw_path.partition(b"?")[0]):
+            return invalid_text("path")
+    elif not storable(str(scope.get("path", ""))):
+        return invalid_text("path")
+    query = scope.get("query_string", b"")
+    for pair in query.split(b"&") if query else ():
+        name, _, value = pair.partition(b"=")
+        if not (_storable_bytes(name) and _storable_bytes(value)):
+            shown = urllib.parse.unquote_to_bytes(name.replace(b"+", b" ")).decode("utf-8", "replace")
+            return invalid_text("query", shown.replace("\x00", "\ufffd"))
+    return None
+
+
 class _Middleware:
     """Request id, security headers, access log and metrics (pure ASGI, so
     streaming responses and context variables behave)."""
@@ -102,10 +178,12 @@ class _Middleware:
         token = request_id_var.set(rid)
         start = time.perf_counter()
         status = 500
+        started = False
 
         async def send_wrapper(message: Message) -> None:
-            nonlocal status
+            nonlocal status, started
             if message["type"] == "http.response.start":
+                started = True
                 status = int(message["status"])
                 extra = [
                     (b"x-request-id", rid.encode()),
@@ -118,7 +196,25 @@ class _Middleware:
             await send(message)
 
         try:
-            await self.app(scope, receive, send_wrapper)
+            bad_text = _unstorable_request_text(scope)
+            if bad_text is not None:
+                await _error_response(bad_text)(scope, receive, send_wrapper)
+            else:
+                await self.app(scope, receive, send_wrapper)
+        except DeliberateAbort:
+            raise  # the server must drop the connection (fault injection)
+        except Exception as exc:
+            # Answered here, inside the request id's scope: the framework's
+            # last-resort handler runs outside this middleware, where the
+            # request id is gone and the response lacks its headers.
+            if started:
+                raise
+            _log.exception("unhandled error", path=scope.get("path", ""), error=type(exc).__name__)
+            await _error_response(
+                APIError(
+                    500, "INTERNAL", "An internal error occurred. Use the request id when contacting support."
+                )
+            )(scope, receive, send_wrapper)
         finally:
             elapsed = time.perf_counter() - start
             path = scope.get("path", "")
@@ -294,11 +390,14 @@ async def read_json(request: Request, max_bytes: int = DEFAULT_MAX_BODY) -> Any:
     if not raw.strip():
         raise errors.invalid("EMPTY_BODY", "A JSON request body is required.")
     try:
-        return json.loads(raw)
+        value = json.loads(raw)
     except (ValueError, UnicodeDecodeError) as err:
         raise errors.invalid(
             "INVALID_JSON", "The request body is not valid JSON.", {"reason": str(err)}
         ) from None
+    if not storable_value(value):
+        raise invalid_text("body")
+    return value
 
 
 async def read_model[M: BaseModel](request: Request, model: type[M], max_bytes: int = DEFAULT_MAX_BODY) -> M:

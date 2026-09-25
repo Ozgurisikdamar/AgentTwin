@@ -887,6 +887,37 @@ func TestHostileAttributesAreBoundedAndNormalized(t *testing.T) {
 	}
 }
 
+// A NUL character in telemetry (an agent echoing hostile input) is stored as
+// U+FFFD. It used to fail the insert of the whole batch: the collector
+// retried the 503 and finally dropped the batch, other traces included.
+func TestTextNoColumnStoresIsCleanedNotRefused(t *testing.T) {
+	h := newHarness(t)
+	tid := hexID(32, "nul-text")
+	root := hexID(16, "nulroot1")
+	spans := []spec{
+		{id: hexID(16, "nulmodel"), parent: root, name: "chat \x00model", offsetMS: 5, durMS: 5, status: 1, attrs: map[string]any{
+			"gen_ai.provider.name": "fake", "gen_ai.input.messages": "refund a\x00b", "gen_ai.output.messages": "ok\x00",
+			"note\x00key": "v\x00"}},
+		{id: root, name: "agent.run", durMS: 50, status: 1, attrs: map[string]any{"agenttwin.agent.name": "support\x00agent"}},
+	}
+	if code, body := h.ingest("atk_aaaaaaaa_ingest", otlpJSON(tid, demoResource, spans...)); code != 200 {
+		t.Fatalf("a batch with a NUL was refused: %d %v", code, body)
+	}
+	if n := h.finalizeAll(); n != 1 {
+		t.Fatalf("finalized %d, want 1", n)
+	}
+	var name, agent, attrs, content string
+	if err := h.pool.QueryRow(context.Background(), `SELECT s.name, t.agent_name, s.attributes::text, coalesce(s.content::text, '')
+		FROM trace.span s JOIN trace.trace t USING (project_id, trace_id) WHERE s.trace_id = $1 AND s.span_id = $2`,
+		tid, hexID(16, "nulmodel")).Scan(&name, &agent, &attrs, &content); err != nil {
+		t.Fatal(err)
+	}
+	if name != "chat \uFFFDmodel" || agent != "support\uFFFDagent" || !strings.Contains(attrs, "note\uFFFDkey") ||
+		!strings.Contains(content+attrs, "refund a\uFFFDb") {
+		t.Fatalf("stored: name=%q agent=%q attrs=%s content=%s", name, agent, attrs, content)
+	}
+}
+
 // OTLP/HTTP answers in the encoding of the request, errors included, and an
 // encoding the endpoint does not take is 415, not 400 (ADR-0021).
 func TestOTLPEncodingsAndErrors(t *testing.T) {

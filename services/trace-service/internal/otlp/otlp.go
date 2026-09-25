@@ -20,6 +20,8 @@ import (
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/textx"
 )
 
 // Limits bound what a single export request may carry.
@@ -135,10 +137,36 @@ func Decode(b []byte, contentType string, lim Limits) (Result, error) {
 	if err := CheckContentType(contentType); err != nil {
 		return Result{}, err
 	}
+	decode := decodeJSON
 	if Protobuf(contentType) {
-		return decodeProto(b, lim)
+		decode = decodeProto
 	}
-	return decodeJSON(b, lim)
+	res, err := decode(b, lim)
+	if err == nil {
+		cleanText(&res)
+	}
+	return res, err
+}
+
+// cleanText replaces, in every string a span carries, the characters no
+// column can store (NUL, invalid UTF-8) with U+FFFD. Telemetry is cleaned,
+// not refused: one agent echoing a NUL from its input would otherwise fail
+// the insert of the whole batch, and the collector would retry and finally
+// drop it, other traces included.
+func cleanText(res *Result) {
+	for i := range res.Spans {
+		sp := &res.Spans[i]
+		sp.Name = textx.Clean(sp.Name)
+		sp.ScopeName = textx.Clean(sp.ScopeName)
+		sp.ScopeVersion = textx.Clean(sp.ScopeVersion)
+		sp.StatusMessage = textx.Clean(sp.StatusMessage)
+		textx.CleanValue(sp.Resource) // shared by the spans of one resource; cleaning is idempotent
+		textx.CleanValue(sp.Attrs)
+		for j := range sp.Events {
+			sp.Events[j].Name = textx.Clean(sp.Events[j].Name)
+			textx.CleanValue(sp.Events[j].Attrs)
+		}
+	}
 }
 
 // ---- JSON (OTLP/HTTP JSON encoding: hex ids, int64 as strings, enums as ints)

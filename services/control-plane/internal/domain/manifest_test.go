@@ -118,6 +118,29 @@ func TestManifestRejectsOversizedAndDeepDocuments(t *testing.T) {
 	}
 }
 
+// Manifests are stored as jsonb, which holds no NUL character: one written
+// with an escape (YAML "\0", JSON "\u0000") is refused as a manifest problem,
+// not left to fail inside the database.
+func TestManifestTextMustBeStorable(t *testing.T) {
+	valid := "apiVersion: agenttwin.dev/v1\nkind: Agent\nmetadata: {name: a, version: 1.0.0, description: \"çağrı 注文\"}\n" +
+		"spec: {model: {provider: p, name: m}, tools: []}\n"
+	if _, err := ParseManifest([]byte(valid)); err != nil {
+		t.Fatalf("a manifest with non-ASCII text: %v", err)
+	}
+	for _, doc := range []string{
+		strings.Replace(valid, "çağrı", `refund\0`, 1),
+		strings.Replace(valid, "name: a,", `name: "a\x00",`, 1),
+		`{"apiVersion":"agenttwin.dev/v1","kind":"Agent","metadata":{"name":"a","version":"1.0.0","description":"x\u0000"},` +
+			`"spec":{"model":{"provider":"p","name":"m"},"tools":[]}}`,
+	} {
+		_, err := ParseManifest([]byte(doc))
+		var me *ManifestError
+		if !errors.As(err, &me) || !strings.Contains(err.Error(), "NUL") {
+			t.Errorf("%q: %v", doc, err)
+		}
+	}
+}
+
 func FuzzParseManifestNeverPanics(f *testing.F) {
 	f.Add([]byte("apiVersion: agenttwin.dev/v1\nkind: Agent\nmetadata: {name: a, version: 1.0.0}\nspec: {model: {provider: p, name: m}, tools: []}\n"))
 	f.Add([]byte(`{"apiVersion":"agenttwin.dev/v1"}`))

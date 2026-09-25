@@ -59,6 +59,8 @@ func TestDecodeJSON(t *testing.T) {
 		{"empty", ``, "application/json", 0, "EMPTY_BODY"},
 		{"trailing", `{"name":"a"}{"name":"b"}`, "application/json", 0, "INVALID_JSON"},
 		{"wrong content type", `{"name":"a"}`, "text/plain", 0, "UNSUPPORTED_MEDIA_TYPE"},
+		{"NUL in a value", `{"name":"a\u0000b"}`, "application/json", 0, "INVALID_TEXT"},
+		{"NUL whatever the shape", `{"unknown":"a\u0000b"}`, "application/json", 0, "INVALID_TEXT"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -77,6 +79,58 @@ func TestDecodeJSON(t *testing.T) {
 				t.Fatalf("want %s got %v", c.wantCode, err)
 			}
 		})
+	}
+}
+
+func TestHasNUL(t *testing.T) {
+	for _, c := range []struct {
+		doc  string
+		want bool
+	}{
+		{`{"a":"b"}`, false},
+		{`{"a":"b\u0000"}`, true},
+		{`{"a\u0000":"b"}`, true},
+		{`{"a":["x",{"y":"\u0000"}]}`, true},
+		{`{"a":"\\u0000"}`, false}, // a backslash, then the text u0000
+		{`{"a":"\u00001"}`, true},
+		{`not json \u0000`, false},
+	} {
+		if got := HasNUL([]byte(c.doc)); got != c.want {
+			t.Errorf("HasNUL(%s) = %v", c.doc, got)
+		}
+	}
+}
+
+func TestValidTextRefusesWhatNoColumnStores(t *testing.T) {
+	reached := false
+	h := Chain(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true }), RequestID(), ValidText())
+	for _, c := range []struct {
+		target, in, param string
+	}{
+		{"/api/v1/traces?agent=a%00b", "query", "agent"},
+		{"/api/v1/traces?agent=%FF", "query", "agent"},
+		{"/api/v1/traces?agent=%ED%A0%80", "query", "agent"},
+		{"/api/v1/traces?ok=1&q%00=1", "query", "q\uFFFD"},
+		{"/api/v1/traces/a%00b", "path", ""},
+		{"/api/v1/traces/%C0%AF", "path", ""},
+	} {
+		reached = false
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, c.target, nil))
+		var body errorBody
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		if rec.Code != 400 || body.Error.Code != "INVALID_TEXT" || reached || body.Error.RequestID == "" ||
+			body.Error.Details["in"] != c.in || (c.param != "" && body.Error.Details["parameter"] != c.param) {
+			t.Errorf("%s: %d %s (handler reached: %v)", c.target, rec.Code, rec.Body.String(), reached)
+		}
+	}
+	for _, target := range []string{"/api/v1/traces?agent=%C3%A7a%C4%9Fr%C4%B1&q=%27+OR+%271%27%3D%271", "/api/v1/x/%E6%B3%A8"} {
+		reached = false
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if !reached || rec.Code != 200 {
+			t.Errorf("%s: valid text must pass, got %d", target, rec.Code)
+		}
 	}
 }
 

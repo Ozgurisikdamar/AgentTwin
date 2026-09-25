@@ -2,12 +2,21 @@ package service
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
+
+	promtest "github.com/prometheus/client_golang/prometheus/testutil"
+
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/otelx"
 )
 
 func TestHealthcheckProbesTheLocalReadinessEndpoint(t *testing.T) {
@@ -67,5 +76,35 @@ func TestHealthcheckRejectsBadInputAndDeadProcess(t *testing.T) {
 	_ = l.Close()
 	if code := Healthcheck(port, 1, nil, &stderr); code != 1 {
 		t.Errorf("dead process: exit %d, want 1", code)
+	}
+}
+
+// Every service's handler refuses text PostgreSQL cannot store before a
+// route sees it, and the refusal is logged and counted like any request.
+func TestTheStandardHandlerRefusesUnstorableText(t *testing.T) {
+	tel, err := otelx.Setup(context.Background(), otelx.Config{Service: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := &Runtime{Config: Config{Name: "test"}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Tel: tel, Health: httpx.NewHealth()}
+	reached := 0
+	h := rt.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { reached++; w.WriteHeader(http.StatusOK) }))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/traces?agent=a%00b", nil))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"INVALID_TEXT"`) || reached != 0 {
+		t.Fatalf("NUL in the query: %d %s (app reached %d times)", rec.Code, rec.Body.String(), reached)
+	}
+	if rec.Header().Get(httpx.RequestIDHeader) == "" || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("the refusal lacks the standard headers: %v", rec.Header())
+	}
+	if n := promtest.ToFloat64(tel.HTTPRequests.WithLabelValues("GET", "unmatched", "400")); n != 1 {
+		t.Fatalf("the refusal was not counted: %v", n)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/traces?agent=support%20bot", nil))
+	if rec.Code != http.StatusOK || reached != 1 {
+		t.Fatalf("valid text: %d (app reached %d times)", rec.Code, reached)
 	}
 }

@@ -381,6 +381,7 @@ func (rt *Runtime) Handler(app http.Handler) http.Handler {
 		httpx.SecurityHeaders(),
 		httpx.CORS(rt.Config.CORSOrigins),
 		httpx.AccessLog(rt.Log, rt.Tel.HTTPObserver()),
+		httpx.ValidText(),
 	)
 	return otelx.WrapHandler(h, rt.Config.Name)
 }

@@ -108,6 +108,10 @@ func (s *Server) readInvocation(w http.ResponseWriter, r *http.Request) (invocat
 		return invocation{}, httpx.Invalid("INVALID_ARGUMENTS", "The body must be the tool's arguments as one JSON object: "+
 			strings.TrimPrefix(err.Error(), gateway.ErrArgs.Error()+": ")+".", nil)
 	}
+	if httpx.HasNUL(body) {
+		// The arguments are recorded with the decision (jsonb, no NUL).
+		return invocation{}, httpx.ErrInvalidText.WithDetails(map[string]any{"in": "body"})
+	}
 	c, problems := gateway.ReadContext(r.Header, args)
 	if len(problems) > 0 {
 		return invocation{}, httpx.Invalid("INVALID_CONTEXT", problems[0].Field+" "+problems[0].Message+".",

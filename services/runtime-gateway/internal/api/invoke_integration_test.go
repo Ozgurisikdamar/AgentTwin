@@ -783,3 +783,29 @@ func TestADecisionThatCannotBeRecordedForwardsNothing(t *testing.T) {
 		t.Fatalf("after recovery: %d %s", r.status, r.body)
 	}
 }
+
+// Arguments are recorded with the decision (jsonb, which holds no NUL
+// character): arguments carrying one are refused before a decision is made,
+// and the tool is not called.
+func TestArgumentsWithANulAreRefusedBeforeADecision(t *testing.T) {
+	h := newHarness(t)
+	h.demo()
+	agent := h.key("agent")
+	r := h.invoke(agent, "refund_payment", map[string]any{"order_id": "ORD-1001\x00", "amount": 40}, agentHeaders(7, "k-nul"))
+	expectRefused(t, r, 400, "INVALID_TEXT")
+	if n := len(h.tools.received("refund_payment")); n != 0 {
+		t.Fatalf("the tool was called %d times", n)
+	}
+	var decisions int
+	if err := h.pool.QueryRow(context.Background(), `SELECT count(*) FROM policy_decision`).Scan(&decisions); err != nil {
+		t.Fatal(err)
+	}
+	if decisions != 0 {
+		t.Fatalf("%d decisions recorded for refused arguments", decisions)
+	}
+	// Any other character is an argument like any other.
+	r = h.invoke(agent, "lookup_order", map[string]any{"order_id": "ORD-1001", "note": "çağrı 注文"}, agentHeaders(7, "k-text"))
+	if r.status != 200 {
+		t.Fatalf("non-ASCII arguments: %d %s", r.status, r.body)
+	}
+}

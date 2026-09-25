@@ -95,6 +95,8 @@ def test_agent_adapter_rejects_bad_requests(stack: Any) -> None:
     assert post(server.url + "/run", {"input": "hi"}, token="wrong")[0] == 401
     assert post(server.url + "/run", {"input": ""})[0] == 400
     assert post(server.url + "/run", {"input": "hi", "tool_headers": {"a": 1}})[0] == 400
+    code, body = post(server.url + "/run", {"input": "refund \ud800 please"})
+    assert code == 400 and "lone surrogate" in body["error"]["message"]
     code, body = post(server.url + "/run", {"input": "hi", "agent_version": "9.9.9"})
     assert code == 404 and body["error"]["code"] == "UNKNOWN_VERSION"
     with urllib.request.urlopen(server.url + "/versions", timeout=5) as resp:

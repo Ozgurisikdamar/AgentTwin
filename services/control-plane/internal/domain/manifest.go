@@ -16,6 +16,7 @@ import (
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/hashx"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/jsonschemax"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/textx"
 	scenarioschema "github.com/Ozgurisikdamar/AgentTwin/packages/scenario-schema"
 )
 
@@ -198,6 +199,10 @@ func DecodeDocumentLimit(data []byte, maxBytes int) (map[string]any, error) {
 	m, ok := out.(map[string]any)
 	if !ok {
 		return nil, problem("/", "document must be an object")
+	}
+	if !textx.ValueValid(m) {
+		// Stored as jsonb, which holds no NUL character.
+		return nil, problem("/", "text must be valid UTF-8 and cannot contain a NUL character")
 	}
 	return m, nil
 }

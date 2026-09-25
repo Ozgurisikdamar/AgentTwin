@@ -4,6 +4,7 @@
 package httpx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/logx"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/textx"
 )
 
 // DefaultMaxBody is the default request body limit (1 MiB). Endpoints that
@@ -55,6 +57,8 @@ var (
 	ErrUnavailable    = NewError(http.StatusServiceUnavailable, "UNAVAILABLE", "A dependency is temporarily unavailable. Retry later.")
 	ErrRateLimited    = NewError(http.StatusTooManyRequests, "RATE_LIMITED", "Too many requests. Retry later.")
 	ErrMethodNotAllow = NewError(http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed.")
+	ErrInvalidText    = NewError(http.StatusBadRequest, "INVALID_TEXT",
+		"Text in a request must be valid UTF-8 and cannot contain a NUL character.")
 )
 
 // Invalid returns a 400 validation error with per-field details.
@@ -110,6 +114,9 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // DecodeJSON decodes a JSON body into dst with a size limit and strict fields.
+// A string holding a NUL character (\u0000) is refused: no column stores it,
+// so accepting it would fail later, inside the database, as a 500.
+// (Invalid UTF-8 needs no check: encoding/json replaces it with U+FFFD.)
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64) error {
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxBody
@@ -118,14 +125,21 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64)
 	if ct != "" && !strings.HasPrefix(strings.ToLower(ct), "application/json") {
 		return NewError(http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json.")
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBytes))
+	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			return ErrPayloadTooBig
 		}
+		return fmt.Errorf("read body: %w", err)
+	}
+	// Checked first, so the answer does not depend on the body's shape.
+	if HasNUL(raw) {
+		return ErrInvalidText.WithDetails(map[string]any{"in": "body"})
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
 		if errors.Is(err, io.EOF) {
 			return NewError(http.StatusBadRequest, "EMPTY_BODY", "A JSON request body is required.")
 		}
@@ -135,6 +149,50 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64)
 		return ErrInvalidJSON.WithDetails(map[string]any{"reason": "multiple JSON values in body"})
 	}
 	return nil
+}
+
+// HasNUL reports whether a string of the JSON document raw holds a NUL
+// character. JSON can only carry one escaped, so documents without the
+// escape are answered without parsing.
+func HasNUL(raw []byte) bool {
+	if !bytes.Contains(raw, []byte(`\u0000`)) {
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		if s, ok := tok.(string); ok && strings.IndexByte(s, 0) >= 0 {
+			return true
+		}
+	}
+}
+
+// ValidText refuses a request whose path or query holds text no service can
+// store (see textx): a NUL character or bytes that are not UTF-8. Without it,
+// such a filter reached PostgreSQL and failed there as a 500.
+func ValidText() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !textx.Valid(r.URL.Path) {
+				WriteError(w, r, ErrInvalidText.WithDetails(map[string]any{"in": "path"}))
+				return
+			}
+			for key, values := range r.URL.Query() {
+				bad := !textx.Valid(key)
+				for _, v := range values {
+					bad = bad || !textx.Valid(v)
+				}
+				if bad {
+					WriteError(w, r, ErrInvalidText.WithDetails(map[string]any{"in": "query", "parameter": textx.Clean(key)}))
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // ReadLimited reads the entire body up to maxBytes.

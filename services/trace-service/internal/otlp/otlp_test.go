@@ -15,6 +15,8 @@ import (
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/textx"
 )
 
 func init() { Now = func() time.Time { return time.Unix(1790000000, 0).Add(time.Hour) } }
@@ -96,6 +98,71 @@ func TestProtobufMatchesJSON(t *testing.T) {
 	}
 }
 
+// storable reports whether every string a span carries can be written to
+// PostgreSQL (no NUL, valid UTF-8).
+func storable(s Span) bool {
+	ok := textx.Valid(s.Name) && textx.Valid(s.ScopeName) && textx.Valid(s.ScopeVersion) && textx.Valid(s.StatusMessage) &&
+		textx.ValueValid(s.Resource) && textx.ValueValid(s.Attrs)
+	for _, e := range s.Events {
+		ok = ok && textx.Valid(e.Name) && textx.ValueValid(e.Attrs)
+	}
+	return ok
+}
+
+// A NUL character in any string (an agent echoing hostile input, say) used to
+// fail the insert of the whole batch. It is replaced, in both encodings, and
+// the span is kept.
+func TestTextNoColumnCanStoreIsReplaced(t *testing.T) {
+	const nul = `\u0000`
+	body := `{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"ag` + nul + `ent"}}]},
+ "scopeSpans":[{"scope":{"name":"s` + nul + `","version":"1` + nul + `"},"spans":[
+  {"traceId":"0af7651916cd43dd8448eb211c80319c","spanId":"b7ad6b7169203331","name":"agent` + nul + `.run",
+   "startTimeUnixNano":"1790000000000000000","endTimeUnixNano":"1790000002000000000",
+   "attributes":[{"key":"in` + nul + `put","value":{"stringValue":"refund a` + nul + `b"}},
+     {"key":"arr","value":{"arrayValue":{"values":[{"stringValue":"x` + nul + `"}]}}},
+     {"key":"kv","value":{"kvlistValue":{"values":[{"key":"k` + nul + `","value":{"stringValue":"v` + nul + `"}}]}}}],
+   "events":[{"timeUnixNano":"1790000001000000000","name":"e` + nul + `","attributes":[{"key":"m","value":{"stringValue":"` + nul + `"}}]}],
+   "status":{"code":2,"message":"bo` + nul + `om"}}]}]}]}`
+	res, err := Decode([]byte(body), "application/json", DefaultLimits)
+	if err != nil || len(res.Spans) != 1 || res.Rejected != 0 {
+		t.Fatalf("err=%v spans=%d rejected=%d", err, len(res.Spans), res.Rejected)
+	}
+	s := res.Spans[0]
+	if !storable(s) {
+		t.Fatalf("a string still holds a NUL: %#v", s)
+	}
+	const r = textx.Replacement
+	if s.Name != "agent"+r+".run" || s.Attrs["in"+r+"put"] != "refund a"+r+"b" || s.StatusMessage != "bo"+r+"om" ||
+		s.Resource["service.name"] != "ag"+r+"ent" || s.ScopeName != "s"+r || s.Events[0].Name != "e"+r ||
+		!reflect.DeepEqual(s.Attrs["kv"], map[string]any{"k" + r: "v" + r}) || !reflect.DeepEqual(s.Attrs["arr"], []any{"x" + r}) {
+		t.Fatalf("cleaned span: %#v", s)
+	}
+
+	str := func(v string) *commonpb.AnyValue {
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: v}}
+	}
+	b, err := proto.Marshal(&coltracepb.ExportTraceServiceRequest{ResourceSpans: []*tracepb.ResourceSpans{{
+		Resource: &resourcepb.Resource{Attributes: []*commonpb.KeyValue{{Key: "service.name", Value: str("ag\x00ent")}}},
+		ScopeSpans: []*tracepb.ScopeSpans{{Spans: []*tracepb.Span{{
+			TraceId: mustHex("0af7651916cd43dd8448eb211c80319c"), SpanId: mustHex("b7ad6b7169203331"), Name: "agent\x00.run",
+			StartTimeUnixNano: 1790000000000000000, EndTimeUnixNano: 1790000002000000000,
+			Attributes: []*commonpb.KeyValue{{Key: "input", Value: str("refund a\x00b")}},
+			Events:     []*tracepb.Span_Event{{TimeUnixNano: 1790000001000000000, Name: "e\x00"}},
+			Status:     &tracepb.Status{Message: "bo\x00om"},
+		}}}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pres, err := Decode(b, "application/x-protobuf", DefaultLimits)
+	if err != nil || len(pres.Spans) != 1 {
+		t.Fatalf("err=%v spans=%d", err, len(pres.Spans))
+	}
+	if p := pres.Spans[0]; !storable(p) || p.Name != "agent"+r+".run" || p.Attrs["input"] != "refund a"+r+"b" {
+		t.Fatalf("cleaned protobuf span: %#v", p)
+	}
+}
+
 func TestGzipAndBombLimit(t *testing.T) {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
@@ -166,13 +233,14 @@ func TestLimits(t *testing.T) {
 func FuzzDecodeJSON(f *testing.F) {
 	f.Add([]byte(jsonReq))
 	f.Add([]byte(`{"resourceSpans":[{"scopeSpans":[{"spans":[{"traceId":"zz"}]}]}]}`))
+	f.Add([]byte(strings.ReplaceAll(jsonReq, "boom", `bo\u0000om`)))
 	f.Fuzz(func(t *testing.T, b []byte) {
 		res, err := Decode(b, "application/json", DefaultLimits)
 		if err != nil {
 			return
 		}
 		for _, s := range res.Spans {
-			if len(s.TraceID) != 32 || len(s.SpanID) != 16 || s.End.Before(s.Start) || s.Name == "" {
+			if len(s.TraceID) != 32 || len(s.SpanID) != 16 || s.End.Before(s.Start) || s.Name == "" || !storable(s) {
 				t.Fatalf("invalid span accepted: %+v", s)
 			}
 		}
@@ -187,7 +255,7 @@ func FuzzDecodeProto(f *testing.F) {
 			return
 		}
 		for _, s := range res.Spans {
-			if len(s.TraceID) != 32 || len(s.SpanID) != 16 || s.End.Before(s.Start) {
+			if len(s.TraceID) != 32 || len(s.SpanID) != 16 || s.End.Before(s.Start) || !storable(s) {
 				t.Fatalf("invalid span accepted: %+v", s)
 			}
 		}

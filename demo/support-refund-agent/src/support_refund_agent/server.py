@@ -36,6 +36,15 @@ log = logging.getLogger("support_refund_agent.server")
 MAX_BODY = 64 * 1024
 
 
+def _require_unicode(body: dict[str, Any]) -> None:
+    """JSON can carry a lone surrogate (``\\ud800``) that no UTF-8 text holds;
+    the run would fail later, when its trace is encoded, as a 500."""
+    try:
+        json.dumps(body, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:
+        raise ValueError("text must be valid Unicode (a lone surrogate is not)") from None
+
+
 class AgentServer:
     def __init__(
         self, agent: Agent, *, host: str = "127.0.0.1", port: int = 0, token: str | None = None
@@ -93,6 +102,7 @@ class AgentServer:
                     body = json.loads(self.rfile.read(length))
                     if not isinstance(body, dict):
                         raise ValueError("body must be an object")
+                    _require_unicode(body)
                     req = RunRequest.from_json(body)
                 except (ValueError, TypeError) as err:
                     self._send(400, {"error": {"code": "INVALID_REQUEST", "message": str(err)}})

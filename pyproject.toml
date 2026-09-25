@@ -1,0 +1,84 @@
+# Python workspace (ADR-0010). The root is a virtual workspace: it is not a
+# package itself, it only groups members and shared tooling configuration.
+[tool.uv.workspace]
+members = [
+  "packages/sdk-python",
+  "packages/core-py",
+  "services/simulation-service",
+  "services/evaluation-service",
+  "demo/support-refund-agent",
+]
+
+[tool.uv]
+required-version = ">=0.8"
+
+[tool.uv.sources]
+agenttwin = { workspace = true }
+agenttwin-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=9.1,<10",
+  "hypothesis>=6.168,<7",
+  "ruff>=0.16,<0.17",
+  "mypy>=2.3,<3",
+  "types-PyYAML>=6.0.12",
+  "types-jsonschema>=4.26",
+  "types-regex>=2026.9",
+  "openapi-spec-validator>=0.8,<0.9",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+extend-exclude = ["apps", "node_modules", "infra"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "BLE", "PTH", "T20"]
+ignore = [
+  "S311",   # random is used for deterministic demo traffic, not for security
+  "RUF012", # class-level constant tables are intentional
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agenttwin", "agenttwin_core", "agenttwin_simulation", "agenttwin_evaluation", "support_refund_agent", "sdk_testutil", "demo_testutil", "sim_testutil", "eval_testutil"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106", "S107", "S310", "PLR2004", "T20"]
+"scripts/**" = ["T20"]
+"**/cli.py" = ["T20"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+files = [
+  "packages/sdk-python/src",
+  "packages/core-py/src",
+  "services/simulation-service/src",
+  "services/evaluation-service/src",
+  "demo/support-refund-agent/src",
+  "scripts/contracts_check.py",
+]
+
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*"]
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["anthropic", "anthropic.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib -ra --strict-markers"
+testpaths = [
+  "packages/sdk-python/tests",
+  "packages/core-py/tests",
+  "services/simulation-service/tests",
+  "services/evaluation-service/tests",
+  "demo/support-refund-agent/tests",
+  "scripts/tests",
+]
+markers = [
+  "integration: needs PostgreSQL/RabbitMQ or a running stack",
+]

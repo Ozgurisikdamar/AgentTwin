@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -41,7 +42,7 @@ func LoadMigrations(fsys fs.FS, dir string) ([]Migration, error) {
 			}
 			continue
 		}
-		b, err := fs.ReadFile(fsys, dir+"/"+e.Name())
+		b, err := fs.ReadFile(fsys, path.Join(dir, e.Name()))
 		if err != nil {
 			return nil, err
 		}

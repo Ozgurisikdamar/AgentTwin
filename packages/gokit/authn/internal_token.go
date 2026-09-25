@@ -53,6 +53,9 @@ func (t *TokenService) Mint(p Principal, audience, requestID string) (string, er
 	if p.OrgID == "" || p.Actor == "" || p.Role == "" {
 		return "", errors.New("mint: principal requires org, actor and role")
 	}
+	if p.OrgID == SystemOrg && p.Role != RoleService {
+		return "", errors.New("mint: only service principals may use the system organization")
+	}
 	now := t.now()
 	claims := internalClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -95,6 +98,9 @@ func (t *TokenService) Verify(token, audience string) (Principal, string, error)
 	}
 	if claims.Org == "" || claims.Subject == "" || claims.Role == "" {
 		return Principal{}, "", errors.New("invalid internal token: missing claims")
+	}
+	if claims.Org == SystemOrg && claims.Role != RoleService {
+		return Principal{}, "", errors.New("invalid internal token: system organization requires a service principal")
 	}
 	p := Principal{
 		OrgID:       claims.Org,
@@ -174,3 +180,11 @@ func RequireProject(r *http.Request, perm Permission, projectID string) (Princip
 func ServicePrincipal(service, orgID string, projectIDs ...string) Principal {
 	return Principal{OrgID: orgID, Actor: "service:" + service, Role: RoleService, ProjectIDs: projectIDs}
 }
+
+// SystemOrg is the organization claim of platform-level service calls made
+// before any organization is known (for example API key verification). Only
+// service principals may carry it; Mint and Verify reject anything else.
+const SystemOrg = "_system"
+
+// SystemPrincipal builds the principal for platform-level service calls.
+func SystemPrincipal(service string) Principal { return ServicePrincipal(service, SystemOrg) }

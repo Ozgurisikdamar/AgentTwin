@@ -1,0 +1,22 @@
+[project]
+name = "agenttwin-evaluation"
+version = "0.1.0"
+description = "AgentTwin evaluation service: datasets, evaluation runs, baseline/candidate comparison and LLM judges."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+  "agenttwin-core",
+]
+
+[project.scripts]
+evaluation-service = "agenttwin_evaluation.main:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agenttwin_evaluation"]
+
+[tool.uv.sources]
+agenttwin-core = { workspace = true }

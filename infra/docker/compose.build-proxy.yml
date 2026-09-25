@@ -1,0 +1,31 @@
+# Optional overlay for build hosts behind a TLS-intercepting HTTPS proxy
+# (corporate networks, CI sandboxes). Builds then run on the host network,
+# use the proxy, and receive the proxy CA as a BuildKit secret — the CA is
+# never written into an image layer. Enable it in .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:infra/docker/compose.build-proxy.yml
+#   AGENTTWIN_BUILD_CA_BUNDLE=/path/to/proxy-ca.pem
+#   AGENTTWIN_BUILD_HTTPS_PROXY=http://127.0.0.1:3128
+#   AGENTTWIN_BUILD_NO_PROXY=localhost,127.0.0.1
+x-proxy-build: &proxy-build
+  network: host
+  args:
+    HTTPS_PROXY: ${AGENTTWIN_BUILD_HTTPS_PROXY:-}
+    NO_PROXY: ${AGENTTWIN_BUILD_NO_PROXY:-}
+  secrets: [ca_bundle]
+
+services:
+  control-plane: {build: *proxy-build}
+  trace-service: {build: *proxy-build}
+  web: {build: *proxy-build}
+  demo-tools: {build: *proxy-build}
+  demo-agent: {build: *proxy-build}
+  seed: {build: *proxy-build}
+  simulation-service: {build: *proxy-build}
+  simulation-worker: {build: *proxy-build}
+  evaluation-service: {build: *proxy-build}
+  evaluation-worker: {build: *proxy-build}
+
+secrets:
+  ca_bundle:
+    file: ${AGENTTWIN_BUILD_CA_BUNDLE:?set AGENTTWIN_BUILD_CA_BUNDLE to the proxy CA bundle}

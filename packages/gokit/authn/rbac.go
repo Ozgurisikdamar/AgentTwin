@@ -5,6 +5,7 @@ package authn
 import (
 	"context"
 	"slices"
+	"strings"
 )
 
 // Role is an organization membership role.
@@ -125,12 +126,16 @@ func (p Principal) Can(perm Permission) bool {
 	}
 }
 
-// CanAccessProject reports whether the principal may touch projectID.
+// CanAccessProject reports whether the principal may touch projectID. Project
+// ids are UUIDs, which are case-insensitive (RFC 9562): a request may name a
+// project in either case.
 func (p Principal) CanAccessProject(projectID string) bool {
 	if projectID == "" {
 		return false
 	}
-	return p.AllProjects || slices.Contains(p.ProjectIDs, projectID)
+	return p.AllProjects || slices.ContainsFunc(p.ProjectIDs, func(id string) bool {
+		return strings.EqualFold(id, projectID)
+	})
 }
 
 type principalKey struct{}
@@ -144,4 +149,18 @@ func WithPrincipal(ctx context.Context, p Principal) context.Context {
 func FromContext(ctx context.Context) (Principal, bool) {
 	p, ok := ctx.Value(principalKey{}).(Principal)
 	return p, ok
+}
+
+// Matrix returns the role and scope permission tables (for differential tests
+// against the Python implementation; see packages/gokit/cmd/parity).
+func Matrix() map[string]map[string][]Permission {
+	roles := map[string][]Permission{}
+	for r, perms := range rolePermissions {
+		roles[string(r)] = slices.Sorted(slices.Values(perms))
+	}
+	scopes := map[string][]Permission{}
+	for s, perms := range scopePermissions {
+		scopes[string(s)] = slices.Sorted(slices.Values(perms))
+	}
+	return map[string]map[string][]Permission{"roles": roles, "scopes": scopes}
 }

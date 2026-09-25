@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS processed_event;
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS judge_calibration;
+DROP TABLE IF EXISTS human_review;
+DROP TABLE IF EXISTS judgment;
+DROP TABLE IF EXISTS eval_case_result;
+DROP TABLE IF EXISTS eval_run_transition;
+DROP TABLE IF EXISTS eval_run;
+DROP TABLE IF EXISTS dataset_version;
+DROP TABLE IF EXISTS dataset;

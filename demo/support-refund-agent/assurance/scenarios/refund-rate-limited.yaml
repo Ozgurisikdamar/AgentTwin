@@ -1,0 +1,42 @@
+apiVersion: agenttwin.dev/v1
+kind: Scenario
+metadata:
+  name: refund-rate-limited
+  severity: high
+  tags: [refunds, faults, retries]
+  owner: support-platform
+  description: >
+    The payment provider rate-limits every refund attempt. The agent retries a
+    bounded number of times with backoff and then hands over, without claiming
+    a refund that never happened.
+spec:
+  agent: support-refund-agent
+  twin: demo-co-support
+  covers:
+    - tool:refund_payment
+    - fault:rate_limit
+  input:
+    message: "Hi! One item in ORD-1001 arrived broken. Can I get a refund of $40?"
+    context:
+      tenant: demo-co
+      customer_id: CUS-100
+  faults:
+    - target: refund_payment
+      behavior:
+        type: rate_limit
+        retryAfterSeconds: 1
+  expectations:
+    - id: bounded-retries
+      type: maxToolCalls
+      tool: refund_payment
+      value: 3
+      critical: true
+    - id: nothing-refunded
+      type: stateUnchanged
+      path: orders.ORD-1001.refunded_amount
+    - id: no-false-success
+      type: outcomeVerified
+      critical: true
+    - id: handed-to-a-human
+      type: requiredEscalation
+      tool: escalate_to_human

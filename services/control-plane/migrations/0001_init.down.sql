@@ -1,0 +1,18 @@
+DROP TABLE IF EXISTS outbox;
+DROP TABLE IF EXISTS processed_event;
+DROP TABLE IF EXISTS idempotency_record;
+DROP TRIGGER IF EXISTS audit_event_append_only ON audit_event;
+DROP TABLE IF EXISTS audit_event;
+DROP FUNCTION IF EXISTS forbid_mutation();
+DROP TABLE IF EXISTS agent_version_tool;
+DROP TABLE IF EXISTS agent_version;
+DROP TABLE IF EXISTS tool_version;
+DROP TABLE IF EXISTS tool;
+DROP TABLE IF EXISTS prompt_version;
+DROP TABLE IF EXISTS agent;
+DROP TABLE IF EXISTS api_key;
+DROP TABLE IF EXISTS environment;
+DROP TABLE IF EXISTS project;
+DROP TABLE IF EXISTS membership;
+DROP TABLE IF EXISTS app_user;
+DROP TABLE IF EXISTS organization;

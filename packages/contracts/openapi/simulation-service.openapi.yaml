@@ -1,0 +1,2448 @@
+openapi: 3.1.0
+info:
+  title: AgentTwin simulation API
+  version: 1.0.0
+  summary: Tool twins, versioned scenarios and simulation runs.
+  description: |
+    Register stateful tool twins, author and version scenarios, run an agent
+    version against them and read the verdicts with their evidence.
+
+    **Where to call it.** The public API is served by the control plane (the
+    edge), which authenticates the caller, applies rate limits and
+    `Idempotency-Key`, and forwards the request to the simulation service. The
+    `/twin/v1` paths are not public: agents under test call them on the URL
+    they receive in `tools_base_url`. Nor are the `/internal/v1` paths: the
+    evaluation service calls them with a short-lived internal token (ADR-0009).
+
+    **Conventions.**
+    * Every response carries `X-Request-Id`; errors are
+      `{"error": {"code", "message", "request_id", "details"?}}` with a stable
+      machine-readable `code`.
+    * Request bodies are strict: unknown fields are rejected (`400
+      INVALID_REQUEST`). Responses may gain fields: clients ignore fields and
+      enum values they do not know.
+    * Resources of projects outside the caller's access answer `404`, never
+      `403`, so their existence cannot be probed.
+    * Lists are ordered and paginated with an opaque `next_cursor`.
+
+    Compatibility and the checks that keep this document true are described
+    in `packages/contracts/README.md`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: The control plane of a local stack (`make dev`).
+tags:
+  - name: Twins
+    description: Stateful stand-ins for an agent's tools (ADR-0016).
+  - name: Scenarios
+    description: Versioned scenario documents (ADR-0020).
+  - name: Simulations
+    description: Runs of an agent version against scenarios (ADR-0017).
+  - name: Twin runtime
+    description: The tool endpoint agents call during a simulation case (ADR-0011).
+  - name: Internal
+    description: Operations for other AgentTwin services (internal token).
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  /api/v1/twins:
+    post:
+      operationId: registerTwin
+      tags: [Twins]
+      summary: Register a twin definition
+      description: |
+        Stores a `TwinDefinition` document as a new version of the named twin
+        when its content changed (`201`); identical content answers the latest
+        version (`200`). Invalid documents answer `400 TWIN_INVALID` with
+        `details.problems`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+      responses:
+        '201':
+          description: A new twin version was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterTwinResponse'
+        '200':
+          description: The document equals the latest version; nothing was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterTwinResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listTwins
+      tags: [Twins]
+      summary: List twins
+      description: The latest version of every twin in the caller's projects (at most 500).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+      responses:
+        '200':
+          description: The twins, ordered by project and name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwinList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/twins/{twin_id}:
+    get:
+      operationId: getTwin
+      tags: [Twins]
+      summary: Get a twin version
+      description: |
+        One twin version with its tools, its document (planted canary secrets
+        are masked), the document as YAML and the list of all versions of the
+        twin.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - name: twin_id
+          in: path
+          required: true
+          description: The id of a twin version.
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The twin version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwinDetailResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/scenarios/validate:
+    post:
+      operationId: validateScenario
+      tags: [Scenarios]
+      summary: Validate a scenario without saving it
+      description: |
+        Checks a scenario document on its own (schema, evaluator parameters)
+        and against the latest version of the twin it names. Problems of the
+        document are part of a `200` answer (`valid: false`), not an error.
+        Needs read access to the project.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+      responses:
+        '200':
+          description: The result of the checks.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioValidation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/scenarios:
+    post:
+      operationId: saveScenario
+      tags: [Scenarios]
+      summary: Save a scenario version
+      description: |
+        Saving is by name within the project: a new name creates a scenario, an
+        existing name adds a version to it (and restores it when archived).
+        Content equal to the latest version answers `200` without a new
+        version. An invalid document answers `400 SCENARIO_INVALID` with
+        `details.problems` and `details.warnings`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+      responses:
+        '201':
+          description: A new version was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveScenarioResponse'
+        '200':
+          description: The document equals the latest version; nothing was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveScenarioResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listScenarios
+      tags: [Scenarios]
+      summary: List scenarios
+      description: Scenarios with their latest version, ordered by name.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - name: agent
+          in: query
+          description: Scenarios for this agent, including those that name no agent.
+          schema:
+            type: string
+            maxLength: 200
+        - name: severity
+          in: query
+          schema:
+            $ref: '#/components/schemas/Severity'
+        - name: tag
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: q
+          in: query
+          description: Substring of the name or the description (case-insensitive).
+          schema:
+            type: string
+        - name: name
+          in: query
+          description: Exact name ("is this name taken?" before saving).
+          schema:
+            type: string
+        - name: include_archived
+          in: query
+          description: '`1` or `true` includes archived scenarios.'
+          schema:
+            type: string
+            enum: ['1', 'true', '0', 'false']
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of scenarios.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/scenarios/{scenario_id}:
+    get:
+      operationId: getScenario
+      tags: [Scenarios]
+      summary: Get a scenario version
+      description: A scenario with the document of one version (default the latest) and its version list.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ScenarioId'
+        - name: version
+          in: query
+          description: The version to return (default the latest).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000000
+      responses:
+        '200':
+          description: The scenario version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/scenarios/{scenario_id}/archive:
+    post:
+      operationId: archiveScenario
+      tags: [Scenarios]
+      summary: Archive a scenario
+      description: |
+        Archived scenarios are hidden from lists and never selected by runs.
+        Saving a version under the same name restores the scenario.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ScenarioId'
+      responses:
+        '200':
+          description: The archived scenario.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/simulations/capabilities:
+    get:
+      operationId: getSimulationCapabilities
+      tags: [Simulations]
+      summary: What this deployment can simulate
+      description: Runnable agents, fault and expectation types, evaluator versions and limits.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The capabilities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capabilities'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/simulations:
+    post:
+      operationId: startSimulation
+      tags: [Simulations]
+      summary: Start a simulation run
+      description: |
+        Queues a run of one agent version against the selected scenarios (by
+        name, by tag, or every scenario that applies to the agent) and answers
+        `202` with the pinned versions and seeds. A worker executes the run
+        (ADR-0017); poll `GET /api/v1/simulations/{run_id}`.
+
+        `400` codes: `AGENT_NOT_RUNNABLE` (no endpoint is configured for the
+        agent; `details.runnable`), `AGENT_VERSION_NOT_FOUND`,
+        `SCENARIO_NOT_FOUND` (`details.missing`), `NO_SCENARIOS`,
+        `TOO_MANY_SCENARIOS`, `SCENARIO_INVALID` (a scenario cannot run against
+        its twin; `details.scenarios`), `INVALID_PARAMETER` (including
+        `eval_run_id` or a `side` other than `SINGLE`: the runs of an
+        evaluation are created in pairs by the evaluation service),
+        `INVALID_REQUEST`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSimulationRequest'
+      responses:
+        '202':
+          description: The run is queued.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartSimulationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listSimulations
+      tags: [Simulations]
+      summary: List simulation runs
+      description: Runs, newest first.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - name: agent
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/RunStatus'
+        - name: eval_run_id
+          in: query
+          description: Runs requested by one release evaluation.
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of runs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/simulations/{run_id}:
+    get:
+      operationId: getSimulation
+      tags: [Simulations]
+      summary: Get a simulation run
+      description: The run with its pinning, its cases and its lifecycle transitions.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: The run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/simulations/{run_id}/cases/{case_id}:
+    get:
+      operationId: getSimulationCase
+      tags: [Simulations]
+      summary: Get one case of a run
+      description: |
+        The case with its verdict, expectation results, state diff and the
+        agent's answer; the scenario document it ran; every step the twin
+        recorded; and the twin state before and after. Planted canary values
+        are replaced by `[REDACTED:canary]` wherever they appear.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RunId'
+        - name: case_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The case.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/simulations/{run_id}/cancel:
+    post:
+      operationId: cancelSimulation
+      tags: [Simulations]
+      summary: Request cancellation of a run
+      description: |
+        Cancellation is a request: `202` while a worker stops the run at its
+        next checkpoint (within about a second during an agent call); `200`
+        when the run is already final — or became final at once because it was
+        still queued.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '202':
+          description: Cancellation requested; the run is still stopping.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '200':
+          description: The run is final.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /twin/v1/tools/{tool}:
+    servers:
+      - url: http://{host}
+        description: The twin endpoint of the simulation service (the base of `tools_base_url`).
+        variables:
+          host:
+            default: simulation-service:8084
+    post:
+      operationId: callTwinTool
+      tags: [Twin runtime]
+      summary: Call a tool of the case's twin
+      description: |
+        The request body is the tool's arguments object. The reply — status,
+        headers and body — is the twin's: what the tool's handler or an
+        injected fault answers (ADR-0016), so it can be any status and, under
+        wire faults, a dropped connection, a partial body or malformed JSON.
+        The twin records every call. The endpoint's own refusals use the error
+        envelope: `401 TWIN_CREDENTIAL_REQUIRED` / `TWIN_CREDENTIAL_INVALID`,
+        `400 INVALID_TOOL_NAME` / `INVALID_JSON` / `INVALID_ARGUMENTS`,
+        `409 RUN_CANCELLED` / `CASE_CLOSED` / `CALL_LIMIT_EXCEEDED`, `413`.
+      security:
+        - caseToken: []
+      parameters:
+        - name: tool
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_.-]{1,100}$
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The tool's arguments (an empty body means `{}`).
+      responses:
+        default:
+          description: The twin's reply, or one of the endpoint's own refusals.
+          content:
+            application/json:
+              schema: {}
+
+  /twin/v1/kb/search:
+    servers:
+      - url: http://{host}
+        description: The twin endpoint of the simulation service (the base of `tools_base_url`).
+        variables:
+          host:
+            default: simulation-service:8084
+    get:
+      operationId: searchTwinKnowledgeBase
+      tags: [Twin runtime]
+      summary: Search the case's knowledge base
+      description: |
+        Retrieval over the twin's documents and the scenario's planted
+        documents. The results carry no trust labels: retrieved content is
+        untrusted input to the agent. Every search is recorded as a step.
+      security:
+        - caseToken: []
+      parameters:
+        - name: q
+          in: query
+          description: The query (at most the first 1000 characters are used).
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 3
+      responses:
+        '200':
+          description: The best matching documents.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseResults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/TwinCredential'
+        '409':
+          $ref: '#/components/responses/CaseNotRunning'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /internal/v1/simulation-pairs:
+    servers:
+      - url: http://{host}
+        description: The simulation service, on the internal network.
+        variables:
+          host:
+            default: simulation-service:8084
+    post:
+      operationId: startSimulationPair
+      tags: [Internal]
+      summary: Start the baseline and candidate runs of an evaluation
+      description: |
+        Queues two runs of one agent — the baseline version and the candidate
+        version — in one transaction, over one pinned suite: the same scenario
+        versions, twin definitions and seeds, so the agent version is the only
+        difference between them (ADR-0023). Both runs carry the evaluation run
+        id and their side, and their completion events
+        (`simulation.run_completed.v1`) say so.
+
+        One pair per evaluation run: repeating the request answers the pair
+        with `200` and `created: false` (a worker that retries after a crash
+        gets the same runs); a different request for the same evaluation run is
+        `409 PAIR_CONFLICT`. Service callers only.
+
+        `400` codes are those of `POST /api/v1/simulations`;
+        `AGENT_VERSION_NOT_FOUND` names the side (`details.side`).
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSimulationPairRequest'
+      responses:
+        '200':
+          description: The evaluation run already has this pair.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationPair'
+        '201':
+          description: Both runs are queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationPair'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          description: The caller is not a service (`FORBIDDEN`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            The evaluation run already has a pair requested differently
+            (`PAIR_CONFLICT`; `details.baseline_run_id`, `details.candidate_run_id`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+webhooks:
+  agentRun:
+    post:
+      operationId: runAgent
+      summary: 'Agent adapter contract: POST {agent endpoint}/run'
+      description: |
+        The simulation worker calls the agent under test once per case
+        (ADR-0011). The agent calls the twin's tools at `tools_base_url` with
+        `tool_headers` (the case's capability token) and answers when the
+        conversation ends. Tool calls are recorded by the twin, not taken from
+        the answer. Any status other than `200`, a body that is not a JSON
+        object, a timeout or an unreachable agent decide the case's verdict
+        (`agent_result.kind`).
+      security:
+        - {}
+        - agentToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRunRequest'
+      responses:
+        '200':
+          description: The conversation finished.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunResponse'
+        default:
+          description: The agent could not run the conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A session token (dev login), an OIDC access token or an API key.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-AgentTwin-Api-Key
+      description: A project API key.
+    caseToken:
+      type: http
+      scheme: bearer
+      description: |
+        The capability token of one simulation case, sent to the agent in
+        `tool_headers`. Random per case, stored only as a hash and revoked when
+        the case closes.
+    agentToken:
+      type: http
+      scheme: bearer
+      description: The token an operator configured for the agent endpoint (`SIMULATION_AGENT_ENDPOINTS`).
+    internalToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A short-lived internal token minted by another AgentTwin service for
+        the principal it acts for (audience `simulation-service`, ADR-0009).
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        One key per user action (ADR-0019). A repeat of the same request
+        returns the stored response with `Idempotent-Replayed: true`; the same
+        key with a different request answers `422`; while the first request
+        runs, `409`. Keys expire after 24 hours.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9._:-]{8,128}$
+    Organization:
+      name: X-AgentTwin-Org
+      in: header
+      required: false
+      description: The organization to act in, for credentials that belong to several.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ProjectFilter:
+      name: project_id
+      in: query
+      description: Restricts the list to one project (default every project the caller can access).
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Cursor:
+      name: cursor
+      in: query
+      description: The `next_cursor` of the previous page.
+      schema:
+        type: string
+        maxLength: 512
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    ScenarioId:
+      name: scenario_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+
+  headers:
+    IdempotentReplayed:
+      description: '`true` when the response is the stored answer to an earlier request with the same `Idempotency-Key`.'
+      schema:
+        type: string
+        enum: ['true']
+
+  responses:
+    BadRequest:
+      description: |
+        The request is invalid. `INVALID_REQUEST` (body fields; `details.errors`),
+        `INVALID_PARAMETER` (`details.field`), `INVALID_JSON`, `EMPTY_BODY`,
+        `INVALID_CURSOR`, `INVALID_IDEMPOTENCY_KEY` or an operation-specific code.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: No valid credential (`UNAUTHENTICATED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The credential lacks the permission (`FORBIDDEN`; `details.required_permission`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The resource does not exist or is outside the caller's projects (`NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyInProgress:
+      description: The first request with this `Idempotency-Key` is still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: The request body is too large (`PAYLOAD_TOO_LARGE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsupportedMediaType:
+      description: The body is not `application/json` (`UNSUPPORTED_MEDIA_TYPE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyKeyReused:
+      description: The `Idempotency-Key` was used for a different request (`IDEMPOTENCY_KEY_REUSED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests (`RATE_LIMITED`).
+      headers:
+        Retry-After:
+          description: Seconds to wait.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Internal:
+      description: An unexpected error (`INTERNAL`); quote the `request_id`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UpstreamUnavailable:
+      description: The simulation service is not reachable from the control plane (`UPSTREAM_UNAVAILABLE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: |
+        A dependency is unavailable (`UNAVAILABLE`), or the simulation service
+        is not configured on this control plane (`SERVICE_NOT_CONFIGURED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TwinCredential:
+      description: The case token is missing (`TWIN_CREDENTIAL_REQUIRED`), unknown, or its case is closed (`TWIN_CREDENTIAL_INVALID`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    CaseNotRunning:
+      description: The run was cancelled (`RUN_CANCELLED`), the case is not running (`CASE_CLOSED`) or it reached its call limit (`CALL_LIMIT_EXCEEDED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    SpecHash:
+      type: string
+      description: SHA-256 (hex) of the document's canonical JSON form.
+      pattern: ^[0-9a-f]{64}$
+    Severity:
+      type: string
+      enum: [critical, high, medium, low]
+    RunStatus:
+      type: string
+      enum: [QUEUED, PREPARING, RUNNING, EVALUATING, COMPLETED, FAILED, CANCELLED]
+    CaseStatus:
+      type: string
+      enum: [PENDING, RUNNING, PASSED, FAILED, ERRORED, CANCELLED]
+    Side:
+      type: string
+      enum: [SINGLE, BASELINE, CANDIDATE]
+      description: '`BASELINE` / `CANDIDATE` when the run is one side of a release evaluation.'
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable (e.g. `SCENARIO_INVALID`).
+              pattern: ^[A-Z][A-Z0-9_]*$
+            message:
+              type: string
+              description: For people; may change.
+            request_id:
+              type: string
+              description: Equals the `X-Request-Id` response header.
+            details:
+              type: object
+              description: Code-specific context (field names, problems, missing names).
+
+    DocumentRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id]
+      description: Exactly one of `yaml` and `document`.
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        yaml:
+          type: string
+          maxLength: 600000
+          description: |
+            The document as YAML text: plain data only (no anchors, aliases or
+            tags), at most 512 KiB, duplicate keys rejected.
+        document:
+          type: object
+          description: The document as a JSON object.
+      oneOf:
+        - required: [yaml]
+        - required: [document]
+
+    TwinSummary:
+      type: object
+      required: [id, organization_id, project_id, name, version, spec_hash, tool_count, description, created_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        version:
+          type: integer
+          minimum: 1
+        spec_hash:
+          $ref: '#/components/schemas/SpecHash'
+        tool_count:
+          type: integer
+          minimum: 0
+        description:
+          type: [string, 'null']
+        created_by:
+          type: string
+          description: The actor that stored this version (e.g. `user:…`, `apikey:…`).
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    TwinTool:
+      type: object
+      required: [name, description, risk, handler, mutates, idempotency, tenant_scoped]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        risk:
+          type: string
+          enum: [READ, WRITE_REVERSIBLE, WRITE_IRREVERSIBLE, EXECUTE, ADMIN]
+        handler:
+          type: string
+          enum: [read, mutate, static, echo, recorded, custom]
+        mutates:
+          type: boolean
+          description: A successful call changes the twin's state.
+        idempotency:
+          type: [string, 'null']
+          description: The argument that carries the idempotency key, or `header:<name>`.
+        tenant_scoped:
+          type: boolean
+    Twin:
+      allOf:
+        - $ref: '#/components/schemas/TwinSummary'
+        - type: object
+          required: [tools]
+          properties:
+            tools:
+              type: array
+              items:
+                $ref: '#/components/schemas/TwinTool'
+    TwinDetail:
+      allOf:
+        - $ref: '#/components/schemas/Twin'
+        - type: object
+          required: [tenant_key]
+          properties:
+            tenant_key:
+              type: [string, 'null']
+              description: The state field that holds a record's tenant.
+    TwinVersion:
+      type: object
+      required: [id, version, spec_hash, tool_count, created_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+          minimum: 1
+        spec_hash:
+          $ref: '#/components/schemas/SpecHash'
+        tool_count:
+          type: integer
+          minimum: 0
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    RegisterTwinResponse:
+      type: object
+      required: [twin, created]
+      properties:
+        twin:
+          $ref: '#/components/schemas/Twin'
+        created:
+          type: boolean
+    TwinList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TwinSummary'
+    TwinDetailResponse:
+      type: object
+      required: [twin, document, yaml, versions]
+      properties:
+        twin:
+          $ref: '#/components/schemas/TwinDetail'
+        document:
+          type: object
+          description: The `TwinDefinition` document (twin.v1), canary secrets masked.
+          x-agenttwin-schema: twin.v1
+        yaml:
+          type: string
+          description: The document as YAML, in reading order.
+        versions:
+          type: array
+          description: All versions of the twin, newest first.
+          items:
+            $ref: '#/components/schemas/TwinVersion'
+
+    Scenario:
+      type: object
+      required: [id, organization_id, project_id, name, agent, twin, severity, tags, source, latest_version, archived, created_by, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,98}$
+        agent:
+          type: [string, 'null']
+          description: 'The agent the scenario is for (`null`: every agent).'
+        twin:
+          type: [string, 'null']
+          description: The twin the scenario runs against.
+        severity:
+          $ref: '#/components/schemas/Severity'
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          enum: [manual, production_regression, generated, policy_derived, imported, production_replay]
+        latest_version:
+          type: integer
+          minimum: 1
+        archived:
+          type: boolean
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+        version_id:
+          description: The version this response describes (present with the version).
+          $ref: '#/components/schemas/Uuid'
+        spec_hash:
+          $ref: '#/components/schemas/SpecHash'
+        description:
+          type: string
+          description: The description of the latest version (lists only; absent when empty).
+        expectation_count:
+          type: integer
+          minimum: 0
+          description: Lists only.
+        fault_count:
+          type: integer
+          minimum: 0
+          description: Lists only.
+    ScenarioVersion:
+      type: object
+      required: [id, version, spec_hash, created_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: integer
+          minimum: 1
+        spec_hash:
+          $ref: '#/components/schemas/SpecHash'
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    ScenarioValidation:
+      type: object
+      required: [valid, problems, warnings, spec_hash, twin]
+      properties:
+        valid:
+          type: boolean
+        problems:
+          type: array
+          description: 'What makes the document invalid, as `path: message`.'
+          items:
+            type: string
+        warnings:
+          type: array
+          description: Accepted but probably not what was meant.
+          items:
+            type: string
+        spec_hash:
+          description: '`null` when the body is not a document at all.'
+          anyOf:
+            - $ref: '#/components/schemas/SpecHash'
+            - type: 'null'
+        twin:
+          description: The twin the scenario was checked against.
+          anyOf:
+            - $ref: '#/components/schemas/TwinSummary'
+            - type: 'null'
+    SaveScenarioResponse:
+      type: object
+      required: [scenario, version, created, warnings]
+      properties:
+        scenario:
+          $ref: '#/components/schemas/Scenario'
+        version:
+          type: integer
+          minimum: 1
+        created:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+    ScenarioPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scenario'
+        next_cursor:
+          type: [string, 'null']
+    ScenarioDetail:
+      type: object
+      required: [scenario, version, version_created_by, version_created_at, document, yaml, versions]
+      properties:
+        scenario:
+          $ref: '#/components/schemas/Scenario'
+        version:
+          type: integer
+          minimum: 1
+        version_created_by:
+          type: string
+        version_created_at:
+          $ref: '#/components/schemas/Timestamp'
+        document:
+          type: object
+          description: The scenario document (scenario.v1) of this version.
+          x-agenttwin-schema: scenario.v1
+        yaml:
+          type: string
+          description: The document as YAML, in reading order (ADR-0020).
+        versions:
+          type: array
+          description: All versions, newest first.
+          items:
+            $ref: '#/components/schemas/ScenarioVersion'
+    ScenarioResponse:
+      type: object
+      required: [scenario]
+      properties:
+        scenario:
+          $ref: '#/components/schemas/Scenario'
+
+    Capabilities:
+      type: object
+      required: [agents, fault_types, expectation_types, evaluators, engine, limits]
+      properties:
+        agents:
+          type: array
+          description: Agents this deployment can run (an endpoint is configured).
+          items:
+            type: string
+        fault_types:
+          type: array
+          items:
+            type: string
+            enum:
+              - timeout_before_mutation
+              - timeout_after_mutation
+              - http_429
+              - http_500
+              - http_503
+              - malformed_json
+              - semantic_bad_response
+              - delay
+              - dropped_connection
+              - partial_response
+              - stale_response
+              - duplicate_response
+              - auth_denied
+              - rate_limit
+              - transient_unavailable
+              - permanent_unavailable
+              - inconsistent_state
+              - success_without_mutation
+              - message_duplication
+              - non_retryable_error
+        expectation_types:
+          type: array
+          items:
+            type: string
+        evaluators:
+          type: object
+          description: Evaluator name → version.
+          additionalProperties:
+            type: string
+        engine:
+          type: string
+          description: The twin engine version (e.g. `twin-engine/1.0.0`).
+        limits:
+          type: object
+          required: [max_cases, max_calls_per_case, case_timeout_seconds, max_fault_delay_ms]
+          properties:
+            max_cases:
+              type: integer
+            max_calls_per_case:
+              type: integer
+            case_timeout_seconds:
+              type: number
+            max_fault_delay_ms:
+              type: integer
+
+    StartSimulationRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, agent, agent_version]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        agent_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: A registered version of the agent.
+        scenarios:
+          type: [array, 'null']
+          maxItems: 500
+          description: Scenario names (default every scenario that applies to the agent).
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,98}$
+        tags:
+          type: [array, 'null']
+          maxItems: 50
+          description: Scenarios with any of these tags.
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_:.-]{0,62}$
+        seed:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 4294967295
+          description: The run seed (default random); it is pinned either way.
+        eval_run_id:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            Reserved: the evaluation service sets it on the runs it creates in
+            pairs (`POST /internal/v1/simulation-pairs`). Leave it unset.
+        side:
+          $ref: '#/components/schemas/Side'
+        release_id:
+          type: [string, 'null']
+          maxLength: 200
+
+    StartSimulationPairRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, eval_run_id, agent, baseline_version, candidate_version]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        eval_run_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        baseline_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+        candidate_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: May equal `baseline_version` (the same version twice shows how repeatable it is).
+        scenarios:
+          type: [array, 'null']
+          maxItems: 500
+          description: Scenario names (default every scenario that applies to the agent).
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,98}$
+        tags:
+          type: [array, 'null']
+          maxItems: 50
+          description: Scenarios with any of these tags.
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_:.-]{0,62}$
+        seed:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 4294967295
+          description: The seed of both runs (default random); it is pinned either way.
+        release_id:
+          type: [string, 'null']
+          maxLength: 200
+        requested_by:
+          type: [string, 'null']
+          pattern: '^(user|apikey|service):[A-Za-z0-9._@:-]{1,200}$'
+          description: Who asked for the evaluation; the runs are attributed to them (default the calling service).
+    PairCase:
+      type: object
+      description: One case of the pair's suite, with its id in each run.
+      required:
+        [position, scenario_id, scenario_name, severity, seed, tenant, baseline_case_id, candidate_case_id]
+      properties:
+        position:
+          type: integer
+          minimum: 0
+        scenario_id:
+          $ref: '#/components/schemas/Uuid'
+        scenario_name:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        seed:
+          type: integer
+          minimum: 0
+        tenant:
+          type: [string, 'null']
+        baseline_case_id:
+          $ref: '#/components/schemas/Uuid'
+        candidate_case_id:
+          $ref: '#/components/schemas/Uuid'
+    SimulationPair:
+      type: object
+      required: [eval_run_id, created, seed, baseline, candidate, cases]
+      properties:
+        eval_run_id:
+          $ref: '#/components/schemas/Uuid'
+        created:
+          type: boolean
+          description: '`false` when the evaluation run already had this pair (a repeated request).'
+        seed:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        baseline:
+          $ref: '#/components/schemas/PinnedRun'
+        candidate:
+          $ref: '#/components/schemas/PinnedRun'
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/PairCase'
+
+    Run:
+      type: object
+      required:
+        - id
+        - organization_id
+        - project_id
+        - agent_name
+        - agent_version
+        - agent_version_id
+        - side
+        - eval_run_id
+        - release_id
+        - status
+        - requested_by
+        - cancel_requested
+        - attempts
+        - case_count
+        - passed
+        - failed
+        - errored
+        - cancelled
+        - critical_failures
+        - error
+        - created_at
+        - started_at
+        - finished_at
+        - updated_at
+        - finished_cases
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent_name:
+          type: string
+        agent_version:
+          type: string
+        agent_version_id:
+          type: [string, 'null']
+          format: uuid
+        side:
+          $ref: '#/components/schemas/Side'
+        eval_run_id:
+          type: [string, 'null']
+          format: uuid
+        release_id:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        requested_by:
+          type: string
+        cancel_requested:
+          type: boolean
+        attempts:
+          type: integer
+          minimum: 0
+          description: Worker attempts (a run whose worker died is retried, at most 3 times).
+        case_count:
+          type: integer
+          minimum: 0
+        passed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        errored:
+          type: integer
+          minimum: 0
+        cancelled:
+          type: integer
+          minimum: 0
+        critical_failures:
+          type: integer
+          minimum: 0
+          description: Failed cases of critical-severity scenarios (what blocks a release).
+        error:
+          type: [string, 'null']
+          description: Why the run failed, when it did.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        finished_at:
+          type: [string, 'null']
+          format: date-time
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+        finished_cases:
+          type: integer
+          minimum: 0
+          description: passed + failed + errored + cancelled.
+    PinnedScenario:
+      type: object
+      required: [scenario, scenario_version_id, spec_hash, twin, twin_definition_id, twin_version, twin_spec_hash, seed]
+      properties:
+        scenario:
+          type: string
+        scenario_version_id:
+          $ref: '#/components/schemas/Uuid'
+        spec_hash:
+          $ref: '#/components/schemas/SpecHash'
+        twin:
+          type: string
+        twin_definition_id:
+          $ref: '#/components/schemas/Uuid'
+        twin_version:
+          type: integer
+          minimum: 1
+        twin_spec_hash:
+          $ref: '#/components/schemas/SpecHash'
+        seed:
+          type: integer
+          minimum: 0
+    Pinning:
+      type: object
+      description: Everything needed to reproduce the run.
+      required: [correlation_id, seed, agent, scenarios, evaluators, engine, selection]
+      properties:
+        correlation_id:
+          type: string
+        seed:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        agent:
+          type: object
+          required: [name, version, version_id, manifest_sha256, prompt_sha256, model_provider, model_name, commit_sha]
+          properties:
+            name:
+              type: string
+            version:
+              type: string
+            version_id:
+              type: [string, 'null']
+              format: uuid
+            manifest_sha256:
+              type: [string, 'null']
+            prompt_sha256:
+              type: [string, 'null']
+            model_provider:
+              type: [string, 'null']
+            model_name:
+              type: [string, 'null']
+            commit_sha:
+              type: [string, 'null']
+        scenarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/PinnedScenario'
+        evaluators:
+          type: object
+          additionalProperties:
+            type: string
+        engine:
+          type: string
+        selection:
+          type: object
+          required: [scenarios, tags]
+          properties:
+            scenarios:
+              type: [array, 'null']
+              items:
+                type: string
+            tags:
+              type: [array, 'null']
+              items:
+                type: string
+        pair:
+          type: object
+          description: The evaluation this run is one side of (runs created in pairs only).
+          required: [eval_run_id, side, counterpart_run_id]
+          properties:
+            eval_run_id:
+              $ref: '#/components/schemas/Uuid'
+            side:
+              type: string
+              enum: [BASELINE, CANDIDATE]
+            counterpart_run_id:
+              $ref: '#/components/schemas/Uuid'
+    PinnedRun:
+      allOf:
+        - $ref: '#/components/schemas/Run'
+        - type: object
+          required: [pinning]
+          properties:
+            pinning:
+              $ref: '#/components/schemas/Pinning'
+    QueuedCase:
+      type: object
+      required: [id, position, scenario_id, scenario_name, severity, seed, tenant]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        position:
+          type: integer
+          minimum: 0
+        scenario_id:
+          $ref: '#/components/schemas/Uuid'
+        scenario_name:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        seed:
+          type: integer
+          minimum: 0
+        tenant:
+          type: [string, 'null']
+    StartSimulationResponse:
+      type: object
+      required: [run, cases]
+      properties:
+        run:
+          $ref: '#/components/schemas/PinnedRun'
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueuedCase'
+    RunPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Run'
+        next_cursor:
+          type: [string, 'null']
+    RunResponse:
+      type: object
+      required: [run]
+      properties:
+        run:
+          $ref: '#/components/schemas/Run'
+    Transition:
+      type: object
+      required: [seq, from_status, to_status, reason, at]
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+        from_status:
+          anyOf:
+            - $ref: '#/components/schemas/RunStatus'
+            - type: 'null'
+        to_status:
+          $ref: '#/components/schemas/RunStatus'
+        reason:
+          type: [string, 'null']
+        at:
+          $ref: '#/components/schemas/Timestamp'
+    CaseSummary:
+      type: object
+      required:
+        - id
+        - run_id
+        - position
+        - scenario_id
+        - scenario_version_id
+        - scenario_name
+        - severity
+        - twin_definition_id
+        - status
+        - seed
+        - tenant
+        - call_count
+        - trace_id
+        - reason
+        - error
+        - latency_ms
+        - outcome_status
+        - started_at
+        - finished_at
+        - labels
+        - score
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        run_id:
+          $ref: '#/components/schemas/Uuid'
+        position:
+          type: integer
+          minimum: 0
+        scenario_id:
+          $ref: '#/components/schemas/Uuid'
+        scenario_version_id:
+          $ref: '#/components/schemas/Uuid'
+        scenario_name:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        twin_definition_id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          $ref: '#/components/schemas/CaseStatus'
+        seed:
+          type: integer
+          minimum: 0
+        tenant:
+          type: [string, 'null']
+        call_count:
+          type: integer
+          minimum: 0
+          description: Tool calls the twin recorded (retrievals are not counted).
+        trace_id:
+          type: [string, 'null']
+          pattern: ^[0-9a-f]{32}$
+          description: The agent's trace of this case, when it reported one.
+        reason:
+          type: [string, 'null']
+          description: Why the case ended as it did.
+        error:
+          type: [string, 'null']
+        latency_ms:
+          type: [number, 'null']
+        outcome_status:
+          type: string
+          enum: [none, pending, posted, failed]
+          description: Delivery of the verified outcome to the trace service.
+        started_at:
+          type: [string, 'null']
+          format: date-time
+        finished_at:
+          type: [string, 'null']
+          format: date-time
+        labels:
+          type: array
+          description: Labels of the failed expectations.
+          items:
+            type: string
+        score:
+          type: [number, 'null']
+          description: Fraction of evaluated expectations that passed.
+    RunDetail:
+      type: object
+      required: [run, cases, transitions]
+      properties:
+        run:
+          $ref: '#/components/schemas/PinnedRun'
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/CaseSummary'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transition'
+
+    Verdict:
+      type: object
+      required: [status, reason, passed, failed, errored, skipped, critical_failures, score, labels]
+      description: |
+        `FAILED` if any expectation failed; otherwise `ERRORED` if one could not
+        be evaluated, a critical expectation was skipped, nothing was evaluated
+        or there are no expectations; otherwise `PASSED`.
+      properties:
+        status:
+          type: string
+          enum: [PASSED, FAILED, ERRORED]
+        reason:
+          type: string
+        passed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        errored:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        critical_failures:
+          type: integer
+          minimum: 0
+          description: Failed critical expectations of this case.
+        score:
+          type: [number, 'null']
+        labels:
+          type: array
+          items:
+            type: string
+    Evidence:
+      type: object
+      required: [kind, detail]
+      properties:
+        kind:
+          type: string
+          enum: [tool_call, state, output, agent, config]
+        detail:
+          type: string
+        ref:
+          type: string
+          description: What the evidence points at (e.g. `tool_call:3`).
+        expected:
+          description: The expected value, when there is one.
+        actual:
+          description: The observed value, when there is one.
+    ExpectationResult:
+      type: object
+      required: [status, reason, evaluator, evaluator_version, score, label, critical, expectation, evidence]
+      properties:
+        status:
+          type: string
+          enum: [PASS, FAIL, ERROR, SKIPPED]
+        reason:
+          type: string
+        evaluator:
+          type: string
+        evaluator_version:
+          type: string
+        score:
+          type: [number, 'null']
+        label:
+          type: [string, 'null']
+        critical:
+          type: boolean
+        expectation:
+          type: object
+          description: Which expectation of the scenario this result is for.
+          required: [id, type, critical]
+          properties:
+            id:
+              type: string
+              description: The expectation's `id`, or `e<n>` (its position, from 1) when it has none.
+            type:
+              type: string
+            critical:
+              type: boolean
+            description:
+              type: string
+            category:
+              type: string
+            tool:
+              type: string
+            path:
+              type: string
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+    StateChange:
+      type: object
+      required: [op, path]
+      properties:
+        op:
+          type: string
+          enum: [added, removed, changed]
+        path:
+          type: string
+          description: A JSONPath-like location (`$` for the root).
+        before:
+          description: The value before (removed, changed).
+        after:
+          description: The value after (added, changed).
+    AgentResult:
+      type: object
+      description: What was kept of the agent's answer (bounded, never credentials).
+      required: [kind, http_status, elapsed_ms]
+      properties:
+        kind:
+          type: string
+          enum: [ok, timeout, unreachable, http_error, invalid_response]
+        http_status:
+          type: [integer, 'null']
+        elapsed_ms:
+          type: number
+        error:
+          type: string
+          description: Why the call did not succeed.
+        output:
+          type: string
+        trace_id:
+          type: string
+        status:
+          type: string
+        agent_version:
+          type: string
+        model:
+          type: string
+        model_kind:
+          type: string
+        steps:
+          type: integer
+        claimed_outcome:
+          type: string
+        business_outcome:
+          type: [string, 'null']
+        tool_calls:
+          type: array
+          description: The agent's own account of its tool calls (the twin's records are the evidence).
+          items:
+            type: object
+        agent_error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    CaseResult:
+      allOf:
+        - $ref: '#/components/schemas/CaseSummary'
+        - type: object
+          required: [verdict, results, state_diff, agent_result]
+          properties:
+            verdict:
+              anyOf:
+                - $ref: '#/components/schemas/Verdict'
+                - type: 'null'
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/ExpectationResult'
+            state_diff:
+              type: array
+              description: What changed in the twin's state during the case.
+              items:
+                $ref: '#/components/schemas/StateChange'
+            agent_result:
+              anyOf:
+                - $ref: '#/components/schemas/AgentResult'
+                - type: 'null'
+    ToolCallRecord:
+      type: object
+      description: One tool call as the twin observed it.
+      required:
+        - seq
+        - call_number
+        - tool
+        - arguments
+        - http_status
+        - status
+        - error_code
+        - response
+        - risk
+        - fault
+        - mutated
+        - expects_mutation
+        - replayed
+        - effect_key
+        - cross_tenant
+        - policy_violation
+        - redelivered
+        - changes
+        - delay_ms
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+        call_number:
+          type: integer
+          minimum: 1
+          description: The n-th call of this tool in the case.
+        tool:
+          type: string
+        arguments:
+          type: object
+        http_status:
+          type: integer
+          description: '`0` when no response reached the caller.'
+        status:
+          type: string
+          enum: [ok, rate_limited, denied, not_found, unknown_tool, timeout, invalid, error, dropped, partial, malformed]
+        error_code:
+          type: [string, 'null']
+        response:
+          description: The reply body the agent received (`null` when none).
+        risk:
+          type: [string, 'null']
+        fault:
+          type: [string, 'null']
+          description: The injected fault type, if any.
+        mutated:
+          type: boolean
+        expects_mutation:
+          type: boolean
+        replayed:
+          type: boolean
+          description: Answered from the idempotency record, without a second effect.
+        effect_key:
+          type: [string, 'null']
+        cross_tenant:
+          type: [string, 'null']
+        policy_violation:
+          type: [string, 'null']
+        redelivered:
+          type: boolean
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/StateChange'
+        delay_ms:
+          type: integer
+          minimum: 0
+    RetrievalRecord:
+      type: object
+      required: [seq, kind, query, limit, documents]
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+        kind:
+          const: retrieval
+        query:
+          type: string
+        limit:
+          type: integer
+        documents:
+          type: array
+          items:
+            type: object
+            required: [id, trusted]
+            properties:
+              id:
+                type: string
+              trusted:
+                type: boolean
+    Step:
+      type: object
+      required: [seq, kind, tool, latency_ms, created_at, record]
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum: [tool_call, retrieval]
+        tool:
+          type: [string, 'null']
+        latency_ms:
+          type: [number, 'null']
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        record:
+          anyOf:
+            - $ref: '#/components/schemas/ToolCallRecord'
+            - $ref: '#/components/schemas/RetrievalRecord'
+    CaseDetail:
+      type: object
+      required: [case, scenario, twin, steps, state]
+      properties:
+        case:
+          $ref: '#/components/schemas/CaseResult'
+        scenario:
+          type: object
+          required: [document, faults]
+          properties:
+            document:
+              type: object
+              description: The scenario version the case ran.
+              x-agenttwin-schema: scenario.v1
+            faults:
+              type: array
+              description: The scenario's fault rules (its `spec.faults`).
+              items:
+                type: object
+                x-agenttwin-schema: scenario.v1#/$defs/fault
+        twin:
+          anyOf:
+            - type: object
+              required: [id, name, version, spec_hash]
+              properties:
+                id:
+                  $ref: '#/components/schemas/Uuid'
+                name:
+                  type: string
+                version:
+                  type: integer
+                  minimum: 1
+                spec_hash:
+                  $ref: '#/components/schemas/SpecHash'
+            - type: 'null'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/Step'
+        state:
+          type: object
+          required: [initial, final]
+          properties:
+            initial:
+              type: [object, 'null']
+              description: The twin state the case started from.
+            final:
+              type: [object, 'null']
+              description: The twin state when the case ended.
+
+    KnowledgeBaseResults:
+      type: object
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          items:
+            type: object
+            required: [id, title, text]
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              text:
+                type: string
+
+    AgentRunRequest:
+      type: object
+      required: [input, agent_version, session_id, tools_base_url, tool_headers, run_context]
+      properties:
+        input:
+          type: string
+          description: The customer's message.
+        agent_version:
+          type: string
+          description: The version to run.
+        session_id:
+          type: string
+          description: '`sim-<case id>`.'
+        tools_base_url:
+          type: string
+          format: uri
+          description: The twin endpoint; tools are `POST {tools_base_url}/tools/{tool}`.
+        tool_headers:
+          type: object
+          description: Headers to send with every tool call (the case's capability token).
+          additionalProperties:
+            type: string
+        run_context:
+          type: object
+          required: [source, simulation_run_id, scenario_id, scenario_name, case_id, release_id]
+          properties:
+            source:
+              const: simulation
+            simulation_run_id:
+              $ref: '#/components/schemas/Uuid'
+            scenario_id:
+              $ref: '#/components/schemas/Uuid'
+            scenario_name:
+              type: string
+            case_id:
+              $ref: '#/components/schemas/Uuid'
+            release_id:
+              type: [string, 'null']
+        tenant:
+          type: string
+          description: The tenant the case runs as (from the scenario).
+        customer_id:
+          type: string
+          description: The customer the conversation is with (from the scenario).
+        context:
+          type: object
+          description: Other values of the scenario's `input.context`.
+    AgentRunResponse:
+      type: object
+      description: |
+        Every field is optional for the worker; what is present is kept for
+        display and outcome checks (bounded).
+      properties:
+        output:
+          type: string
+          description: The agent's final answer to the customer.
+        trace_id:
+          type: string
+          pattern: ^[0-9a-f]{32}$
+          description: The agent's trace of the conversation (links the case to it).
+        status:
+          type: string
+          description: How the conversation ended (e.g. `completed`, `step_limit`).
+        agent_version:
+          type: string
+        model:
+          type: string
+        model_kind:
+          type: string
+        steps:
+          type: integer
+          minimum: 0
+        claimed_outcome:
+          type: string
+          description: What the agent says it achieved (checked against the twin's state).
+        business_outcome:
+          type: [string, 'null']
+        tool_calls:
+          type: array
+          items:
+            type: object
+    AgentError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string

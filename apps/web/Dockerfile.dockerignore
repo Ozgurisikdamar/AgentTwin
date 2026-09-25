@@ -1,0 +1,14 @@
+# Allowlist: the pnpm workspace manifests and the web app sources.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!apps/web
+!packages/scenario-schema
+apps/web/node_modules
+apps/web/.next
+apps/web/tests
+apps/web/e2e
+apps/web/playwright-report
+apps/web/test-results
+apps/web/*.tsbuildinfo

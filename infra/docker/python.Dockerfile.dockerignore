@@ -1,0 +1,19 @@
+# Allowlist: the uv workspace (every member must be present for --frozen).
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!packages/sdk-python
+!packages/core-py
+!packages/contracts
+!packages/scenario-schema
+!services/evaluation-service
+!services/simulation-service
+!demo
+**/tests
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.venv

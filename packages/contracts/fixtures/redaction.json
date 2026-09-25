@@ -1,0 +1,23 @@
+{
+  "description": "Cross-language redaction contract. Go (gokit/redact), Python (agenttwin SDK) and TypeScript (@agenttwin/sdk) must produce exactly these outputs.",
+  "cases": [
+    {"name": "email", "mode": "all", "input": "contact jane.doe+billing@example.co.uk today", "output": "contact [REDACTED:email] today"},
+    {"name": "email untouched by secrets-only", "mode": "secrets", "input": "contact jane.doe@example.com", "output": "contact jane.doe@example.com"},
+    {"name": "jwt", "mode": "secrets", "input": "token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl ok", "output": "token [REDACTED:jwt] ok"},
+    {"name": "bearer keeps scheme", "mode": "secrets", "input": "Authorization: Bearer abcdEFGH12345678", "output": "Authorization: Bearer [REDACTED:bearer]"},
+    {"name": "agenttwin api key", "mode": "secrets", "input": "key=atk_ab12cd34_s3cretValue-XYZ", "output": "key=[REDACTED:api_key]"},
+    {"name": "provider api key", "mode": "secrets", "input": "use sk-ant-api03-AbCdEfGhIjKlMnOpQrStUv now", "output": "use [REDACTED:api_key] now"},
+    {"name": "aws access key", "mode": "secrets", "input": "AKIAABCDEFGHIJKLMNOP", "output": "[REDACTED:api_key]"},
+    {"name": "password assignment keeps key", "mode": "secrets", "input": "password: hunter2hunter", "output": "password: [REDACTED:credential]"},
+    {"name": "credential value that also occurs in the key", "mode": "secrets", "input": "password=pass", "output": "password=[REDACTED:credential]"},
+    {"name": "json secret field", "mode": "secrets", "input": "{\"api_key\": \"xyz12345abc\"}", "output": "{\"api_key\": \"[REDACTED:credential]\"}"},
+    {"name": "valid card number", "mode": "all", "input": "card 4111 1111 1111 1111 exp 12/29", "output": "card [REDACTED:card] exp 12/29"},
+    {"name": "luhn-invalid digits are kept", "mode": "all", "input": "order 1234 5678 9012 3456", "output": "order 1234 5678 9012 3456"},
+    {"name": "phone with country code", "mode": "all", "input": "call +44 20 7946 0958 please", "output": "call [REDACTED:phone] please"},
+    {"name": "us phone", "mode": "all", "input": "call (415) 555-2671 now", "output": "call [REDACTED:phone] now"},
+    {"name": "money amounts are not phones", "mode": "all", "input": "refund 150.00 USD for order ORD-1042", "output": "refund 150.00 USD for order ORD-1042"},
+    {"name": "private key block", "mode": "secrets", "input": "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu\n-----END RSA PRIVATE KEY-----", "output": "[REDACTED:private_key]"},
+    {"name": "hash strategy is stable", "mode": "all", "strategy": "hash", "input": "mail jane@example.com", "output": "mail [HASH:email:8c87b489ce35]"},
+    {"name": "no match is unchanged", "mode": "all", "input": "The refund for order ORD-1001 was completed.", "output": "The refund for order ORD-1001 was completed."}
+  ]
+}

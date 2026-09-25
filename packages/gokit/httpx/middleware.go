@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -73,16 +74,34 @@ func Recover() Middleware {
 	}
 }
 
+// securityHeaders are set on every API response.
+var securityHeaders = [][2]string{
+	{"X-Content-Type-Options", "nosniff"},
+	{"X-Frame-Options", "DENY"},
+	{"Referrer-Policy", "no-referrer"},
+	{"Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"},
+	{"Cache-Control", "no-store"},
+}
+
+// OwnedResponseHeaders are the response headers RequestID and SecurityHeaders
+// set. A reverse proxy behind them must drop these from the upstream's
+// response, or the client receives each twice (the proxy adds, not replaces).
+func OwnedResponseHeaders() []string {
+	out := []string{RequestIDHeader}
+	for _, kv := range securityHeaders {
+		out = append(out, kv[0])
+	}
+	return out
+}
+
 // SecurityHeaders sets conservative headers for API responses.
 func SecurityHeaders() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
-			h.Set("X-Content-Type-Options", "nosniff")
-			h.Set("X-Frame-Options", "DENY")
-			h.Set("Referrer-Policy", "no-referrer")
-			h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-			h.Set("Cache-Control", "no-store")
+			for _, kv := range securityHeaders {
+				h.Set(kv[0], kv[1])
+			}
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -143,6 +162,28 @@ func (s *statusRecorder) Flush() {
 // Observer receives per-request measurements (metrics).
 type Observer func(r *http.Request, route string, status int, dur time.Duration)
 
+type routeKey struct{}
+
+// routeHolder carries the matched route pattern back to AccessLog. Nested
+// muxes set Pattern on a shallow copy of the request, so reading r.Pattern
+// in an outer middleware would always see the outer pattern.
+type routeHolder struct{ route string }
+
+// SetRoute records the pattern matched by the innermost mux for metrics and
+// logs. Handle calls it automatically.
+func SetRoute(r *http.Request) {
+	if r.Pattern != "" {
+		SetRouteName(r, r.Pattern)
+	}
+}
+
+// SetRouteName records an explicit, low-cardinality route label.
+func SetRouteName(r *http.Request, name string) {
+	if h, ok := r.Context().Value(routeKey{}).(*routeHolder); ok {
+		h.route = name
+	}
+}
+
 // AccessLog logs one line per request (path only, never query strings, which
 // may carry tokens) and notifies observers.
 func AccessLog(log *slog.Logger, observers ...Observer) Middleware {
@@ -150,12 +191,17 @@ func AccessLog(log *slog.Logger, observers ...Observer) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w}
+			holder := &routeHolder{}
+			r = r.WithContext(context.WithValue(r.Context(), routeKey{}, holder))
 			next.ServeHTTP(rec, r)
 			if rec.status == 0 {
 				rec.status = http.StatusOK
 			}
 			dur := time.Since(start)
-			route := r.Pattern
+			route := holder.route
+			if route == "" {
+				route = r.Pattern
+			}
 			if route == "" {
 				route = "unmatched"
 			}

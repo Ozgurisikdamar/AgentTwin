@@ -62,13 +62,13 @@ flowchart TB
   subgraph core[Services]
     ts[trace-service · Go<br/>OTLP/JSON ingest, normalization,<br/>trace query, outcomes]
     gs[graph-service · Go<br/>components, edges, evidence,<br/>blast radius]
-    es[evaluation-service · Python<br/>evaluators, datasets, comparison,<br/>regression miner]
+    es[evaluation-service · Python<br/>datasets, evaluation runs, comparison,<br/>judges, reviews + worker]
     ss[simulation-service · Python<br/>scenarios, tool twins, faults,<br/>simulation runs + worker]
     rg[runtime-gateway · Go<br/>CEL policies, approvals,<br/>idempotency, SSRF-safe proxy]
   end
 
   subgraph infra[Infrastructure]
-    pg[(PostgreSQL 16 + pgvector<br/>schemas: control, trace, graph,<br/>eval, simulation, runtime)]
+    pg[(PostgreSQL 16 + pgvector<br/>schemas: control, trace, graph,<br/>evaluation, simulation, runtime)]
     mq[[RabbitMQ<br/>agenttwin.events topic exchange]]
     otel[OpenTelemetry Collector]
     obj[(Object storage<br/>filesystem / S3-compatible)]
@@ -111,7 +111,7 @@ boundary genuinely differ (specification §7 — "no microservice theatre"):
 | control-plane | Go | The only internet-facing edge: authentication, RBAC, tenancy, audit. Governance data with strict transactional invariants. |
 | trace-service | Go | Ingestion workload scales with customer traffic, not with users. Must survive bursts and back-pressure independently. |
 | graph-service | Go | Bounded recursive traversal and evidence bookkeeping; consumes events from several producers. |
-| evaluation-service | Python | Evaluators, embeddings, clustering (numpy, scikit-learn) and LLM-judge adapters live in the Python ecosystem. |
+| evaluation-service | Python | Evaluators, embeddings, clustering (numpy, scikit-learn) and LLM-judge adapters live in the Python ecosystem. Worker process is separable from its API (a slow judge never blocks it). |
 | simulation-service | Python | Long-running CPU/IO jobs with isolated per-run state; different failure mode (a stuck simulation must not affect the API). Worker process is separable from its API. |
 | runtime-gateway | Go | Sits in the agent's hot path for tool actions; latency-sensitive, security boundary for outbound traffic. |
 
@@ -124,8 +124,13 @@ process.
 ### 3.1 Public API (UI and CLI)
 
 1. The browser never holds a bearer token. The Next.js server stores the session
-   token in an `HttpOnly; SameSite=Lax` cookie and proxies `/api/v1/*` to the
-   control-plane (BFF pattern).
+   token in an `HttpOnly; SameSite=Lax` cookie (`Secure` behind HTTPS) and
+   proxies `/api/v1/*` to the control-plane (BFF pattern). The BFF rejects
+   cross-site writes (`Sec-Fetch-Site`, falling back to `Origin` vs `Host`),
+   refuses path traversal, caps request bodies at 16 MiB, clears the cookie when
+   the control-plane answers 401, and never forwards cookies upstream. Pages are
+   served with a per-request nonce Content-Security-Policy (`script-src 'self'
+   'nonce-…' 'strict-dynamic'`, `frame-ancestors 'none'`).
 2. The control-plane authenticates (dev session JWT, OIDC token, or project API
    key), resolves the principal `{organization, role, project scope}` and applies
    RBAC.
@@ -143,8 +148,36 @@ The SDK sends the project API key in the `x-agenttwin-api-key` header. The
 collector keeps it as request metadata (`include_metadata`), batches **per key**
 (`batch.metadata_keys`) so tenants are never merged into one export, and the
 `headers_setter` extension re-attaches it on export. trace-service verifies the
-key with the control-plane (cached 60 s) — tenancy is derived from the verified
-key, never from span attributes supplied by the agent.
+key with the control-plane (`/internal/v1/api-keys/verify`, internal JWT) and
+caches the answer for 30 s (`API_KEY_CACHE_TTL`; rejections for 10 s, transient
+lookup failures not at all), so a revoked key stops working within 30 s.
+Tenancy and content policy are derived from the verified key, never from span
+attributes supplied by the agent.
+
+#### Trace lifecycle
+
+1. **Ingest** (`POST /v1/traces`): OTLP/JSON or protobuf, gzip allowed, bounded
+   body and decompressed size, bounded concurrency (`INGEST_MAX_CONCURRENT`,
+   excess → 503 so the collector retries). Spans are normalized (GenAI semantic
+   conventions + `agenttwin.*` attributes), hostile values are truncated and
+   out-of-vocabulary enums normalized, content is filtered again by the
+   project's content mode, and spans are upserted idempotently (a collector
+   retry never duplicates a span). The trace row is marked `dirty`.
+2. **Finalize** (background, every replica): a dirty trace is finalized once its
+   root span arrived and no span came for `TRACE_SETTLE_DURATION` (2 s), or after
+   `TRACE_INCOMPLETE_AFTER` (2 min) without a root (`incomplete` signal). The
+   finalizer claims rows with `FOR UPDATE SKIP LOCKED`, computes the
+   deterministic summary (tool sequence, errors, retries, cost, last good step,
+   failing tool, signals), records the span-reported outcome and writes
+   `trace.ingested.v1` (and `trace.outcome_recorded.v1`) to the outbox in the
+   same transaction. A trace that keeps failing is retried at most 10 times and
+   never blocks other traces; new spans reset its budget.
+3. **Outcomes** reported later through the API (`POST
+   /api/v1/traces/{id}/outcome`) take precedence over the agent's self-report
+   and flag contradictions (claimed success, verified failure).
+4. **Query**: explorer list with keyset pagination and filters, facets (value
+   counts over the most recent 10,000 traces), detail, and stats — all scoped by
+   organization and project in SQL.
 
 ### 3.3 Release evaluation (asynchronous)
 
@@ -169,7 +202,8 @@ sequenceDiagram
   CP-->>U: 202 {evaluation_id, status: QUEUED}
   CP->>MQ: evaluation.run_requested.v1 (outbox relay, publisher confirms)
   MQ->>ES: consume → create EvalRun (idempotent)
-  ES->>MQ: simulation.run_requested.v1 ×2 (baseline, candidate)
+  ES->>SS: POST /internal/v1/simulation-pairs (baseline + candidate on one pinned suite)
+  SS->>MQ: simulation.run_requested.v1 (outbox; wakes a worker)
   MQ->>SS: worker claims run (lease), runs cases in isolated twins
   SS->>MQ: simulation.run_completed.v1
   MQ->>ES: both sides done → evaluate expectations, compare, first divergence
@@ -180,7 +214,82 @@ sequenceDiagram
 Any missing mandatory result, failed simulation, evaluator `ERROR` or stale run
 produces **BLOCK (INCOMPLETE)** — infrastructure uncertainty never yields PASS.
 
-### 3.4 Runtime containment (opt-in)
+### 3.4 Simulation run
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as UI / CLI / SDK
+  participant CP as control-plane
+  participant SS as simulation-service
+  participant W as simulation worker
+  participant A as agent under test
+  participant TS as trace-service
+  U->>CP: POST /api/v1/simulations (Idempotency-Key)
+  CP->>SS: forward with an internal JWT
+  SS->>SS: scenarios checked against their twins, versions and seeds pinned,<br/>run + cases + outbox(simulation.run_requested.v1) in one tx
+  SS-->>U: 202 {run, cases}
+  SS->>W: event wakes a worker (or the next poll finds the run)
+  W->>W: claim run (FOR UPDATE SKIP LOCKED, renewable lease)
+  loop every case
+    W->>W: fresh twin state + per-case capability token
+    W->>A: POST /run (input, twin URL, token, run context)
+    A->>SS: POST /twin/v1/tools/{tool} (token)
+    SS-->>A: reply (faults applied); the twin records the call
+    A-->>W: final answer + claimed outcome
+    W->>W: revoke token, evaluate expectations on the recorded state → verdict
+  end
+  W->>SS: run COMPLETED + outbox(simulation.run_completed.v1)
+  W->>TS: verified outcome on each case's trace (retried until ingested)
+```
+
+Design decisions: [ADR-0016](../adr/0016-declarative-tool-twins-and-faults.md)
+(twins and faults), [ADR-0017](../adr/0017-simulation-runs-cancellation-and-verdicts.md)
+(runs, cancellation, verdicts), [ADR-0019](../adr/0019-idempotency-keys-per-user-action.md)
+(idempotency), [ADR-0020](../adr/0020-scenario-documents-stored-as-data.md)
+(scenario documents).
+
+### 3.5 Evaluation run
+
+The comparison the release gate will rely on, available on its own since
+Phase 3 (UI, SDK, `make seed`):
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as UI / SDK
+  participant CP as control-plane
+  participant ES as evaluation-service
+  participant W as evaluation worker
+  participant SS as simulation-service
+  participant J as judge (fake / Anthropic / OpenAI-compatible)
+  participant MQ as RabbitMQ
+  U->>CP: POST /api/v1/eval-runs (Idempotency-Key)
+  CP->>ES: forward with an internal JWT
+  ES->>ES: dataset version (or the scenarios asked for) resolved,<br/>run QUEUED + transition + audit in one tx
+  ES-->>U: 202 {run}
+  W->>W: claim (FOR UPDATE SKIP LOCKED, lease) → PREPARING
+  W->>SS: POST /internal/v1/simulation-pairs (keyed by the eval run)
+  SS-->>W: baseline + candidate runs, one pinned suite and seed<br/>(versions and scenarios checked here; a refusal fails the run)
+  W->>W: RUNNING: lease released, next check + wait deadline set
+  SS->>MQ: simulation.run_completed.v1 (each side)
+  MQ->>ES: the run is due now (polling is the fallback)
+  W->>W: both sides done → claim → EVALUATING
+  W->>SS: read every case of both sides
+  W->>J: grade semantic expectations (budget, verdict cache)
+  W->>W: classify each case, first divergence, deltas, slices
+  W->>ES: case results + COMPLETED + outbox(evaluation.run_completed.v1) in one tx
+```
+
+A person can then review one expectation's verdict: the review replaces it,
+and the case and the run are classified again from the stored snapshots,
+without the simulation service. Design decisions:
+[ADR-0022](../adr/0022-judges-grade-semantic-expectations.md) (judges),
+[ADR-0023](../adr/0023-baseline-and-candidate-run-as-one-pinned-pair.md)
+(the pinned pair), [ADR-0024](../adr/0024-evaluation-runs-wait-without-a-lease.md)
+(waiting without a lease).
+
+### 3.6 Runtime containment (opt-in)
 
 `agent → POST /gateway/v1/tools/{tool}/invoke → policy (CEL) → allow | allow_with_limits | require_approval | deny → upstream tool`
 
@@ -199,8 +308,8 @@ through REST (synchronous, owner-validated) or events (asynchronous).
 | `control` | control-plane | organization, app_user, membership, project, environment, api_key, agent, agent_version, prompt_version, tool, tool_version, release_candidate, release_evaluation, gate_decision, gate_override, gate_policy, audit_event, outbox, processed_event |
 | `trace` | trace-service | trace, span, outcome, trace_flag, outbox |
 | `graph` | graph-service | component, dependency_edge, edge_evidence, processed_event |
-| `eval` | evaluation-service | dataset, eval_case, evaluator_version, eval_run, eval_result, scenario_comparison, human_review, failure, failure_cluster, regression_case, judge_calibration, outbox, processed_event |
-| `simulation` | simulation-service | twin_definition, scenario, scenario_version, simulation_run, simulation_case, simulation_step, artifact, outbox, processed_event |
+| `evaluation` | evaluation-service | dataset, dataset_version, eval_run, eval_run_transition, eval_case_result, judgment (verdict cache), human_review, judge_calibration, outbox, processed_event (regression mining adds its tables in Phase 6) |
+| `simulation` | simulation-service | twin_definition, scenario, scenario_version, simulation_run, simulation_run_transition, simulation_case, simulation_step, outbox, processed_event |
 | `runtime` | runtime-gateway | policy, policy_version, policy_decision, approval_request, approval_token, idempotency_record, tool_endpoint, trace_tool_counter, outbox |
 
 Each service ships its own versioned migrations (`<service>/migrations`), applied
@@ -208,7 +317,7 @@ automatically on local startup (`MIGRATE_ON_START=true`) and explicitly in
 production (`<binary> migrate`). The migration ledger lives in
 `<schema>.schema_migrations`.
 
-## 5. Events
+## 5. Events and API contracts
 
 Topic exchange `agenttwin.events`, envelope defined in
 [`packages/contracts/events/envelope.v1.schema.json`](../../packages/contracts/events/envelope.v1.schema.json).
@@ -221,12 +330,19 @@ transaction), bounded retry through a TTL retry queue, then a parking DLQ.
 Events whose loss would corrupt state (audit, run requests, run completions)
 are written through a **transactional outbox**.
 
+HTTP APIs are documented by hand-written OpenAPI 3.1 documents in
+[`packages/contracts/openapi`](../../packages/contracts/openapi), held to the
+services by route parity, strict traffic checks in the integration tests and a
+compatibility baseline ([ADR-0021](../adr/0021-http-contracts-checked-openapi.md)).
+
 ## 6. Key cross-cutting mechanisms
 
 * **Content capture is off by default.** SDKs redact client-side before export
   (`drop`, `mask`, `hash` modes; email, phone, JWT, API-key, card, custom regex,
-  JSON-path rules). The trace-service truncates oversized attributes and records
-  that it did.
+  JSON-path rules). The trace-service enforces the project's content mode again
+  (it never stores more than the project allows, whatever the SDK sent),
+  truncates oversized attributes and records that it did. Content is stored
+  apart from span metadata with its own, shorter retention.
 * **Hashing.** SHA-256 of canonical JSON identifies prompts, manifests, tool
   schemas, scenario versions, policies, evaluator configs and release evidence.
 * **Immutability.** Gate decisions and their evidence snapshots are append-only

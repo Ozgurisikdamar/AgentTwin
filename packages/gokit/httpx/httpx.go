@@ -157,6 +157,7 @@ type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
 // Handle adapts a HandlerFunc to http.HandlerFunc.
 func Handle(fn HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		SetRoute(r)
 		if err := fn(w, r); err != nil {
 			WriteError(w, r, err)
 		}

@@ -19,7 +19,10 @@
 | **Simulation run** | Execution of a suite of scenarios against one agent version with pinned inputs. State machine QUEUED → PREPARING → RUNNING → EVALUATING → COMPLETED/FAILED/CANCELLED. | simulation-service |
 | **Evaluator** | Versioned function from run evidence to `PASS/FAIL/ERROR/SKIPPED` + score + evidence. Deterministic, trajectory or semantic (judge). | evaluation-service |
 | **Dataset / Eval case** | Versioned collection of scenario-backed cases with tags, severity, source and owner. | evaluation-service |
-| **Eval run / Comparison** | Evaluation of baseline and candidate simulation results with per-scenario deltas (IMPROVED, UNCHANGED, REGRESSED, NEW_CRITICAL_FAILURE) and first divergence. | evaluation-service |
+| **Eval run / Comparison** | Evaluation of baseline and candidate simulation results — one pinned suite and seed for both sides — with a class per scenario (NEW_CRITICAL_FAILURE, REGRESSED, INCOMPLETE, IMPROVED, UNCHANGED), metric deltas and first divergence. INCOMPLETE means a side could not be graded; it is never read as a pass. | evaluation-service |
+| **Human review** | A person's verdict on one expectation of one side, with a note. It replaces that result, and the case and run are classified again; the latest review counts. | evaluation-service |
+| **Review queue** | Results of finished evaluations a person should decide: the judge could not grade them, did not grade them, or graded a critical expectation without being calibrated for it. | evaluation-service |
+| **Judge calibration** | The judge's labels on examples people labeled, per criterion: agreement, Cohen's kappa and a confusion matrix. A criterion is calibrated when the latest completed calibration meets the requirements (20 examples, 80% agreement, kappa 0.6). | evaluation-service |
 | **First divergence** | The first step where the normalized baseline and candidate trajectories differ, described in plain language. | evaluation-service |
 | **Failure** | A production trace with failure signals (failed outcome, policy violation, tool error, loop, cost, flag) plus structured features and embedding. | evaluation-service |
 | **Failure cluster** | Group of similar failures (rules + similarity; HDBSCAN with enough data). Lifecycle CANDIDATE → CONFIRMED → PROMOTED → FIXED / DISMISSED / REOPENED. | evaluation-service |

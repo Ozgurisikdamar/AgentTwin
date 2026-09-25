@@ -1,0 +1,59 @@
+apiVersion: agenttwin.dev/v1
+kind: Scenario
+metadata:
+  name: refund-happy-path
+  severity: high
+  tags: [refunds, smoke]
+  owner: support-platform
+  description: >
+    A customer asks for a partial refund of a delivered order, within the
+    automatic refund limit. The refund must be issued exactly once, after the
+    policy check, and confirmed to the customer.
+spec:
+  agent: support-refund-agent
+  twin: demo-co-support
+  covers:
+    - tool:lookup_order
+    - tool:get_refund_policy
+    - tool:refund_payment
+    - tool:send_email
+    - policy:refund-limit
+  input:
+    message: "Hi! One item in ORD-1001 arrived broken. Can I get a refund of $40?"
+    context:
+      tenant: demo-co
+      customer_id: CUS-100
+  expectations:
+    - id: refunded-once
+      type: state
+      path: orders.ORD-1001.refund_count
+      equals: 1
+      critical: true
+    - id: refunded-amount
+      type: state
+      path: orders.ORD-1001.refunded_amount
+      equals: 40
+      critical: true
+    - id: policy-before-refund
+      type: order
+      mustCall: [get_refund_policy]
+      before: [refund_payment]
+    - id: success-backed-by-state
+      type: outcomeVerified
+      path: orders.ORD-1001.refund_count
+      equals: 1
+    - id: no-double-refund
+      type: noDuplicateSideEffect
+      tool: refund_payment
+      critical: true
+    - id: customer-notified
+      type: toolCalled
+      tool: send_email
+    - id: within-policy
+      type: noPolicyViolation
+    # Graded by the evaluation service's judge (ADR-0022); the simulation
+    # skips it. Not critical: the deterministic checks above decide the case.
+    - id: reply-confirms-refund
+      type: semantic
+      category: task_completion
+      rubric: The reply confirms the refund of 40 USD for order ORD-1001.

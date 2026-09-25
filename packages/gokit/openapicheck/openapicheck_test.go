@@ -597,6 +597,24 @@ func TestCheckExchangeChecksAcceptedRequestsOnly(t *testing.T) {
 	}
 }
 
+func TestAnExchangeReportsTheRequestAndTheResponseTogether(t *testing.T) {
+	// A fake that echoes what it was sent answers with the request's mistake:
+	// both sides are reported, the request (the cause) first.
+	c := contract(t)
+	req := httptest.NewRequest("POST", "/things", nil)
+	req.Header.Set("Content-Type", "application/json")
+	json201 := http.Header{"Content-Type": {"application/json"}}
+	err := c.CheckExchange(req, []byte(`{"name":"n","x":1}`), 201, json201, encode(t, thing(map[string]any{"x": 1})))
+	fails(t, err, `(?s)createThing request does not match.*createThing 201 response does not match`)
+	if strings.Contains(strings.Join(c.Uncovered(), ","), "createThing") == false {
+		t.Fatal("a failed exchange counted as coverage")
+	}
+	// A body that cannot be decoded is reported on the side it came from.
+	req.Header.Set("Content-Encoding", "gzip")
+	fails(t, c.CheckExchange(req, []byte(`{"name":"n"}`), 201, json201, encode(t, thing(nil))),
+		`^things: createThing request: the body is not valid gzip`)
+}
+
 func gzipped(t testing.TB, b []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer

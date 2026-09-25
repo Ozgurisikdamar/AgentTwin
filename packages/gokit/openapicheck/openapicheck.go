@@ -1125,19 +1125,23 @@ func (c *Contract) CheckExchange(r *http.Request, requestBody []byte, status int
 	if err != nil {
 		return err
 	}
-	if body, err = decoded(header.Get("Content-Encoding"), body); err != nil {
-		return violation("%s: %s %d response: %v", c.Name, op.ID, status, err)
-	}
-	if err := c.checkResponseOf(op, status, header.Get("Content-Type"), body); err != nil {
-		return err
-	}
+	// Both sides are checked and reported together, the request first: a
+	// fake that echoes what it was sent answers with the request's mistake.
+	var problems []string
 	if status >= 200 && status < 300 {
 		if requestBody, err = decoded(r.Header.Get("Content-Encoding"), requestBody); err != nil {
-			return violation("%s: %s request: %v", c.Name, op.ID, err)
+			problems = append(problems, fmt.Sprintf("%s: %s request: %v", c.Name, op.ID, err))
+		} else if err := c.checkRequestOf(op, values, r.URL.Query(), r.Header, r.Header.Get("Content-Type"), requestBody); err != nil {
+			problems = append(problems, err.Error())
 		}
-		if err := c.checkRequestOf(op, values, r.URL.Query(), r.Header, r.Header.Get("Content-Type"), requestBody); err != nil {
-			return err
-		}
+	}
+	if body, err = decoded(header.Get("Content-Encoding"), body); err != nil {
+		problems = append(problems, fmt.Sprintf("%s: %s %d response: %v", c.Name, op.ID, status, err))
+	} else if err := c.checkResponseOf(op, status, header.Get("Content-Type"), body); err != nil {
+		problems = append(problems, err.Error())
+	}
+	if len(problems) > 0 {
+		return violation("%s", strings.Join(problems, "\n"))
 	}
 	c.record(op, status)
 	return nil

@@ -55,7 +55,7 @@ drifts silently unless something holds it to the service.
     an assumption of the UI does not compile, and names the field.
   * *Python:* the fakes that stand in for the service in the SDK's and the
     demo seed's tests answer with contract payloads
-    (`agenttwin_core.simulation_fakes`) and check every exchange — the
+    (`agenttwin_core.api_fakes`) and check every exchange — the
     request the client sent, the answer the fake gave.
 * **The promise stays open, the check is strict.** Responses may gain fields
   and enum values; clients ignore what they do not know. Strictness belongs to

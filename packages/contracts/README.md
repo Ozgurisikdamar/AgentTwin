@@ -59,7 +59,7 @@ are generated from them (`make gen-api` writes
 when they are stale), its hand-written types must accept every documented
 response at compile time, and the Python SDK's and the demo seed's test fakes
 answer with contract payloads and check every exchange
-(`agenttwin_core.simulation_fakes`).
+(`agenttwin_core.api_fakes`).
 
 To change an API: edit the document with the code, run the service's tests
 (route parity and traffic), `make gen-api`, then `make contracts-check`. A

@@ -9,7 +9,9 @@ infrastructure). One stack per test:
   a background thread, calling the twin endpoint with ``urllib``;
 * a worker driven step by step by the test (``process_next``);
 * fakes of the control plane and the trace service that verify the
-  internal JWT (audience included) of every call they receive;
+  internal JWT (audience included) of every call they receive, answer with
+  contract payloads and check every exchange against those services'
+  contracts;
 * the service's contract (ADR-0021): every response of the API and the twin
   endpoint, every request the service accepts and every call the worker makes
   to the agent is checked against ``simulation-service.openapi.yaml``.
@@ -18,19 +20,21 @@ infrastructure). One stack per test:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import socket
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 import uvicorn
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from agenttwin import AgentTwin, Config
+from agenttwin_core import api_fakes as fake
 from agenttwin_core.auth import Principal, Role, TokenService
 from agenttwin_core.db import Migrator, Pool, connect, load_migrations, transaction
 from agenttwin_core.evaluators import default_registry
@@ -84,61 +88,86 @@ def scenario_yaml(name: str) -> str:
     return (ASSURANCE / "scenarios" / f"{name}.yaml").read_text()
 
 
+def manifest_sha256(version: str) -> str:
+    """The manifest digest the fake control plane pins for ``version``."""
+    return hashlib.sha256(f"manifest:{version}".encode()).hexdigest()
+
+
 class FakeControlPlane:
-    """``GET /internal/v1/agent-versions`` of the control plane."""
+    """``GET /internal/v1/agent-versions`` of the control plane. Its answers
+    are contract payloads and every exchange is checked against the control
+    plane's contract (:attr:`checker`, asserted by the harness)."""
 
     def __init__(self, tokens: TokenService, versions: tuple[str, ...] = VERSIONS) -> None:
         self.tokens = tokens
         self.versions = versions
         self.calls: list[dict[str, str]] = []
-        self.fail: int | None = None  # answer this status to every call
+        # A documented failure status to answer every call with, or "down"
+        # for a control plane that does not answer at all.
+        self.fail: int | Literal["down"] | None = None
+        self.checker = fake.ExchangeChecker()
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        response = self._answer(request)
+        self.checker.check_exchange(request, response)
+        return response
+
+    def _answer(self, request: httpx.Request) -> httpx.Response:
         p, _ = self.tokens.verify(request.headers["authorization"][7:], "control-plane")
         q = dict(request.url.params)
         self.calls.append(q)
+        if self.fail == "down":
+            raise httpx.ConnectError("connection refused", request=request)
         if self.fail is not None:
-            return httpx.Response(self.fail, json={"error": {"code": "UNAVAILABLE"}})
+            return httpx.Response(self.fail, json=fake.error("INTERNAL", "An internal error occurred."))
+        not_found = httpx.Response(404, json=fake.error("NOT_FOUND", "No such resource."))
         if request.url.path != "/internal/v1/agent-versions" or not p.can_access_project(q["project_id"]):
-            return httpx.Response(404, json={"error": {"code": "NOT_FOUND"}})
+            return not_found
         if q["project_id"] != PROJECT or q["agent"] != AGENT or q["version"] not in self.versions:
-            return httpx.Response(404, json={"error": {"code": "NOT_FOUND"}})
+            return not_found
+        version = q["version"]
         return httpx.Response(
             200,
-            json={
-                "id": f"0190f3b4-0000-7000-8000-0000000{self.versions.index(q['version']):05d}",
-                "agent_name": AGENT,
-                "project_id": PROJECT,
-                "version": q["version"],
-                "manifest_sha256": f"sha256:manifest-{q['version']}",
-                "prompt_sha256": f"sha256:prompt-{q['version']}",
-                "model_provider": "scripted",
-                "model_name": "scripted-planner-v1",
-                "tools": [],
-            },
+            json=fake.agent_version_detail(
+                id=f"0190f3b4-0000-7000-8000-0000000{self.versions.index(version):05d}",
+                agent_name=AGENT,
+                project_id=PROJECT,
+                version=version,
+                manifest_sha256=manifest_sha256(version),
+                prompt_sha256=hashlib.sha256(f"prompt:{version}".encode()).hexdigest(),
+                tools=[],
+            ),
         )
 
 
 class FakeTraceService:
     """``POST /api/v1/traces/{id}/outcome``: the first post of every trace
-    answers 404 (not ingested yet), later ones are accepted."""
+    answers 404 (not ingested yet), later ones store the outcome. Answers are
+    contract payloads and every exchange is checked against the trace
+    service's contract (:attr:`checker`)."""
 
     def __init__(self, tokens: TokenService) -> None:
         self.tokens = tokens
         self.seen: set[str] = set()
         self.posts: list[dict[str, Any]] = []
+        self.checker = fake.ExchangeChecker()
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        response = self._answer(request)
+        self.checker.check_exchange(request, response)
+        return response
+
+    def _answer(self, request: httpx.Request) -> httpx.Response:
         p, _ = self.tokens.verify(request.headers["authorization"][7:], "trace-service")
         project = request.url.params["project_id"]
         assert p.can_access_project(project)
         trace_id = request.url.path.split("/")[4]
         if trace_id not in self.seen:
             self.seen.add(trace_id)
-            return httpx.Response(404, json={"error": {"code": "NOT_FOUND"}})
+            return httpx.Response(404, json=fake.error("NOT_FOUND", "No such resource."))
         body = json.loads(request.content)
         self.posts.append({"trace_id": trace_id, "project_id": project, "actor": p.actor, "body": body})
-        return httpx.Response(200, json={"trace_id": trace_id, "status": body["status"]})
+        return httpx.Response(200, json=fake.outcome(**body, recorded_by=p.actor))
 
 
 def free_socket() -> socket.socket:
@@ -174,7 +203,7 @@ class ASGIFake:
         try:
             resp = self.handler(request)
         except Exception:  # noqa: BLE001 - a rejected credential is a 401, as in the real services
-            resp = httpx.Response(401, json={"error": {"code": "UNAUTHENTICATED"}})
+            resp = httpx.Response(401, json=fake.error("UNAUTHENTICATED", "Authentication is required."))
         await send(
             {
                 "type": "http.response.start",
@@ -394,8 +423,11 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
                         # The worker turns what its agent call raises into a
                         # failed run; a contract violation there is the root
                         # cause of whatever the test saw, so it is reported.
-                        if checker.violations:
-                            raise ContractViolation("\n".join(checker.violations))
+                        # So is one on the service's own calls to the control
+                        # plane and the trace service.
+                        violations = checker.violations + cp.checker.violations + ts.checker.violations
+                        if violations:
+                            raise ContractViolation("\n".join(violations))
             finally:
                 await agents.close()
                 await control.close()

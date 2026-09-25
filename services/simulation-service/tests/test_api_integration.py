@@ -246,10 +246,11 @@ async def test_run_requests_are_checked_before_anything_is_queued() -> None:
         assert not_runnable == (400, "AGENT_NOT_RUNNABLE", {"runnable": [AGENT]})
         bad_seed = await error(s, "POST", "/api/v1/simulations", req(seed=-1))
         assert bad_seed[:2] == (400, "INVALID_REQUEST")
-        # The control plane is down: nothing can be pinned, nothing is queued.
-        s.control_plane.fail = 503
-        down = await error(s, "POST", "/api/v1/simulations", req())
-        assert down[:2] == (503, "UNAVAILABLE")
+        # The control plane fails or is down: nothing can be pinned, nothing is queued.
+        for failure in (500, "down"):
+            s.control_plane.fail = failure
+            down = await error(s, "POST", "/api/v1/simulations", req())
+            assert down[:2] == (503, "UNAVAILABLE"), failure
         s.control_plane.fail = None
         assert await s.outbox("simulation.run_requested.v1") == []
         assert await s.store.all("SELECT id FROM simulation_run") == []

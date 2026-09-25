@@ -1,10 +1,10 @@
 """REST client and outcome reporting against a local stub of the API.
 
-The stub's answers on the simulation API follow its contract
-(``packages/contracts/openapi/simulation-service.openapi.yaml``), and every
-request the client sends there is checked against it (ADR-0021): a request the
-service would reject, or a stub answer the service could not give, fails the
-test that sees it.
+The stub answers as the services' contracts document
+(``packages/contracts/openapi``: control plane, trace service, simulation
+service), and every exchange is checked against the contract of the service
+that owns the path (ADR-0021): a request the service would reject, or a stub
+answer the service could not give, fails the test that sees it.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from agenttwin import APIError, Client, Config, OutcomeReportError, report_outcome
-from agenttwin_core import simulation_fakes as fake
+from agenttwin_core import api_fakes as fake
 
 KEY = "atk_test0000_secret-value-that-must-not-leak"
 PROJECT = fake.PROJECT
@@ -58,15 +58,16 @@ class Stub:
                 return 503, {"status": "unready"}
             return 200, {"status": "ready"}
         if h.headers.get("X-AgentTwin-Api-Key") != KEY:
-            return 401, {"error": {"code": "UNAUTHORIZED", "message": "Authentication required."}}
+            return 401, fake.error("UNAUTHENTICATED", "Authentication is required.")
         if h.command == "GET" and h.path == "/api/v1/projects":
-            return 200, {"items": [{"id": PROJECT, "slug": "support", "name": "Customer Support"}]}
+            return 200, {"items": [fake.project()]}
         if h.command == "POST" and h.path.startswith(f"/api/v1/projects/{PROJECT}/agent-manifests"):
             if b"version: 9.9.9" in body:
-                return 409, {"error": {"code": "VERSION_EXISTS", "message": "immutable", "details": {"v": 1}}}
-            return 201, {"created": True, "version": {"version": "1.0.0"}}
+                return 409, fake.error("VERSION_EXISTS", "Versions are immutable.", v=1)
+            return 201, fake.registered_version(version="1.0.0")
         if h.command == "POST" and h.path.endswith("/outcome"):
-            return 200, {"status": json.loads(body)["status"], "recorded": True}
+            sent = json.loads(body)
+            return 200, fake.outcome(**sent, recorded_by="apikey:test")
         if h.command == "POST" and h.path == "/api/v1/twins":
             return 201, {"twin": fake.twin(), "created": True}
         if h.command == "POST" and h.path == "/api/v1/scenarios":
@@ -136,19 +137,21 @@ def test_client_authenticates_and_resolves_projects(stub: tuple[Stub, str]) -> N
     with pytest.raises(APIError) as e:
         client.project_id("billing")
     assert e.value.status == 404 and e.value.code == "PROJECT_NOT_FOUND"
+    assert "listProjects" in state.checker.succeeded()
 
 
 def test_register_manifest_sends_yaml_and_commit_metadata(stub: tuple[Stub, str]) -> None:
     state, url = stub
     client = Client(url, KEY)
     res = client.register_manifest(PROJECT, "name: a\nversion: 1.0.0\n", commit_sha="abc1234", branch="main")
-    assert res["created"] is True
+    assert res["created"] is True and res["version"]["version"] == "1.0.0"
     req = state.requests[-1]
     assert req["headers"]["content-type"] == "application/yaml"
     assert req["path"].endswith("agent-manifests?commit_sha=abc1234&branch=main")
     with pytest.raises(APIError) as e:
         client.register_manifest(PROJECT, "name: a\nversion: 9.9.9\n")
     assert (e.value.status, e.value.code, e.value.details) == (409, "VERSION_EXISTS", {"v": 1})
+    assert "registerManifest" in state.checker.succeeded()
 
 
 def test_errors_never_leak_the_key(stub: tuple[Stub, str]) -> None:
@@ -156,7 +159,7 @@ def test_errors_never_leak_the_key(stub: tuple[Stub, str]) -> None:
     bad = Client(url, "atk_wrong000_other-secret")
     with pytest.raises(APIError) as e:
         bad.projects()
-    assert e.value.status == 401 and e.value.code == "UNAUTHORIZED"
+    assert e.value.status == 401 and e.value.code == "UNAUTHENTICATED"
     assert "other-secret" not in str(e.value) and "other-secret" not in repr(bad)
     down = Client("http://127.0.0.1:1", KEY, timeout_s=1)
     with pytest.raises(APIError) as e:
@@ -200,7 +203,8 @@ def test_report_outcome_round_trip_and_validation(stub: tuple[Stub, str]) -> Non
         claimed_status="SUCCESS",
         actual_state={"refund_count": 2},
     )
-    assert out == {"status": "FAILURE", "recorded": True}
+    # The stored outcome: the verification disproved what the agent claimed.
+    assert (out["status"], out["claimed_status"], out["contradiction"]) == ("FAILURE", "SUCCESS", True)
     req = state.requests[-1]
     assert req["path"] == f"/api/v1/traces/{trace_id}/outcome"
     assert json.loads(req["body"]) == {
@@ -210,6 +214,7 @@ def test_report_outcome_round_trip_and_validation(stub: tuple[Stub, str]) -> Non
         "claimed_status": "SUCCESS",
         "actual_state": {"refund_count": 2},
     }
+    assert "recordOutcome" in state.checker.succeeded()
     with pytest.raises(ValueError):
         report_outcome("not-a-trace", "SUCCESS", config=cfg)
     with pytest.raises(ValueError):

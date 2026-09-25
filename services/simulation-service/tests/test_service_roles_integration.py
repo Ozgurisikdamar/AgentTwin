@@ -279,3 +279,10 @@ async def exercise(
     assert value("agenttwin_simulation_case_duration_seconds_count") >= 2
     # Tool names never become labels (they come from user-authored twins).
     assert not any("tool" in dict(ls) for _, ls in samples)
+    # The service's calls to the control plane and the trace service, and the
+    # fakes' answers, are what those services' contracts document.
+    violations = control_plane.checker.violations + traces.checker.violations
+    assert not violations, "\n".join(violations)
+    assert {"findAgentVersionInternal", "recordOutcome"} <= (
+        control_plane.checker.succeeded() | traces.checker.succeeded()
+    )

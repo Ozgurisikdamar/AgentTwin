@@ -1,6 +1,7 @@
 """``support-refund-agent seed`` against a recording fake of the AgentTwin API:
-what it registers, in which order, and when it reports failure. The fake's
-exchanges on the simulation API are held to its contract (ADR-0021)."""
+what it registers, in which order, and when it reports failure. Every exchange
+of the fake is held to the contract of the service that owns the path
+(ADR-0021)."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from typing import Any
 import pytest
 import yaml
 
-from agenttwin_core import simulation_fakes as fake
+from agenttwin_core import api_fakes as fake
 from support_refund_agent.cli import default_assurance_dir, main
 
 PROJECT = "0199a0a0-0000-7000-8000-000000000001"
@@ -48,10 +49,12 @@ class FakeAPI:
         if (method, path) == ("GET", "/health/ready"):
             return 200, {"status": "ready"}
         if (method, path) == ("GET", "/api/v1/projects"):
-            return 200, {"items": [{"id": PROJECT, "slug": "support"}]}
+            return 200, {"items": [fake.project(id=PROJECT)]}
         if method == "POST" and path == f"/api/v1/projects/{PROJECT}/agent-manifests":
             version = yaml.safe_load(body)["metadata"]["version"]
-            return 200, {"created": self._created(f"manifest:{version}")}
+            created = self._created(f"manifest:{version}")
+            registered = fake.registered_version(created=created, version=version, project_id=PROJECT)
+            return 201 if created else 200, registered
         if (method, path) == ("POST", "/api/v1/twins"):
             if self.twin_error:
                 status, code = self.twin_error
@@ -176,8 +179,9 @@ def test_seed_registers_the_suite_then_runs_it(api: FakeAPI, capsys: pytest.Capt
     }
     # A candidate with regressions is what the demo is for, not a seed failure.
     assert candidate["failed_scenarios"] == ["refund-happy-path", "refund-tool-success-lie"]
-    # What the seed sent and read on the simulation API was checked against its contract.
-    assert {"registerTwin", "saveScenario", "startSimulation", "getSimulation"} <= api.checker.succeeded()
+    # What the seed sent and read was checked against the services' contracts.
+    used = {"listProjects", "registerManifest", "registerTwin", "saveScenario", "startSimulation"}
+    assert used | {"getSimulation"} <= api.checker.succeeded()
 
     # Seeding again changes nothing but starts new runs.
     code, again = seed(capsys, "--simulate", "1.2.4")

@@ -596,24 +596,34 @@ class Contract:
     def check_exchange(self, request: httpx.Request, response: httpx.Response) -> Operation:
         """Checks a response (read already, so decoded by httpx) and — when the
         server accepted the request (2xx) — the request as well, its content
-        coding (gzip) undone."""
+        coding (gzip) undone. Both sides are reported together, the request
+        first: a fake that echoes what it was sent answers with the request's
+        mistake."""
         op, path_values = self._operation(request.method, request.url.path)
-        self._check_response_of(
-            op, response.status_code, response.headers.get("content-type"), response.content
-        )
+        problems: list[str] = []
         if 200 <= response.status_code < 300:
             try:
                 content = _decoded(request.headers.get("content-encoding"), request.content)
+                self._check_request_of(
+                    op,
+                    path_values,
+                    request.url.params.multi_items(),
+                    request.headers,
+                    request.headers.get("content-type"),
+                    content,
+                )
             except ValueError as err:
-                raise ContractViolation(f"{self.name}: {op.operation_id} request: {err}") from None
-            self._check_request_of(
-                op,
-                path_values,
-                request.url.params.multi_items(),
-                request.headers,
-                request.headers.get("content-type"),
-                content,
+                problems.append(f"{self.name}: {op.operation_id} request: {err}")
+            except ContractViolation as err:
+                problems.append(str(err))
+        try:
+            self._check_response_of(
+                op, response.status_code, response.headers.get("content-type"), response.content
             )
+        except ContractViolation as err:
+            problems.append(str(err))
+        if problems:
+            raise ContractViolation("\n".join(problems))
         self.seen[op.operation_id].add(response.status_code)
         return op
 

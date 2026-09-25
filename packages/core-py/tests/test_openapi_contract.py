@@ -428,6 +428,26 @@ def test_content_codings_are_undone_before_the_check() -> None:
         c.check_exchange(post(body({"name": "n"}), "br"), created)
 
 
+def test_an_exchange_reports_the_request_and_the_response_together() -> None:
+    # A fake that echoes what it was sent answers with the request's mistake:
+    # both sides are reported, the request (the cause) first.
+    c = contract()
+    request = httpx.Request("POST", "http://t/things", json={"name": "n", "x": 1})
+    with pytest.raises(ContractViolation) as e:
+        c.check_exchange(request, httpx.Response(201, json=THING | {"x": 1}))
+    message = str(e.value)
+    assert message.index("createThing request does not match") < message.index(
+        "createThing 201 response does not match"
+    )
+    assert "createThing" in c.uncovered()
+    # A body that cannot be decoded is reported on the side it came from.
+    gz = httpx.Request(
+        "POST", "http://t/things", headers={"content-encoding": "gzip"}, content=body({"name": "n"})
+    )
+    with pytest.raises(ContractViolation, match=r"^things: createThing request: the body is not valid gzip"):
+        c.check_exchange(gz, httpx.Response(201, json=THING))
+
+
 def test_coverage_counts_successful_answers_only() -> None:
     c = contract()
     assert c.uncovered() == ["createThing", "getThing", "listThings", "ping", "raw", "specialThing"]

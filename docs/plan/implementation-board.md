@@ -83,7 +83,7 @@ web 101; `make dev` healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical);
 |---|---|
 | Web types | `apps/web/src/lib/api/simulation.gen.ts` generated from the document (openapi-typescript 7.13.0); embedded documents (`x-agenttwin-schema`) typed from `scenario.v1` / `twin.v1`; a unit test and `make contracts-check` fail when it is stale |
 | Web, compile time | every hand-written response type accepts the documented response of its operation (15 checks); request bodies, query parameters and the unit tests' fixtures are typed by the contract |
-| Python fakes | the SDK's and the demo seed's test fakes answer with contract payloads (`agenttwin_core.simulation_fakes`) and check every exchange; the seed's run exercises `registerTwin`, `saveScenario`, `startSimulation`, `getSimulation` |
+| Python fakes | the SDK's and the demo seed's test fakes answer with contract payloads (`agenttwin_core.api_fakes`) and check every exchange; the seed's run exercises `registerTwin`, `saveScenario`, `startSimulation`, `getSimulation` |
 | Mutation proofs | UI type reading `verdict.score` as never null, an unknown body field (`priority`), an undocumented query parameter (`order`) and a fixture with a status the service never sends each fail `tsc`; a contract change (`reason` made optional) fails the drift test, then — regenerated — `tsc` names the field, and `make contracts-check` reports it; an SDK request with a renamed field and the demo fake's old partial twin answer each fail their tests |
 
 Found and fixed: the UI read a verdict's score as always a number (`null`

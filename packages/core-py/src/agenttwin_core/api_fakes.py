@@ -1,12 +1,13 @@
-"""Payloads of the simulation API that its contract accepts, for the fakes
-that stand in for the service in client tests (the Python SDK, the demo
-seed).
+"""Payloads of the AgentTwin APIs that their contracts accept, for the fakes
+that stand in for a service in tests: the Python SDK's stub, the demo seed's
+fake API, and the simulation service's fakes of the control plane and the
+trace service.
 
 Each builder returns a complete response object; a test overrides the fields
 it cares about. :class:`ExchangeChecker` holds every exchange a fake serves
-to the contract (ADR-0021), so a fake cannot answer what the service never
-would, and a client cannot send what the service would reject, without a
-test failing.
+to the contract of the service that owns the path (ADR-0021), so a fake
+cannot answer what the service never would, and a client cannot send what the
+service would reject, without a test failing.
 """
 
 from __future__ import annotations
@@ -21,9 +22,16 @@ from agenttwin_core.openapi_contract import Contract, ContractViolation, contrac
 
 __all__ = [
     "ExchangeChecker",
+    "agent",
+    "agent_version",
+    "agent_version_detail",
     "case_summary",
     "error",
+    "manifest",
+    "outcome",
+    "project",
     "queued_case",
+    "registered_version",
     "run",
     "run_detail",
     "scenario",
@@ -41,6 +49,122 @@ PROJECT = "0190f3b4-0000-7000-8000-00000000b000"
 def uuid(n: int) -> str:
     """A fixed, valid (canonical, lower-case) UUID for test data."""
     return f"0190f3b4-0000-7000-8000-{n:012x}"
+
+
+def sha256(c: str) -> str:
+    """A fixed, valid SHA-256 digest (64 hex characters) for test data."""
+    return (c * 64)[:64]
+
+
+# ------------------------------------------------------------ control plane
+
+
+def project(**over: Any) -> dict[str, Any]:
+    """A project (``listProjects``, ``getProject``)."""
+    return {
+        "id": PROJECT,
+        "organization_id": ORGANIZATION,
+        "slug": "support",
+        "name": "Customer Support",
+        "description": "",
+        "content_mode": "redacted",
+        "store_prompt_text": False,
+        "trace_retention_days": 30,
+        "content_retention_days": 7,
+        "artifact_retention_days": 30,
+        "gate_policy": {},
+        "created_by": ACTOR,
+        "updated_by": ACTOR,
+        "created_at": NOW,
+        "updated_at": NOW,
+    } | over
+
+
+def agent(**over: Any) -> dict[str, Any]:
+    return {
+        "id": uuid(0xB101),
+        "organization_id": ORGANIZATION,
+        "project_id": PROJECT,
+        "name": "support-refund-agent",
+        "description": "",
+        "created_by": ACTOR,
+        "created_at": NOW,
+        "version_count": 1,
+        "latest_version": "1.2.4",
+    } | over
+
+
+def manifest(**over: Any) -> dict[str, Any]:
+    """A normalized manifest, as a registered version carries it."""
+    return {
+        "name": "support-refund-agent",
+        "version": "1.2.4",
+        "model": {"provider": "scripted", "name": "scripted-planner-v1", "temperature": 0},
+        "limits": {"max_steps": 30},
+        "tools": [
+            {"name": "lookup_order", "risk": "READ", "risk_declared": True, "definition_sha256": sha256("1")}
+        ],
+        "content_mode": "redacted",
+    } | over
+
+
+def agent_version(**over: Any) -> dict[str, Any]:
+    """An agent version as the version list answers it (``listAgentVersions``)."""
+    version = over.get("version", "1.2.4")
+    return {
+        "id": uuid(0xB201),
+        "agent_id": uuid(0xB101),
+        "agent_name": "support-refund-agent",
+        "project_id": PROJECT,
+        "version": version,
+        "manifest": manifest(version=version),
+        "manifest_sha256": sha256("a"),
+        "prompt_sha256": sha256("c"),
+        "model_provider": "scripted",
+        "model_name": "scripted-planner-v1",
+        "model_params": {"temperature": 0},
+        "created_by": ACTOR,
+        "created_at": NOW,
+    } | over
+
+
+def agent_version_detail(**over: Any) -> dict[str, Any]:
+    """A version with the tool versions it is bound to (``getAgentVersion``,
+    ``findAgentVersionInternal``)."""
+    tools = [{"name": "lookup_order", "tool_version": 1, "risk": "READ", "definition_sha256": sha256("1")}]
+    return agent_version(**over) | {"tools": over.get("tools", tools)}
+
+
+def registered_version(*, created: bool = True, **over: Any) -> dict[str, Any]:
+    """``registerManifest``: 201 when ``created``, 200 for identical content."""
+    version = agent_version(**over)
+    return {"agent": agent(latest_version=version["version"]), "version": version, "created": created}
+
+
+# ------------------------------------------------------------ trace service
+
+
+def outcome(**over: Any) -> dict[str, Any]:
+    """A stored outcome (``recordOutcome``). ``contradiction`` follows the
+    claimed and the verified status unless overridden."""
+    body = {
+        "status": "SUCCESS",
+        "business_outcome": None,
+        "verified": False,
+        "verification_source": "external_callback",
+        "claimed_status": None,
+        "notes": None,
+        "source": "api",
+        "recorded_by": ACTOR,
+        "recorded_at": NOW,
+    } | over
+    claimed = body["claimed_status"]
+    return {
+        "contradiction": bool(body["verified"] and claimed is not None and claimed != body["status"])
+    } | body
+
+
+# ------------------------------------------------------------ simulation service
 
 
 def twin_summary(**over: Any) -> dict[str, Any]:
@@ -204,16 +328,44 @@ def error(code: str, message: str, **details: Any) -> dict[str, Any]:
     return {"error": body}
 
 
-class ExchangeChecker:
-    """Checks the exchanges a fake serves on the simulation API against its
-    contract. Violations are kept rather than raised: a fake's handler runs
-    on a server thread, where an exception would not reach the test — the
-    test asserts :attr:`violations` is empty."""
+# The service that owns each path (longest prefix first). Paths no service
+# documents (``/health/ready``) are not checked.
+_ROUTES: tuple[tuple[str, str], ...] = (
+    ("/api/v1/trace-stats", "trace-service"),
+    ("/api/v1/traces", "trace-service"),
+    ("/v1/traces", "trace-service"),
+    ("/api/v1/twins", "simulation-service"),
+    ("/api/v1/scenarios", "simulation-service"),
+    ("/api/v1/simulations", "simulation-service"),
+    ("/twin/v1", "simulation-service"),
+    ("/internal/v1", "control-plane"),
+    ("/api/v1", "control-plane"),
+)
+_DOCUMENTS: dict[str, Contract] = {}
 
-    PREFIXES = ("/api/v1/twins", "/api/v1/scenarios", "/api/v1/simulations")
+
+def owner(path: str) -> str | None:
+    """The service whose contract documents ``path``, if any."""
+    for prefix, service in _ROUTES:
+        if path == prefix or path.startswith(prefix + "/"):
+            return service
+    return None
+
+
+class ExchangeChecker:
+    """Checks the exchanges a fake serves against the contract of the service
+    that owns the path. Violations are kept rather than raised: a fake's
+    handler runs on a server thread, where an exception would not reach the
+    test — the test asserts :attr:`violations` is empty."""
 
     def __init__(self) -> None:
-        self.contract = Contract.load(contract_path("simulation-service"))
+        self.contracts: dict[str, Contract] = {}
+        for service in dict.fromkeys(s for _, s in _ROUTES):
+            parsed = _DOCUMENTS.get(service)
+            if parsed is None:
+                parsed = _DOCUMENTS[service] = Contract.load(contract_path(service))
+            # A fresh checker per instance: coverage is per test.
+            self.contracts[service] = Contract(parsed.document, parsed.name)
         self.violations: list[str] = []
 
     def check(
@@ -227,15 +379,24 @@ class ExchangeChecker:
     ) -> None:
         """One exchange: ``target`` is the request target (path and query).
         The answer is always checked; the request when it was accepted."""
-        if not urlsplit(target).path.startswith(self.PREFIXES):
-            return
         request = httpx.Request(method, f"http://fake{target}", headers=dict(headers), content=body)
-        response = httpx.Response(status, json=payload, request=request)
+        self.check_exchange(request, httpx.Response(status, json=payload, request=request))
+
+    def check_exchange(self, request: httpx.Request, response: httpx.Response) -> None:
+        """One exchange of an ``httpx`` fake (a ``MockTransport`` handler)."""
+        service = owner(urlsplit(str(request.url)).path)
+        if service is None:
+            return
         try:
-            self.contract.check_exchange(request, response)
+            self.contracts[service].check_exchange(request, response)
         except ContractViolation as err:
             self.violations.append(str(err))
 
     def succeeded(self) -> set[str]:
         """The operations with at least one checked successful exchange."""
-        return {op for op, statuses in self.contract.seen.items() if any(200 <= s < 300 for s in statuses)}
+        return {
+            op
+            for contract in self.contracts.values()
+            for op, statuses in contract.seen.items()
+            if any(200 <= s < 300 for s in statuses)
+        }

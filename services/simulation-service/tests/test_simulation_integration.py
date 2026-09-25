@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from sim_testutil import PROJECT, Stack, simulation_stack
+from sim_testutil import PROJECT, Stack, manifest_sha256, simulation_stack
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -64,7 +64,7 @@ async def test_safe_and_unsafe_versions_under_timeout_after_mutation() -> None:
             "COMPLETED",
         ]
         pin = run["pinning"]
-        assert pin["seed"] == 7 and pin["agent"]["manifest_sha256"] == "sha256:manifest-1.2.4"
+        assert pin["seed"] == 7 and pin["agent"]["manifest_sha256"] == manifest_sha256("1.2.4")
         assert {p["scenario"] for p in pin["scenarios"]} == {HAPPY, TIMEOUT}
         assert pin["evaluators"]["expectation.state"] == "1.0.0"
 

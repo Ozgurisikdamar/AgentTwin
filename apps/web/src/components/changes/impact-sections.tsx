@@ -232,11 +232,20 @@ export function AffectedComponents({ impact }: { impact: ChangeImpact }) {
       <CardHeader>
         <CardTitle>Blast radius</CardTitle>
         {graph ? (
-          <span className="text-xs text-slate-500">
-            {graph.affected.length < graph.affected_count
-              ? `${graph.affected.length} most affected of ${graph.affected_count}`
-              : `${graph.affected_count} ${graph.affected_count === 1 ? "component" : "components"}`}{" "}
-            within {graph.max_depth} steps
+          <span className="flex items-center gap-3 text-xs text-slate-500">
+            <Link
+              href={`/graph?${new URLSearchParams({ project_id: impact.project_id, change_set: impact.change_set_id })}`}
+              className="text-indigo-700 hover:underline"
+              data-testid="show-on-graph"
+            >
+              Show on the graph
+            </Link>
+            <span>
+              {graph.affected.length < graph.affected_count
+                ? `${graph.affected.length} most affected of ${graph.affected_count}`
+                : `${graph.affected_count} ${graph.affected_count === 1 ? "component" : "components"}`}{" "}
+              within {graph.max_depth} steps
+            </span>
           </span>
         ) : null}
       </CardHeader>

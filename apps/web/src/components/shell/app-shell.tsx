@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Network,
   UserCheck,
 } from "lucide-react";
 import Link from "next/link";
@@ -30,6 +31,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/changes", label: "Changes", icon: GitPullRequestArrow },
+  { href: "/graph", label: "Graph", icon: Network },
   { href: "/simulations", label: "Simulations", icon: FlaskConical },
   { href: "/evaluations", label: "Evaluations", icon: GitCompareArrows },
   { href: "/datasets", label: "Datasets", icon: Database },

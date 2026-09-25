@@ -243,6 +243,10 @@ describe("ChangeSetDetail: the prompt change", () => {
     const affected = await screen.findAllByTestId("affected-component");
     expect(affected).toHaveLength(16);
     expect(screen.getByText("16 components within 4 steps")).toBeInTheDocument();
+    expect(screen.getByTestId("show-on-graph")).toHaveAttribute(
+      "href",
+      `/graph?project_id=${PROJECT}&change_set=${PROMPT_CS}`,
+    );
     expect(within(affected[1]!).getByText("1 step")).toBeInTheDocument();
     const service = affected.find(
       (a) => a.getAttribute("data-kind") === "SERVICE" && a.getAttribute("data-key") === "payments-api",

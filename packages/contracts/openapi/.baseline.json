@@ -20577,6 +20577,258 @@
         }
       }
     },
+    "POST /api/v1/scenarios/match": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/sources/[]": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy_derived\"",
+              "\"production_regression\"",
+              "\"production_replay\""
+            ]
+          },
+          "required": {
+            "/": [
+              "project_id"
+            ],
+            "/queries/[]": [
+              "id",
+              "text"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "null",
+              "string"
+            ],
+            "/max_per_query": [
+              "integer"
+            ],
+            "/min_similarity": [
+              "number"
+            ],
+            "/names": [
+              "array"
+            ],
+            "/names/[]": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/queries": [
+              "array"
+            ],
+            "/queries/[]": [
+              "object"
+            ],
+            "/queries/[]/id": [
+              "string"
+            ],
+            "/queries/[]/text": [
+              "string"
+            ],
+            "/sources": [
+              "array"
+            ],
+            "/sources/[]": [
+              "string"
+            ],
+            "/tags": [
+              "array"
+            ],
+            "/tags/[]": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/scenarios/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/scenarios/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy_derived\"",
+              "\"production_regression\"",
+              "\"production_replay\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "embedding_model",
+              "min_similarity",
+              "project_id",
+              "scenarios",
+              "truncated",
+              "unembedded_queries",
+              "unknown_names"
+            ],
+            "/scenarios/[]": [
+              "agent",
+              "description",
+              "id",
+              "latest_version",
+              "matched",
+              "name",
+              "severity",
+              "source",
+              "tags",
+              "twin"
+            ],
+            "/scenarios/[]/matched": [
+              "name",
+              "similar",
+              "source",
+              "tags"
+            ],
+            "/scenarios/[]/matched/similar/[]": [
+              "query",
+              "similarity"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "null",
+              "string"
+            ],
+            "/embedding_model": [
+              "string"
+            ],
+            "/min_similarity": [
+              "number"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/scenarios": [
+              "array"
+            ],
+            "/scenarios/[]": [
+              "object"
+            ],
+            "/scenarios/[]/agent": [
+              "null",
+              "string"
+            ],
+            "/scenarios/[]/description": [
+              "string"
+            ],
+            "/scenarios/[]/id": [
+              "string"
+            ],
+            "/scenarios/[]/latest_version": [
+              "integer"
+            ],
+            "/scenarios/[]/matched": [
+              "object"
+            ],
+            "/scenarios/[]/matched/name": [
+              "boolean"
+            ],
+            "/scenarios/[]/matched/similar": [
+              "array"
+            ],
+            "/scenarios/[]/matched/similar/[]": [
+              "object"
+            ],
+            "/scenarios/[]/matched/similar/[]/query": [
+              "string"
+            ],
+            "/scenarios/[]/matched/similar/[]/similarity": [
+              "number"
+            ],
+            "/scenarios/[]/matched/source": [
+              "boolean"
+            ],
+            "/scenarios/[]/matched/tags": [
+              "array"
+            ],
+            "/scenarios/[]/matched/tags/[]": [
+              "string"
+            ],
+            "/scenarios/[]/name": [
+              "string"
+            ],
+            "/scenarios/[]/severity": [
+              "string"
+            ],
+            "/scenarios/[]/source": [
+              "string"
+            ],
+            "/scenarios/[]/tags": [
+              "array"
+            ],
+            "/scenarios/[]/tags/[]": [
+              "string"
+            ],
+            "/scenarios/[]/twin": [
+              "null",
+              "string"
+            ],
+            "/truncated": [
+              "boolean"
+            ],
+            "/unembedded_queries": [
+              "array"
+            ],
+            "/unembedded_queries/[]": [
+              "string"
+            ],
+            "/unknown_names": [
+              "array"
+            ],
+            "/unknown_names/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
     "POST /api/v1/scenarios/validate": {
       "parameters": {
         "header:idempotency-key": {

@@ -48,6 +48,19 @@ async def test_every_operation_is_exercised_and_answers_as_documented() -> None:
         assert [it["id"] for it in page["items"]] == [scenario_id] and page["next_cursor"] is None
         version = await s.ok("GET", f"/api/v1/scenarios/{scenario_id}", version=1)
         assert (version["version"], version["scenario"]["spec_hash"]) == (1, saved["scenario"]["spec_hash"])
+        matched = await s.ok(
+            "POST",
+            "/api/v1/scenarios/match",
+            {
+                "project_id": PROJECT,
+                "agent": AGENT,
+                "names": [HAPPY, "gone"],
+                "queries": [{"id": "prompt", "text": "Refund the order after checking the refund policy."}],
+            },
+        )
+        assert [m["name"] for m in matched["scenarios"]] == [HAPPY] and matched["unknown_names"] == ["gone"]
+        assert matched["scenarios"][0]["matched"]["name"] is True
+        assert [x["query"] for x in matched["scenarios"][0]["matched"]["similar"]] == ["prompt"]
 
         # -- runs: one through the worker, which calls the agent -------------------
         caps = await s.ok("GET", "/api/v1/simulations/capabilities")
@@ -106,6 +119,11 @@ async def test_every_operation_is_exercised_and_answers_as_documented() -> None:
             (await s.call("GET", "/api/v1/twins/not-a-uuid"), 400, "INVALID_PARAMETER"),
             (await s.call("GET", f"/api/v1/scenarios/{uuid.uuid4()}"), 404, "NOT_FOUND"),
             (await s.call("GET", "/api/v1/scenarios", limit=0), 400, "INVALID_PARAMETER"),
+            (
+                await s.call("POST", "/api/v1/scenarios/match", {"project_id": PROJECT, "names": ["A B"]}),
+                400,
+                "INVALID_REQUEST",
+            ),
             (
                 await s.call("POST", "/api/v1/simulations", {"project_id": PROJECT, "agent": AGENT, "x": 1}),
                 400,

@@ -298,6 +298,147 @@ class Store:
             params,
         )
 
+    # ------------------------------------------------------------ scenario embeddings
+
+    async def stale_embeddings(
+        self, org: str, project: str, model: str, recipe: str, limit: int
+    ) -> list[Row]:
+        """Active scenarios of a project without a current vector: none yet,
+        or one of another model, recipe or version."""
+        return await self.all(
+            """SELECT s.id, s.organization_id, s.project_id, s.latest_version AS version, v.document
+               FROM scenario s
+               JOIN scenario_version v ON v.scenario_id = s.id AND v.version = s.latest_version
+               LEFT JOIN scenario_embedding e ON e.scenario_id = s.id
+               WHERE s.organization_id = %s AND s.project_id = %s AND NOT s.archived
+                 AND (e.scenario_id IS NULL OR e.model <> %s OR e.recipe <> %s
+                      OR e.version <> s.latest_version)
+               ORDER BY s.id LIMIT %s""",
+            (org, project, model, recipe, limit),
+        )
+
+    async def save_embeddings(self, rows: Sequence[Mapping[str, Any]]) -> None:
+        """Stores vectors (``embedding`` is a pgvector literal or None). A
+        concurrent writer of an older version is corrected by the next match,
+        which sees the version differ."""
+        if not rows:
+            return
+        async with transaction(self.pool) as conn:
+            for r in rows:
+                await conn.execute(
+                    """INSERT INTO scenario_embedding (scenario_id, organization_id, project_id, version,
+                           recipe, model, dims, text_sha256, embedding)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
+                       ON CONFLICT (scenario_id) DO UPDATE SET version = EXCLUDED.version,
+                           recipe = EXCLUDED.recipe, model = EXCLUDED.model, dims = EXCLUDED.dims,
+                           text_sha256 = EXCLUDED.text_sha256, embedding = EXCLUDED.embedding,
+                           updated_at = now()""",
+                    (
+                        r["scenario_id"],
+                        r["organization_id"],
+                        r["project_id"],
+                        r["version"],
+                        r["recipe"],
+                        r["model"],
+                        r["dims"],
+                        r["text_sha256"],
+                        r["embedding"],
+                    ),
+                )
+
+    async def similar_scenarios(
+        self,
+        org: str,
+        project: str,
+        agent: str | None,
+        model: str,
+        dims: int,
+        recipe: str,
+        queries: Sequence[tuple[str, str]],
+        per_query: int,
+        min_similarity: float,
+    ) -> list[Row]:
+        """For each (query id, vector literal), the closest active scenarios
+        of the project with a current vector of ``model``, at least
+        ``min_similarity`` close (cosine), at most ``per_query`` of them.
+        Exact search over the project's vectors."""
+        if not queries:
+            return []
+        return await self.all(
+            """SELECT q.id AS query, m.scenario_id, m.similarity
+               FROM unnest(%s::text[], %s::text[]::vector[]) AS q(id, v)
+               CROSS JOIN LATERAL (
+                   SELECT e.scenario_id, 1 - (e.embedding <=> q.v) AS similarity
+                   FROM scenario_embedding e
+                   JOIN scenario s ON s.id = e.scenario_id
+                   WHERE e.organization_id = %s AND e.project_id = %s AND e.model = %s AND e.dims = %s
+                     AND e.recipe = %s AND e.version = s.latest_version AND e.embedding IS NOT NULL
+                     AND NOT s.archived AND (%s::text IS NULL OR s.agent = %s OR s.agent IS NULL)
+                   ORDER BY e.embedding <=> q.v, e.scenario_id
+                   LIMIT %s
+               ) m
+               WHERE m.similarity >= %s
+               ORDER BY q.id, m.similarity DESC, m.scenario_id""",
+            (
+                [q[0] for q in queries],
+                [q[1] for q in queries],
+                org,
+                project,
+                model,
+                dims,
+                recipe,
+                agent,
+                agent,
+                per_query,
+                min_similarity,
+            ),
+        )
+
+    async def selected_scenarios(
+        self,
+        org: str,
+        project: str,
+        agent: str | None,
+        *,
+        names: Sequence[str],
+        tags: Sequence[str],
+        sources: Sequence[str],
+        ids: Sequence[str],
+        limit: int,
+    ) -> list[Row]:
+        """Active scenarios of a project (for ``agent`` or for any agent) that
+        carry one of ``names``, share a tag with ``tags``, come from one of
+        ``sources`` or are one of ``ids``. When there are more than ``limit``,
+        the named ones come first, then those of ``ids``, each severest first:
+        a wide tag or source never pushes out a scenario asked for by name."""
+        return await self.all(
+            """SELECT s.id, s.name, s.agent, s.twin, s.severity, s.tags, s.source, s.latest_version,
+                      v.document->'metadata'->>'description' AS description
+               FROM scenario s
+               JOIN scenario_version v ON v.scenario_id = s.id AND v.version = s.latest_version
+               WHERE s.organization_id = %s AND s.project_id = %s AND NOT s.archived
+                 AND (%s::text IS NULL OR s.agent = %s OR s.agent IS NULL)
+                 AND (s.name = ANY(%s) OR s.tags && %s OR s.source = ANY(%s) OR s.id = ANY(%s::uuid[]))
+               ORDER BY s.name = ANY(%s) DESC, s.id = ANY(%s::uuid[]) DESC,
+                        CASE s.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1
+                                        WHEN 'medium' THEN 2 ELSE 3 END,
+                        s.name
+               LIMIT %s""",
+            (
+                org,
+                project,
+                agent,
+                agent,
+                list(names),
+                list(tags),
+                list(sources),
+                list(ids),
+                list(names),
+                list(ids),
+                limit,
+            ),
+        )
+
     # ------------------------------------------------------------ runs
 
     async def insert_run(self, conn: Conn, run: Mapping[str, Any], cases: Sequence[Mapping[str, Any]]) -> Row:

@@ -5,6 +5,8 @@ Twins      POST /api/v1/twins · GET /api/v1/twins · GET /api/v1/twins/{id}
 Scenarios  POST /api/v1/scenarios/validate · POST /api/v1/scenarios
            GET /api/v1/scenarios · GET /api/v1/scenarios/{id}
            POST /api/v1/scenarios/{id}/archive
+           POST /api/v1/scenarios/match (the scenarios a change touches:
+           by name, tag, source and semantic similarity, each with why)
 Runs       GET /api/v1/simulations/capabilities
            POST /api/v1/simulations · GET /api/v1/simulations
            GET /api/v1/simulations/{id} · GET /api/v1/simulations/{id}/cases/{case_id}
@@ -18,21 +20,23 @@ Resources of projects outside the caller's scope answer 404 (no probing).
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import secrets
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from agenttwin.hashing import content_hash
 from agenttwin_core import errors
 from agenttwin_core.auth import Permission, Principal, Role
 from agenttwin_core.db import Conn, transaction
+from agenttwin_core.embeddings import EmbeddingProvider, HashingEmbedder, is_zero, vector_literal
 from agenttwin_core.errors import APIError
 from agenttwin_core.evaluators import Registry
 from agenttwin_core.events import Envelope, write_outbox
@@ -53,6 +57,7 @@ from agenttwin_simulation.documents import (
     spec_hash,
     validate_twin,
 )
+from agenttwin_simulation.matching import MAX_MATCHED, RECIPE, SCENARIO_SOURCES, ScenarioSource, scenario_text
 from agenttwin_simulation.runner import PRODUCER, completed_event
 from agenttwin_simulation.store import SCHEMA, Row, Scope, Store, decode_cursor, encode_cursor
 from agenttwin_simulation.twin.adapters import AdapterRegistry
@@ -70,6 +75,10 @@ _RUN_STATUSES = frozenset(
     {"QUEUED", "PREPARING", "RUNNING", "EVALUATING", "COMPLETED", "FAILED", "CANCELLED"}
 )
 _SEVERITIES = frozenset({"critical", "high", "medium", "low"})
+_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+# Scenario vectors computed per match, at most _EMBED_BATCHES batches.
+_EMBED_BATCH = 200
+_EMBED_BATCHES = 25
 _ACTOR = r"^(user|apikey|service):[A-Za-z0-9._@:-]{1,200}$"
 
 
@@ -143,6 +152,35 @@ class PairBody(_Strict):
 
 
 # ---------------------------------------------------------------- rendering
+
+
+_ScenarioName = Annotated[str, StringConstraints(pattern=_NAME)]
+_Tag = Annotated[str, StringConstraints(pattern=_TAG.pattern)]
+
+
+class MatchQuery(_Strict):
+    """A text to find semantically close scenarios for (a changed prompt, a
+    tool's description…). Only its id is echoed in the answer."""
+
+    id: str = Field(pattern=r"^[\x21-\x7e]{1,200}$")
+    text: str = Field(min_length=1, max_length=8000)
+
+
+class MatchBody(_Strict):
+    """What a change touches. A scenario is selected when it carries one of
+    the names (e.g. scenarios the dependency graph links to the change),
+    shares a tag (a suite that always runs), comes from one of the sources
+    (``production_regression``: known regressions) or is semantically close
+    to one of the queries."""
+
+    project_id: str
+    agent: str | None = Field(default=None, pattern=_AGENT)
+    names: list[_ScenarioName] = Field(default_factory=list, max_length=500)
+    tags: list[_Tag] = Field(default_factory=list, max_length=20)
+    sources: list[ScenarioSource] = Field(default_factory=list, max_length=len(SCENARIO_SOURCES))
+    queries: list[MatchQuery] = Field(default_factory=list, max_length=50)
+    min_similarity: float = Field(default=0.25, ge=0.0, le=1.0)
+    max_per_query: int = Field(default=10, ge=1, le=50)
 
 
 def _ts(value: Any) -> Any:
@@ -471,6 +509,7 @@ class SimulationAPI:
         control_plane: ControlPlaneClient,
         log: Log,
         adapters: AdapterRegistry | None = None,
+        embedder: EmbeddingProvider | None = None,
     ) -> None:
         self.store = store
         self.cfg = cfg
@@ -478,6 +517,7 @@ class SimulationAPI:
         self.control_plane = control_plane
         self.log = log
         self.adapters = adapters or AdapterRegistry()
+        self.embedder: EmbeddingProvider = embedder or HashingEmbedder()
 
     # -- shared pieces ------------------------------------------------------
 
@@ -644,6 +684,15 @@ class SimulationAPI:
             }
             return JSONResponse(out, status_code=201 if created else 200)
 
+        @app.post("/api/v1/scenarios/match")
+        async def match_scenarios(request: Request) -> dict[str, Any]:
+            p = require(request, Permission.READ)
+            body = await read_model(request, MatchBody)
+            _check_uuid(body.project_id, "project_id")
+            if not p.can_access_project(body.project_id):
+                raise errors.not_found()
+            return await self._match(p, body)
+
         @app.get("/api/v1/scenarios")
         async def list_scenarios(request: Request) -> dict[str, Any]:
             p = require(request, Permission.READ)
@@ -805,6 +854,132 @@ class SimulationAPI:
             if not p.can_access_project(body.project_id):
                 raise errors.not_found()
             return await self._create_pair(p, body)
+
+    # -- scenario matching ----------------------------------------------------
+
+    async def _embed(self, texts: list[str]) -> list[list[float]]:
+        """The provider's vectors, checked: one per text, each of its dimension."""
+        vectors = await self.embedder.embed(texts)
+        if len(vectors) != len(texts) or any(len(v) != self.embedder.dims for v in vectors):
+            raise RuntimeError(
+                f"embedding provider {self.embedder.model} answered vectors of the wrong shape"
+            )
+        return vectors
+
+    async def _refresh_embeddings(self, org: str, project: str) -> None:
+        """Computes the vectors of the project's scenarios that have none of
+        the current model, recipe and version (new, changed or re-modelled
+        scenarios), in bounded batches."""
+        model, dims = self.embedder.model, self.embedder.dims
+        for _ in range(_EMBED_BATCHES):
+            stale = await self.store.stale_embeddings(org, project, model, RECIPE, _EMBED_BATCH)
+            if not stale:
+                return
+            texts = [scenario_text(r["document"]) for r in stale]
+            vectors = await self._embed(texts)
+            await self.store.save_embeddings(
+                [
+                    {
+                        "scenario_id": r["id"],
+                        "organization_id": r["organization_id"],
+                        "project_id": r["project_id"],
+                        "version": r["version"],
+                        "recipe": RECIPE,
+                        "model": model,
+                        "dims": dims,
+                        "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                        "embedding": None if is_zero(vec) else vector_literal(vec),
+                    }
+                    for r, text, vec in zip(stale, texts, vectors, strict=True)
+                ]
+            )
+            if len(stale) < _EMBED_BATCH:
+                return
+        self.log.warn("scenario embeddings left for the next match", project_id=project)
+
+    async def _match(self, p: Principal, body: MatchBody) -> dict[str, Any]:
+        """Scenarios selected by name, tag, source or similarity, severest
+        first, each with every reason it was selected for. The answer never
+        repeats a query's text (it may be a prompt the caller cannot read in
+        full elsewhere); a similarity names the query by its id."""
+        ids = [q.id for q in body.queries]
+        if len(set(ids)) != len(ids):
+            raise errors.invalid("INVALID_REQUEST", "Query ids must be unique.", {"field": "queries"})
+        org, project = p.org_id, body.project_id
+        similar: dict[str, list[dict[str, Any]]] = {}
+        unembedded: list[str] = []
+        if body.queries:
+            await self._refresh_embeddings(org, project)
+            vectors = await self._embed([q.text for q in body.queries])
+            usable = []
+            for q, vec in zip(body.queries, vectors, strict=True):
+                if is_zero(vec):
+                    unembedded.append(q.id)
+                else:
+                    usable.append((q.id, vector_literal(vec)))
+            rows = await self.store.similar_scenarios(
+                org,
+                project,
+                body.agent,
+                self.embedder.model,
+                self.embedder.dims,
+                RECIPE,
+                usable,
+                body.max_per_query,
+                body.min_similarity,
+            )
+            for r in rows:
+                similar.setdefault(str(r["scenario_id"]), []).append(
+                    {"query": r["query"], "similarity": round(float(r["similarity"]), 4)}
+                )
+        names, tags, sources = set(body.names), set(body.tags), set(body.sources)
+        rows = await self.store.selected_scenarios(
+            org,
+            project,
+            body.agent,
+            names=sorted(names),
+            tags=sorted(tags),
+            sources=sorted(sources),
+            ids=sorted(similar),
+            limit=MAX_MATCHED + 1,
+        )
+        truncated = len(rows) > MAX_MATCHED
+        rows = rows[:MAX_MATCHED]
+        found = {r["name"] for r in rows}
+        scenarios = []
+        for r in sorted(rows, key=lambda r: (_SEVERITY_ORDER[r["severity"]], r["name"])):
+            sid = str(r["id"])
+            scenarios.append(
+                {
+                    "id": sid,
+                    "name": r["name"],
+                    "agent": r["agent"],
+                    "twin": r["twin"],
+                    "severity": r["severity"],
+                    "tags": list(r["tags"]),
+                    "source": r["source"],
+                    "latest_version": r["latest_version"],
+                    "description": (r["description"] or "").strip(),
+                    "matched": {
+                        "name": r["name"] in names,
+                        "tags": sorted(tags.intersection(r["tags"])),
+                        "source": r["source"] in sources,
+                        "similar": sorted(similar.get(sid, []), key=lambda m: (-m["similarity"], m["query"])),
+                    },
+                }
+            )
+        return {
+            "project_id": project,
+            "agent": body.agent,
+            "embedding_model": self.embedder.model,
+            "min_similarity": body.min_similarity,
+            "scenarios": scenarios,
+            # Names that are no active scenario of the project (for the agent).
+            "unknown_names": sorted(names - found),
+            # Queries with nothing to compare (only stopwords, say).
+            "unembedded_queries": unembedded,
+            "truncated": truncated,
+        }
 
     # -- run creation -----------------------------------------------------------
 

@@ -76,6 +76,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scenarios/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select the scenarios a change touches, and why
+         * @description Answers the active scenarios of a project that carry one of `names`
+         *     (for instance the scenarios the dependency graph links to a change),
+         *     share a tag with `tags` (a suite that always runs), come from one of
+         *     `sources` (`production_regression`: known regressions) or are
+         *     semantically close to one of `queries` (a changed prompt, a tool's
+         *     new description). Every scenario says each reason it was selected
+         *     for; a similarity names the query by its `id` and never repeats its
+         *     text. Severest first.
+         *
+         *     Similarity is the cosine of two embeddings of `embedding_model`
+         *     (the local default `hashing-v1` is lexical: texts are close when
+         *     they share words and identifiers). A scenario's embedding is
+         *     computed from its latest version when it is first matched.
+         *
+         *     With `agent`, scenarios of other agents are left out (scenarios for
+         *     every agent are kept). At most 2000 scenarios are answered
+         *     (`truncated`); named ones come first. Needs read access to the
+         *     project.
+         */
+        post: operations["matchScenarios"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scenarios": {
         parameters: {
             query?: never;
@@ -528,6 +565,72 @@ export interface components {
             version: number;
             created: boolean;
             warnings: string[];
+        };
+        MatchQuery: {
+            /** @description Names the query in the answer (unique in the request). */
+            id: string;
+            text: string;
+        };
+        MatchScenariosRequest: {
+            project_id: components["schemas"]["Uuid"];
+            agent?: string | null;
+            names?: string[];
+            tags?: string[];
+            sources?: components["schemas"]["ScenarioSource"][];
+            queries?: components["schemas"]["MatchQuery"][];
+            /**
+             * @description The least cosine similarity that selects a scenario.
+             * @default 0.25
+             */
+            min_similarity?: number;
+            /**
+             * @description The most similar scenarios one query selects.
+             * @default 10
+             */
+            max_per_query?: number;
+        };
+        /** @enum {string} */
+        ScenarioSource: "manual" | "production_regression" | "generated" | "policy_derived" | "imported" | "production_replay";
+        Similarity: {
+            /** @description The id of the query. */
+            query: string;
+            similarity: number;
+        };
+        MatchReasons: {
+            /** @description The scenario carries one of the names asked for. */
+            name: boolean;
+            /** @description The tags asked for that the scenario carries. */
+            tags: string[];
+            /** @description The scenario comes from one of the sources asked for. */
+            source: boolean;
+            /** @description The queries it is similar to, closest first. */
+            similar: components["schemas"]["Similarity"][];
+        };
+        ScenarioMatch: {
+            id: components["schemas"]["Uuid"];
+            name: string;
+            agent: string | null;
+            twin: string | null;
+            severity: components["schemas"]["Severity"];
+            tags: string[];
+            source: components["schemas"]["ScenarioSource"];
+            latest_version: number;
+            description: string;
+            matched: components["schemas"]["MatchReasons"];
+        };
+        MatchScenariosResponse: {
+            project_id: components["schemas"]["Uuid"];
+            agent: string | null;
+            /** @description The model of the embeddings compared. */
+            embedding_model: string;
+            min_similarity: number;
+            scenarios: components["schemas"]["ScenarioMatch"][];
+            /** @description Names asked for that are no active scenario of the project (for the agent). */
+            unknown_names: string[];
+            /** @description Queries with nothing to compare (only stopwords, say). */
+            unembedded_queries: string[];
+            /** @description More scenarios were selected than answered. */
+            truncated: boolean;
         };
         ScenarioPage: {
             items: components["schemas"]["Scenario"][];
@@ -1521,6 +1624,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenarioValidation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["IdempotencyInProgress"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    matchScenarios: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MatchScenariosRequest"];
+            };
+        };
+        responses: {
+            /** @description The selected scenarios with their reasons. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchScenariosResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

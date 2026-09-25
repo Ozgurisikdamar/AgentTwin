@@ -351,6 +351,7 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
         await Migrator(pool, SCHEMA, load_migrations(MIGRATIONS)).up()
         tokens = TokenService(SECRET)
         versions = tuple(overrides.pop("agent_versions", VERSIONS))
+        embedder = overrides.pop("embedder", None)
         with demo_agent(
             float(overrides.pop("agent_tool_timeout_s", 2.0)), overrides.pop("manifest_dir", None)
         ) as (agent_server, exporter):
@@ -384,7 +385,12 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
                 audience="simulation-service",
             )
             SimulationAPI(
-                store=store, cfg=cfg, registry=registry, control_plane=control, log=get_logger("api")
+                store=store,
+                cfg=cfg,
+                registry=registry,
+                control_plane=control,
+                log=get_logger("api"),
+                embedder=embedder,
             ).routes(app)
             TwinEndpoint(store, cfg).routes(app)
             try:

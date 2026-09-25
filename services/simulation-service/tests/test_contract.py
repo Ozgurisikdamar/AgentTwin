@@ -76,7 +76,7 @@ def test_operations_are_exactly_the_service_routes() -> None:
     served = service_routes()
     assert served - documented == set(), "routes the contract does not document"
     assert documented - served == set(), "documented operations the service does not serve"
-    assert len(served) == 17
+    assert len(served) == 18
 
 
 def test_each_surface_uses_its_own_credentials() -> None:

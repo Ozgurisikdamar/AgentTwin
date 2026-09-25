@@ -238,6 +238,74 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /api/v1/scenarios/match:
+    post:
+      operationId: matchScenarios
+      tags: [Scenarios]
+      summary: Select the scenarios a change touches, and why
+      description: |
+        Answers the active scenarios of a project that carry one of `names`
+        (for instance the scenarios the dependency graph links to a change),
+        share a tag with `tags` (a suite that always runs), come from one of
+        `sources` (`production_regression`: known regressions) or are
+        semantically close to one of `queries` (a changed prompt, a tool's
+        new description). Every scenario says each reason it was selected
+        for; a similarity names the query by its `id` and never repeats its
+        text. Severest first.
+
+        Similarity is the cosine of two embeddings of `embedding_model`
+        (the local default `hashing-v1` is lexical: texts are close when
+        they share words and identifiers). A scenario's embedding is
+        computed from its latest version when it is first matched.
+
+        With `agent`, scenarios of other agents are left out (scenarios for
+        every agent are kept). At most 2000 scenarios are answered
+        (`truncated`); named ones come first. Needs read access to the
+        project.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchScenariosRequest'
+      responses:
+        '200':
+          description: The selected scenarios with their reasons.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchScenariosResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
   /api/v1/scenarios:
     post:
       operationId: saveScenario
@@ -1405,6 +1473,154 @@ components:
           type: array
           items:
             type: string
+    MatchQuery:
+      type: object
+      additionalProperties: false
+      required: [id, text]
+      properties:
+        id:
+          type: string
+          pattern: ^[\x21-\x7e]{1,200}$
+          description: Names the query in the answer (unique in the request).
+        text:
+          type: string
+          minLength: 1
+          maxLength: 8000
+    MatchScenariosRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: [string, 'null']
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        names:
+          type: array
+          maxItems: 500
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,98}$
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_:.-]{0,62}$
+        sources:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/ScenarioSource'
+        queries:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/MatchQuery'
+        min_similarity:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.25
+          description: The least cosine similarity that selects a scenario.
+        max_per_query:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+          description: The most similar scenarios one query selects.
+    ScenarioSource:
+      type: string
+      enum: [manual, production_regression, generated, policy_derived, imported, production_replay]
+    Similarity:
+      type: object
+      required: [query, similarity]
+      properties:
+        query:
+          type: string
+          description: The id of the query.
+        similarity:
+          type: number
+          minimum: -1
+          maximum: 1
+    MatchReasons:
+      type: object
+      required: [name, tags, source, similar]
+      properties:
+        name:
+          type: boolean
+          description: The scenario carries one of the names asked for.
+        tags:
+          type: array
+          items:
+            type: string
+          description: The tags asked for that the scenario carries.
+        source:
+          type: boolean
+          description: The scenario comes from one of the sources asked for.
+        similar:
+          type: array
+          items:
+            $ref: '#/components/schemas/Similarity'
+          description: The queries it is similar to, closest first.
+    ScenarioMatch:
+      type: object
+      required: [id, name, agent, twin, severity, tags, source, latest_version, description, matched]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        agent:
+          type: [string, 'null']
+        twin:
+          type: [string, 'null']
+        severity:
+          $ref: '#/components/schemas/Severity'
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          $ref: '#/components/schemas/ScenarioSource'
+        latest_version:
+          type: integer
+          minimum: 1
+        description:
+          type: string
+        matched:
+          $ref: '#/components/schemas/MatchReasons'
+    MatchScenariosResponse:
+      type: object
+      required: [project_id, agent, embedding_model, min_similarity, scenarios, unknown_names, unembedded_queries, truncated]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: [string, 'null']
+        embedding_model:
+          type: string
+          description: The model of the embeddings compared.
+        min_similarity:
+          type: number
+        scenarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScenarioMatch'
+        unknown_names:
+          type: array
+          items:
+            type: string
+          description: Names asked for that are no active scenario of the project (for the agent).
+        unembedded_queries:
+          type: array
+          items:
+            type: string
+          description: Queries with nothing to compare (only stopwords, say).
+        truncated:
+          type: boolean
+          description: More scenarios were selected than answered.
     ScenarioPage:
       type: object
       required: [items, next_cursor]

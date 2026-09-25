@@ -1606,6 +1606,7 @@ components:
     # ---------------------------------------------------------------- review
     RecordOutcomeRequest:
       type: object
+      additionalProperties: false
       required: [status]
       properties:
         status:
@@ -1678,6 +1679,7 @@ components:
           $ref: '#/components/schemas/Timestamp'
     FlagRequest:
       type: object
+      additionalProperties: false
       required: [reason]
       properties:
         kind:

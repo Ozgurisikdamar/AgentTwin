@@ -25,21 +25,30 @@ Versioned, language-neutral contracts shared by Go, Python and TypeScript code.
 
 | Document | Operations | Covers |
 |---|---|---|
+| `openapi/control-plane.openapi.yaml` | 29 | sign-in, `/me`, members, projects and environments, API keys, agents and versions, tools, the audit log; the internal lookups the other services call |
+| `openapi/trace-service.openapi.yaml` | 8 | the OTLP/HTTP receiver (`POST /v1/traces`, protobuf and JSON); the trace explorer, facets, detail, stats, outcomes, flags and deletion (public, via the control plane) |
 | `openapi/simulation-service.openapi.yaml` | 17 | twins, scenarios, simulation runs (public, via the control plane); the twin endpoint agents call; the agent adapter contract (`webhooks.agentRun`) |
 
 Each document describes the API as clients reach it: through the control plane
 with its credentials (`Authorization: Bearer`, `X-AgentTwin-Api-Key`),
-`Idempotency-Key` on mutations and the edge's errors. The document is held to
-the service in four ways (ADR-0021):
+`Idempotency-Key` on mutations and the edge's errors — plus the service's
+other surfaces (the OTLP receiver, the twin endpoint, the internal lookups).
+Operation ids are unique across the documents. A document is held to its
+service in four ways (ADR-0021), by the same checker in Python
+(`agenttwin_core.openapi_contract`) and Go (`packages/gokit/openapicheck`):
 
-1. **Document** — valid OpenAPI 3.1 that follows the API conventions (the
-   service's `test_contract.py`).
+1. **Document** — valid OpenAPI 3.1 that follows the API conventions shared by
+   every document: error responses (`400`, `401`/`403`, `404`, `413`, `429`,
+   `500`, and `502`/`503` behind the edge's proxy), `Idempotency-Key` with
+   `409`/`422` on authenticated mutations, closed request bodies, no unused
+   components (`scripts/tests/test_api_documents.py`).
 2. **Routes** — the service's routes and the documented operations are the same
-   set, both ways.
+   set, both ways (each service's contract test).
 3. **Traffic** — the integration tests check every response strictly
    (undocumented fields fail), every request the service accepts and every call
-   it makes to a webhook; a contract walk requires a checked success response
-   for every operation (`agenttwin_core.openapi_contract`).
+   it makes to a webhook; a coverage gate requires a checked success response
+   for every operation. In Go the check wraps the served handler
+   (`Contract.Checking`), so no exchange escapes it.
 4. **Compatibility** — `make contracts-check` compares every operation with the
    committed `openapi/.baseline.json`:
 
@@ -57,8 +66,11 @@ The clients are held to the documents too (ADR-0021): the web app's API types
 are generated from them (`make gen-api` writes
 `apps/web/src/lib/api/*.gen.ts`; a unit test and `make contracts-check` fail
 when they are stale), its hand-written types must accept every documented
-response at compile time, and the Python SDK's and the demo seed's test fakes
-answer with contract payloads and check every exchange
+response at compile time and what it sends is typed by the contract, and the
+test fakes that stand in for a service (the Python SDK's stub, the demo seed's
+fake API, the simulation service's fakes of the control plane and the trace
+service) answer with contract payloads while `ExchangeChecker` holds each
+exchange to the contract of the service that owns the path
 (`agenttwin_core.api_fakes`).
 
 To change an API: edit the document with the code, run the service's tests

@@ -101,8 +101,55 @@ web 106; `make contracts-check` (events, API document, generated types);
 `make dev` healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical); `make doctor`
 0 failed; `make e2e` 10/10.
 
-Next: the control-plane and trace-service documents with the same traffic
-check in Go.
+### Control-plane and trace-service contracts (2026-09-25)
+
+`control-plane.openapi.yaml` (29 operations: auth, projects, environments,
+API keys, agents and versions, tools, audit, and the internal lookups the other
+services call) and `trace-service.openapi.yaml` (8: the OTLP/HTTP export and
+the list, facets, detail, delete, outcome, flag and stats routes) close the
+Phase 1 gap: every service API now has a document, held to its service the
+same four ways.
+
+| Check | Result |
+|---|---|
+| Document | the three documents are valid OpenAPI 3.1 and follow the shared conventions (`scripts/tests/test_api_documents.py`, 11 tests: error responses per operation, `429` and the edge's `502`/`503`, `Idempotency-Key` with `409`/`422` on every authenticated mutation, closed request bodies, operation ids unique across documents, no unused components) |
+| Routes | control plane: the routes it serves are exactly its 29 documented operations, both ways (the rest of `/api/v1/` is forwarded to the services that document it); trace service: its 8 operations, both ways |
+| Traffic | a Go port of the checker (`packages/gokit/openapicheck`) wraps each Go service in its integration suite (`Contract.Checking`): every exchange is checked, strictly, and a full run fails when an operation never answered successfully (`TestAPIContractWalk` reaches the rest) |
+| Compatibility | `make contracts-check`: 14 event schemas and 3 API documents (54 operations) compatible with the baselines; the three generated web type files up to date |
+| Clients | web types generated from all three documents; compile-time checks for every type the UI reads, the explorer's URL filters (`Sends`: documented parameters, URL form, every enum value) and the fixtures; the Python fakes of all three services answer with contract payloads and `ExchangeChecker` holds each exchange to the document that owns its path |
+| Mutation proofs | Go: an undocumented response field (`total` on the project list: two integration tests name `/total`), an undocumented route (`GET /api/v1/capabilities`: "30 routes served, 29 documented"), enum filters that accept any value (the checker names each off-contract parameter the service accepted: `status=ok`, `outcome=GREAT`, `source=prod`…), a strictified `if` (inverts the condition), an upper-case UUID written by the service ("not a canonical (lower-case) UUID"), case-sensitive project access, and the checker reporting only one side of an exchange — each fails a test. Web: an undocumented `source` value, a dropped `source`, an undocumented `page_size`, `tools` read from version list items, `me.user` read as required and a widened `next_cursor` each fail `tsc`. Python: the SDK stub's old manifest answer, the worker's off-contract `verification_source`, an echoed request blamed on the response, and five document conventions (open body, reused operation id, missing `Idempotency-Key`, unused component, missing `502`) each fail their tests |
+
+Found and fixed in the services: the project list showed the gate policy to
+members without `settings.read`; rotating an API key dropped its expiry and
+could revive an expired key; a malformed path id reached the database; a
+project name could be set empty or unbounded; a repeated tool registration
+answered `201`; the audit list's last page had an empty-string cursor; revoking
+a key required a body; the manifest envelope ignored unknown fields; `/me`
+listed permissions as `null`; parameter errors named the field under another
+key; the proxy forwarded `/api/v1/artifacts`, which no service serves; a `NaN`
+or `Infinity` span attribute failed the whole OTLP export; negative token
+counts and costs were stored; the `status`, `outcome` and `source` filters were
+not validated; an upper-case project id was refused to a scoped key; text
+limits counted bytes; expected/actual state accepted scalars; OTLP errors
+carried the HTTP status as their code, were JSON even to a protobuf client, and
+an unsupported content type or coding answered `400` instead of `415`; the
+trace service's outcome and flag bodies were documented as open although the
+service rejects unknown fields.
+
+Found and fixed in the clients and checks: the agents page showed "0 tools"
+for every version; a shared explorer link with a bare date or an unknown
+`source` ended in `400`; the simulation service's fakes of the control plane
+answered a manifest digest the control plane cannot produce and a `503` it
+does not answer; the compatibility check skipped `head`, `options` and `trace`
+operations.
+
+Gates on this state: `make lint` clean (golangci-lint 0 issues, mypy strict 64
+files, ESLint, `tsc`); `make test` — Go 131 tests + 81 subtests with real
+PostgreSQL + RabbitMQ (0 failed, 0 skipped), Python 425 (core 144, simulation
+service 138, SDK 71, demo 31, repository checks 41), web 110 (13 files);
+`make contracts-check` (events, 3 API documents, generated types); `make dev`
+healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical); `make doctor` 0 failed;
+`make e2e` 12/12 (Phase 1: 7, Phase 2: 5).
 
 ## Definition of Done tracking
 

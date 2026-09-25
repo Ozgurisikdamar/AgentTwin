@@ -1,18 +1,18 @@
-"""The simulation contract as a document (ADR-0021): a valid OpenAPI 3.1
-document whose operations are exactly the service's routes and which follows
-the API conventions. Whether the service answers as documented is checked by
-the integration tests, which run every exchange through the contract."""
+"""The simulation contract as a document (ADR-0021): its operations are
+exactly the service's routes, and each surface uses its own credentials. The
+rules every API document follows (valid OpenAPI 3.1, error responses,
+idempotency, closed bodies, no unused components) are checked for all of them
+in ``scripts/tests/test_api_documents.py``. Whether the service answers as
+documented is checked by the integration tests, which run every exchange
+through the contract."""
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
 from typing import Any, cast
 
 import pytest
 from fastapi.routing import APIRoute
-from openapi_spec_validator import validate
-from openapi_spec_validator.readers import read_from_filename
 
 from agenttwin_core.evaluators import default_registry
 from agenttwin_core.logx import get_logger
@@ -71,23 +71,6 @@ def operations(public: bool | None = None) -> Iterator[tuple[str, str, dict[str,
                 yield method.upper(), path, op
 
 
-def refs(node: Any) -> Iterator[str]:
-    if isinstance(node, dict):
-        if isinstance(node.get("$ref"), str):
-            yield node["$ref"]
-        for value in node.values():
-            yield from refs(value)
-    elif isinstance(node, list):
-        for value in node:
-            yield from refs(value)
-
-
-def test_the_document_is_valid_openapi_31() -> None:
-    spec, base = read_from_filename(str(PATH))
-    validate(spec, base_uri=base)
-    assert DOC["openapi"] == "3.1.0"
-
-
 def test_operations_are_exactly_the_service_routes() -> None:
     documented = {(m, p) for m, p, _ in operations()}
     served = service_routes()
@@ -96,55 +79,13 @@ def test_operations_are_exactly_the_service_routes() -> None:
     assert len(served) == 16
 
 
-def test_every_operation_follows_the_conventions() -> None:
-    ids = []
+def test_each_surface_uses_its_own_credentials() -> None:
     for method, path, op in operations():
         where = f"{method} {path}"
-        ids.append(op["operationId"])
-        assert op.get("summary") and op.get("tags"), where
-        responses = op["responses"]
-        params = [CONTRACT.follow(p) for p in op.get("parameters", [])]
-        declared = {p["name"] for p in params if p["in"] == "path"}
-        assert declared == set(re.findall(r"\{(\w+)\}", path)), where
-        if not path.startswith("/api/"):
-            assert op["security"] == [{"caseToken": []}], where
-            continue
-        assert "security" not in op, f"{where}: the public API uses the edge's credentials"
-        assert {"401", "429", "500", "502", "503"} <= set(responses), where
-        if op.get("requestBody") or any(p["in"] in ("path", "query") for p in params):
-            assert "400" in responses, where
-        if declared:
-            assert "404" in responses, where
-        if method == "POST":
-            refs_ = [p["$ref"] for p in op["parameters"] if "$ref" in p]
-            assert "#/components/parameters/IdempotencyKey" in refs_, where
-            assert {"409", "422"} <= set(responses), where
-        body = op.get("requestBody")
-        if body is not None:
-            schema = CONTRACT.follow(body["content"]["application/json"]["schema"])
-            # The service rejects unknown fields; the contract says so.
-            assert schema.get("additionalProperties") is False, where
-        for status, response in responses.items():
-            if status.startswith("2"):
-                assert "application/json" in CONTRACT.follow(response)["content"], where
-    assert len(ids) == len(set(ids))
-
-
-def test_every_component_is_used() -> None:
-    used = set(refs({k: v for k, v in DOC.items() if k != "components"}))
-    # Components referenced only by other components count once reached.
-    frontier = list(used)
-    while frontier:
-        target = CONTRACT.pointer(frontier.pop())
-        for ref in refs(target):
-            if ref not in used:
-                used.add(ref)
-                frontier.append(ref)
-    for kind, items in DOC["components"].items():
-        if kind == "securitySchemes":
-            continue
-        for name in items:
-            assert f"#/components/{kind}/{name}" in used, f"unused component {kind}/{name}"
+        if path.startswith("/api/"):
+            assert "security" not in op, f"{where}: the public API uses the edge's credentials"
+        else:
+            assert op["security"] == [{"caseToken": []}], f"{where}: the twin endpoint takes a case token"
 
 
 # ---------------------------------------------------------------- the documented shape

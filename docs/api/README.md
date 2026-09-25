@@ -7,6 +7,8 @@ owns the resource; the contracts are OpenAPI 3.1 documents in
 
 | Document | What it covers |
 |---|---|
+| [`control-plane.openapi.yaml`](../../packages/contracts/openapi/control-plane.openapi.yaml) | sign-in, `/me`, members, projects and environments, API keys, agents and their versions, tools, the audit log |
+| [`trace-service.openapi.yaml`](../../packages/contracts/openapi/trace-service.openapi.yaml) | trace ingestion over OTLP/HTTP; the trace explorer, facets, trace detail, stats, outcomes, flags and deletion |
 | [`simulation-service.openapi.yaml`](../../packages/contracts/openapi/simulation-service.openapi.yaml) | tool twins, scenarios, simulation runs and their cases; the twin endpoint agents call; the agent adapter contract |
 
 Each document is checked against its service on every test run (ADR-0021), so
@@ -53,9 +55,31 @@ A user who belongs to several organizations selects one with
   same key with a different request answers `422 IDEMPOTENCY_KEY_REUSED`; while
   the first request runs, `409 IDEMPOTENCY_IN_PROGRESS`. Keep the key when the
   outcome is unknown (network error, `5xx`) and retry with it (ADR-0019).
+* **Validation.** A malformed id in the path answers
+  `400 INVALID_PARAMETER`, a malformed filter `400 INVALID_FILTER`; both name
+  the parameter in `details.field`. Enum values are exact (`FAILURE`, not
+  `failure`): anything else is a `400`, never a silently empty result. Text
+  limits count characters, not bytes.
+* **Ids** are UUIDs. Send them in either case; the API answers in lower case
+  (RFC 9562).
 * **Pagination.** Lists answer `{"items": [...], "next_cursor": "..." | null}`;
-  pass `cursor=<next_cursor>` for the next page, `limit` (1–200, default 50)
-  for its size.
+  `next_cursor` is `null` on the last page. Pass `cursor=<next_cursor>` for the
+  next page, `limit` (1–200, default 50) for its size.
 * **Rate limits** answer `429 RATE_LIMITED` with `Retry-After`.
 * **Asynchronous work** answers `202` with the created resource; poll it (for
   example `GET /api/v1/simulations/{run_id}` until its `status` is final).
+
+## Sending traces
+
+Agents send their traces over OTLP/HTTP (`POST /v1/traces`, protobuf or JSON,
+optionally gzip) with the project's API key in `X-AgentTwin-Api-Key` (or
+`Authorization: Bearer`). Locally the OpenTelemetry collector receives them at
+`http://localhost:4318` and forwards each project's spans to the trace service;
+the Python SDK does this for you (`AGENTTWIN_OTLP_ENDPOINT`, see
+[`packages/sdk-python`](../../packages/sdk-python/README.md)).
+
+The receiver answers like any OTLP/HTTP server: `200` with an
+`ExportTraceServiceResponse` (spans it could not keep are counted in
+`partialSuccess.rejectedSpans`); errors as a `google.rpc.Status`, encoded like
+the request; `415` for a content type or coding it does not take; `503` with
+`Retry-After` when it is at capacity or cannot verify the key yet.

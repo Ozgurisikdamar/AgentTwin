@@ -40,7 +40,7 @@ from agenttwin_evaluation.clients import PairRefused, SimulationClient, TraceCli
 from agenttwin_evaluation.common import PRODUCER
 from agenttwin_evaluation.comparison import DONE, CaseComparison, Side, compare_case, summarize
 from agenttwin_evaluation.config import EvaluationConfig
-from agenttwin_evaluation.judges import JudgeProvider
+from agenttwin_evaluation.judges import JudgeProvider, judge_identity
 from agenttwin_evaluation.semantic import JudgeBudget, Judged, SemanticJudging
 from agenttwin_evaluation.store import SCHEMA, JudgmentCache, Row, Store
 
@@ -280,13 +280,17 @@ class EvalWorker:
         baseline_run, candidate_run = str(run["baseline_run_id"]), str(run["candidate_run_id"])
         usage_b = await self.traces.usage_of_run(org, project, baseline_run)
         usage_c = await self.traces.usage_of_run(org, project, candidate_run)
+        latest = await self.store.latest_calibrations(org, project, judge_identity(self.judge))
         judging = SemanticJudging(
             judge=self.judge,
             budget=JudgeBudget(max_cost_usd=self.cfg.judge_budget_usd, max_calls=self.cfg.judge_max_calls),
             cache=JudgmentCache(self.store),
+            calibrated=frozenset(name for name, row in latest.items() if row["calibrated"]),
             timeout_s=self.cfg.judge_call_timeout_s,
         )
         limit = asyncio.Semaphore(self.cfg.fetch_concurrency)
+
+        from agenttwin_evaluation.reviews import needs_review
 
         async def one(pc: Mapping[str, Any]) -> tuple[CaseComparison, dict[str, Any]]:
             async with limit:
@@ -307,6 +311,11 @@ class EvalWorker:
                 "candidate_case_id": c.case_id,
                 "sides": {"baseline": bsnap, "candidate": csnap},
                 "comparison": comparison.to_json(),
+                "needs_review": [
+                    f"{side}:{eid}"
+                    for side, snap in (("BASELINE", bsnap), ("CANDIDATE", csnap))
+                    for eid in needs_review(snap["results"], snap["verdicts"])
+                ],
             }
 
         cases = sorted((run["pinning"] or {}).get("cases") or (), key=lambda c: int(c["position"]))
@@ -407,7 +416,30 @@ class EvalWorker:
                     out.append((str(run["id"]), "QUEUED"))
         return out
 
+    async def calibrate_next(self) -> str | None:
+        """Claims one queued judge calibration and runs it."""
+        from agenttwin_evaluation.calibrations import run_calibration
+
+        row = await self.store.claim_calibration(self.owner, max(self.cfg.lease_seconds, 600.0))
+        if row is None:
+            return None
+        done = await run_calibration(self.store, self.judge, row, self.owner)
+        if done is not None:
+            self.log.info("judge calibrated", calibration_id=str(row["id"]), status=done["status"])
+        return str(row["id"])
+
     # ------------------------------------------------------------ loops
+
+    async def calibration_loop(self, stop: asyncio.Event) -> None:
+        while not stop.is_set():
+            try:
+                busy = await self.calibrate_next()
+            except Exception as err:  # noqa: BLE001 - keep calibrating
+                self.log.error("judge calibration failed", error=repr(err))
+                busy = None
+            if busy is None:
+                with suppress(TimeoutError):
+                    await asyncio.wait_for(stop.wait(), self.cfg.poll_interval_s)
 
     async def on_event(self, env: Envelope) -> None:
         """``simulation.run_completed.v1`` makes the waiting run due at once;

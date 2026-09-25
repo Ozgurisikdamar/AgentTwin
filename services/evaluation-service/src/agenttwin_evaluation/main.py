@@ -19,10 +19,12 @@ from fastapi import FastAPI
 from agenttwin_core.service import Runtime, Spec
 from agenttwin_core.service import main as service_main
 from agenttwin_core.web import build_app
+from agenttwin_evaluation.calibrations import JudgesAPI
 from agenttwin_evaluation.clients import SimulationClient, TraceClient
 from agenttwin_evaluation.config import EvaluationConfig, load_config
 from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import build_judge
+from agenttwin_evaluation.reviews import ReviewsAPI
 from agenttwin_evaluation.runs import EvalRunsAPI
 from agenttwin_evaluation.store import SCHEMA, Store
 from agenttwin_evaluation.worker import QUEUE, EvalWorker
@@ -51,6 +53,8 @@ async def build_serve(rt: Runtime, cfg: Any) -> FastAPI:
     )
     DatasetsAPI(store=store, simulation=simulation, log=rt.log).routes(app)
     EvalRunsAPI(store=store, log=rt.log).routes(app)
+    ReviewsAPI(store=store, log=rt.log).routes(app)
+    JudgesAPI(store=store, judge=build_judge(cfg.judge), log=rt.log).routes(app)
     rt.start_relay(SCHEMA)
 
     async def close_clients() -> None:
@@ -77,6 +81,7 @@ async def build_worker(rt: Runtime, cfg: Any) -> FastAPI | None:
         rt.spawn(f"evaluation-claim-{i}", lambda: worker.claim_loop(rt.stop))
     rt.spawn("evaluation-wait", lambda: worker.wait_loop(rt.stop))
     rt.spawn("evaluation-janitor", lambda: worker.janitor_loop(rt.stop))
+    rt.spawn("evaluation-calibrations", lambda: worker.calibration_loop(rt.stop))
     rt.spawn(
         "evaluation-events", lambda: rt.broker.consume(QUEUE, worker.on_event, concurrency=4, stop=rt.stop)
     )

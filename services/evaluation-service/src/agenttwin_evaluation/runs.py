@@ -256,6 +256,8 @@ class EvalRunsAPI:
 
         @app.get("/api/v1/eval-runs/{eval_run_id}/cases/{scenario}")
         async def get_eval_case(eval_run_id: str, scenario: str, request: Request) -> dict[str, Any]:
+            from agenttwin_evaluation.reviews import review_json
+
             p = require(request, Permission.READ)
             await self._run_or_404(p, eval_run_id)
             if not re.match(NAME, scenario):
@@ -277,6 +279,8 @@ class EvalRunsAPI:
                 "verdicts": {
                     side: (sides.get(side) or {}).get("verdicts") or [] for side in ("baseline", "candidate")
                 },
+                "needs_review": list(row["needs_review"] or []),
+                "reviews": [review_json(v) for v in await self.store.reviews_of(eval_run_id, scenario)],
                 "updated_at": ts(row["updated_at"]),
             }
 

@@ -114,6 +114,9 @@ CREATE TABLE eval_case_result (
     sides             jsonb NOT NULL,
     comparison        jsonb NOT NULL,
     reviewed          boolean NOT NULL DEFAULT false,
+    -- Expectations a person should look at ("BASELINE:<id>"): the judge
+    -- could not grade them, or graded a critical one uncalibrated.
+    needs_review      text[] NOT NULL DEFAULT '{}',
     updated_at        timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (eval_run_id, position),
     UNIQUE (eval_run_id, scenario_name)
@@ -174,6 +177,7 @@ CREATE TABLE judge_calibration (
     updated_at       timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX judge_calibration_project_idx ON judge_calibration (project_id, criterion, created_at DESC);
+CREATE INDEX eval_case_result_review_idx ON eval_case_result (eval_run_id) WHERE cardinality(needs_review) > 0;
 CREATE INDEX judge_calibration_queue_idx ON judge_calibration (created_at) WHERE status = 'QUEUED';
 
 CREATE TABLE outbox (

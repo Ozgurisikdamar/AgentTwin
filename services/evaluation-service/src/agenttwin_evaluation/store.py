@@ -420,8 +420,8 @@ class Store:
         for c in cases:
             await conn.execute(
                 """INSERT INTO eval_case_result (eval_run_id, position, scenario_name, severity, tags,
-                       classification, baseline_case_id, candidate_case_id, sides, comparison)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       classification, baseline_case_id, candidate_case_id, sides, comparison, needs_review)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     run_id,
                     c["position"],
@@ -433,6 +433,7 @@ class Store:
                     c.get("candidate_case_id"),
                     jsonb(c["sides"]),
                     jsonb(c["comparison"]),
+                    list(c.get("needs_review") or []),
                 ),
             )
 
@@ -460,6 +461,204 @@ class Store:
             """INSERT INTO judgment (cache_key, verdict, judge) VALUES (%s, %s, %s)
                ON CONFLICT (cache_key) DO NOTHING RETURNING cache_key""",
             (key, jsonb(dict(verdict)), jsonb(dict(judge))),
+        )
+
+    # ------------------------------------------------------------ reviews
+
+    async def lock_eval_run(self, conn: Conn, run_id: str) -> Row | None:
+        return await self._one(conn, "SELECT * FROM eval_run WHERE id = %s FOR UPDATE", (run_id,))
+
+    async def case_rows_in(self, conn: Conn, run_id: str) -> list[Row]:
+        return await self._all(
+            conn, "SELECT * FROM eval_case_result WHERE eval_run_id = %s ORDER BY position", (run_id,)
+        )
+
+    async def insert_review(self, conn: Conn, review: Mapping[str, Any]) -> Row:
+        row = await self._one(
+            conn,
+            """INSERT INTO human_review (id, eval_run_id, organization_id, project_id, scenario_name, side,
+                   expectation_id, original_status, original_label, status, note, reviewer)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *""",
+            tuple(
+                review[k]
+                for k in (
+                    "id",
+                    "eval_run_id",
+                    "organization_id",
+                    "project_id",
+                    "scenario_name",
+                    "side",
+                    "expectation_id",
+                    "original_status",
+                    "original_label",
+                    "status",
+                    "note",
+                    "reviewer",
+                )
+            ),
+        )
+        assert row is not None  # noqa: S101 - INSERT … RETURNING
+        return row
+
+    async def reviews_in(self, conn: Conn, run_id: str) -> list[Row]:
+        return await self._all(
+            conn, "SELECT * FROM human_review WHERE eval_run_id = %s ORDER BY created_at, id", (run_id,)
+        )
+
+    async def reviews_of(self, run_id: str, scenario: str) -> list[Row]:
+        return await self.all(
+            """SELECT * FROM human_review WHERE eval_run_id = %s AND scenario_name = %s
+               ORDER BY created_at, id""",
+            (run_id, scenario),
+        )
+
+    async def update_case(self, conn: Conn, run_id: str, position: int, values: Mapping[str, Any]) -> None:
+        await conn.execute(
+            """UPDATE eval_case_result SET classification = %s, comparison = %s, sides = %s,
+                   reviewed = reviewed OR %s, updated_at = now()
+               WHERE eval_run_id = %s AND position = %s""",
+            (
+                values["classification"],
+                jsonb(values["comparison"]),
+                jsonb(values["sides"]),
+                bool(values.get("reviewed")),
+                run_id,
+                position,
+            ),
+        )
+
+    async def update_run_summary(self, conn: Conn, run_id: str, summary: Mapping[str, Any]) -> Row | None:
+        counts = summary["counts"]
+        return await self._one(
+            conn,
+            """UPDATE eval_run SET summary = %s, new_critical_failures = %s, regressed = %s, improved = %s,
+                   unchanged = %s, incomplete = %s, updated_at = now()
+               WHERE id = %s RETURNING *""",
+            (
+                jsonb(dict(summary)),
+                counts["NEW_CRITICAL_FAILURE"],
+                counts["REGRESSED"],
+                counts["IMPROVED"],
+                counts["UNCHANGED"],
+                counts["INCOMPLETE"],
+                run_id,
+            ),
+        )
+
+    async def review_queue(self, scope: Scope, *, after: Cursor | None = None, limit: int = 50) -> list[Row]:
+        """Cases of completed runs with an expectation a person should look at
+        and has not reviewed yet, newest run first."""
+        clause, params = scope.clause("r")
+        where = [clause, "r.status = 'COMPLETED'", "cardinality(c.needs_review) > 0"]
+        if after is not None:
+            where.append("(r.finished_at, r.id, c.position) < (%s::timestamptz, %s::uuid, %s)")
+            key, _, position = after.key.rpartition("|")
+            params += [key, after.id, int(position)]
+        params.append(limit)
+        return await self.all(
+            f"""SELECT c.eval_run_id, c.position, c.scenario_name, c.severity, c.classification,
+                       c.needs_review, c.sides, r.agent_name, r.baseline_version, r.candidate_version,
+                       r.project_id, r.finished_at,
+                       ARRAY(SELECT h.side || ':' || h.expectation_id FROM human_review h
+                             WHERE h.eval_run_id = c.eval_run_id
+                               AND h.scenario_name = c.scenario_name) AS done
+                FROM eval_case_result c JOIN eval_run r ON r.id = c.eval_run_id
+                WHERE {" AND ".join(where)}
+                  AND EXISTS (SELECT 1 FROM unnest(c.needs_review) k
+                              WHERE k NOT IN (SELECT h.side || ':' || h.expectation_id FROM human_review h
+                                              WHERE h.eval_run_id = c.eval_run_id
+                                                AND h.scenario_name = c.scenario_name))
+                ORDER BY r.finished_at DESC, r.id DESC, c.position DESC LIMIT %s""",  # noqa: S608 - fixed clauses
+            params,
+        )
+
+    # ------------------------------------------------------------ judge calibrations
+
+    async def insert_calibration(self, conn: Conn, row: Mapping[str, Any]) -> Row:
+        out = await self._one(
+            conn,
+            """INSERT INTO judge_calibration (id, organization_id, project_id, criterion, status, examples,
+                   example_count, examples_sha256, requested_by)
+               VALUES (%s, %s, %s, %s, 'QUEUED', %s, %s, %s, %s) RETURNING *""",
+            (
+                row["id"],
+                row["organization_id"],
+                row["project_id"],
+                row["criterion"],
+                jsonb(list(row["examples"])),
+                len(row["examples"]),
+                row["examples_sha256"],
+                row["requested_by"],
+            ),
+        )
+        assert out is not None  # noqa: S101 - INSERT … RETURNING
+        return out
+
+    async def get_calibration(self, calibration_id: str) -> Row | None:
+        return await self.one("SELECT * FROM judge_calibration WHERE id = %s", (calibration_id,))
+
+    async def list_calibrations(
+        self, scope: Scope, *, criterion: str | None = None, after: Cursor | None = None, limit: int = 50
+    ) -> list[Row]:
+        clause, params = scope.clause()
+        where = [clause]
+        if criterion is not None:
+            where.append("criterion = %s")
+            params.append(criterion)
+        if after is not None:
+            where.append("(created_at, id) < (%s::timestamptz, %s::uuid)")
+            params += [after.key, after.id]
+        params.append(limit)
+        return await self.all(
+            f"""SELECT * FROM judge_calibration WHERE {" AND ".join(where)}
+                ORDER BY created_at DESC, id DESC LIMIT %s""",  # noqa: S608 - fixed clauses, bound values
+            params,
+        )
+
+    async def latest_calibrations(self, org: str, project: str, judge: Mapping[str, str]) -> dict[str, Row]:
+        """The latest completed calibration of each criterion for this judge
+        (same provider, model and prompt)."""
+        rows = await self.all(
+            """SELECT DISTINCT ON (criterion) * FROM judge_calibration
+               WHERE organization_id = %s AND project_id = %s AND status = 'COMPLETED'
+                 AND judge->>'provider' = %s AND judge->>'model' = %s AND judge->>'prompt_sha256' = %s
+               ORDER BY criterion, finished_at DESC, id DESC""",
+            (org, project, judge["provider"], judge["model"], judge["prompt_sha256"]),
+        )
+        return {str(r["criterion"]): r for r in rows}
+
+    async def claim_calibration(self, owner: str, lease_s: float) -> Row | None:
+        return await self.one(
+            """UPDATE judge_calibration SET status = 'RUNNING', lease_owner = %s,
+                   lease_expires_at = now() + make_interval(secs => %s), attempts = attempts + 1,
+                   started_at = COALESCE(started_at, now()), updated_at = now()
+               WHERE id = (SELECT id FROM judge_calibration
+                           WHERE status = 'QUEUED'
+                              OR (status = 'RUNNING' AND lease_expires_at < now() AND attempts < 3)
+                           ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+               RETURNING *""",
+            (owner, lease_s),
+        )
+
+    async def finish_calibration(
+        self, calibration_id: str, owner: str, values: Mapping[str, Any]
+    ) -> Row | None:
+        return await self.one(
+            """UPDATE judge_calibration SET status = %s, judge = %s, metrics = %s, calibrated = %s,
+                   reason = %s, disagreements = %s, error = %s, finished_at = now(), updated_at = now(),
+                   lease_owner = NULL, lease_expires_at = NULL
+               WHERE id = %s AND lease_owner = %s AND status = 'RUNNING' RETURNING *""",
+            (
+                values["status"],
+                jsonb(values.get("judge")),
+                jsonb(values.get("metrics")),
+                values.get("calibrated"),
+                values.get("reason"),
+                jsonb(values.get("disagreements")),
+                values.get("error"),
+                calibration_id,
+                owner,
+            ),
         )
 
 

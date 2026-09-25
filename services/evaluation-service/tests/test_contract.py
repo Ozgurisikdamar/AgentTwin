@@ -14,8 +14,11 @@ from fastapi.routing import APIRoute
 from agenttwin_core.logx import get_logger
 from agenttwin_core.openapi_contract import Contract, contract_path
 from agenttwin_core.web import Health, build_app
+from agenttwin_evaluation.calibrations import JudgesAPI
 from agenttwin_evaluation.clients import SimulationClient
 from agenttwin_evaluation.datasets import DatasetsAPI
+from agenttwin_evaluation.judges import FakeJudge
+from agenttwin_evaluation.reviews import ReviewsAPI
 from agenttwin_evaluation.runs import EvalRunsAPI
 from agenttwin_evaluation.store import Store
 
@@ -38,6 +41,8 @@ def service_routes() -> set[tuple[str, str]]:
         store=cast(Store, None), simulation=cast(SimulationClient, None), log=get_logger("test")
     ).routes(app)
     EvalRunsAPI(store=cast(Store, None), log=get_logger("test")).routes(app)
+    ReviewsAPI(store=cast(Store, None), log=get_logger("test")).routes(app)
+    JudgesAPI(store=cast(Store, None), judge=FakeJudge(), log=get_logger("test")).routes(app)
     return {
         (method, route.path)
         for route in app.routes
@@ -58,7 +63,7 @@ def test_operations_are_exactly_the_service_routes() -> None:
     served = service_routes()
     assert served - documented == set(), "routes the contract does not document"
     assert documented - served == set(), "documented operations the service does not serve"
-    assert len(served) == 11
+    assert len(served) == 17
 
 
 def test_the_public_api_uses_the_edge_credentials() -> None:

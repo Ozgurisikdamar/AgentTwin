@@ -36,6 +36,10 @@ tags:
     description: Versioned collections of the project's scenarios (spec §17).
   - name: Evaluation runs
     description: A candidate version against its baseline, case by case (spec §27).
+  - name: Reviews
+    description: People's verdicts on what the evaluators decided (spec §16.5).
+  - name: Judges
+    description: The LLM judge and its calibration against human labels (spec §16.4).
 security:
   - bearerAuth: []
   - apiKey: []
@@ -567,6 +571,268 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /api/v1/eval-runs/{eval_run_id}/cases/{scenario}/reviews:
+    post:
+      operationId: reviewExpectation
+      tags: [Reviews]
+      summary: Review one expectation of a compared case
+      description: |
+        A person's verdict (`PASS`/`FAIL`, with a mandatory note) replaces the
+        evaluator's result for one expectation of one side; the case and the
+        run's summary are classified again. Only completed runs (`409
+        EVAL_RUN_NOT_COMPLETED`). Reviews are kept whole (the latest one for an
+        expectation counts) and announced to the audit log with the note as
+        the reason.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/EvalRunId'
+        - $ref: '#/components/parameters/ScenarioName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+      responses:
+        '201':
+          description: The review, and the case's classification after it.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReviewConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/reviews:
+    get:
+      operationId: listReviewQueue
+      tags: [Reviews]
+      summary: The review queue
+      description: |
+        Cases of completed runs with an expectation a person should look at —
+        the judge could not grade it (`ERROR`, `SKIPPED`), or graded a
+        critical one without being calibrated — that no one reviewed yet;
+        newest run first.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of the queue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewQueuePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/judges:
+    get:
+      operationId: describeJudge
+      tags: [Judges]
+      summary: The judge and its calibration
+      description: The configured judge and, per criterion, its latest completed calibration in the project.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - name: project_id
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The judge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JudgeDescription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/judges/calibrations:
+    post:
+      operationId: startJudgeCalibration
+      tags: [Judges]
+      summary: Calibrate the judge on labeled examples
+      description: |
+        Queues a calibration (`202`): the judge grades every example and is
+        compared with the labels people gave. It is calibrated for the
+        criterion with at least 20 examples, 80% agreement and Cohen's kappa
+        0.6 (a judge error counts as a disagreement). Announced to the audit
+        log.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalibrationRequest'
+      responses:
+        '202':
+          description: The calibration, queued.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalibrationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listJudgeCalibrations
+      tags: [Judges]
+      summary: List judge calibrations
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - name: criterion
+          in: query
+          schema:
+            $ref: '#/components/schemas/Criterion'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of calibrations, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalibrationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/judges/calibrations/{calibration_id}:
+    get:
+      operationId: getJudgeCalibration
+      tags: [Judges]
+      summary: Get a judge calibration
+      description: The calibration with its metrics and every disagreement.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - name: calibration_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The calibration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalibrationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -720,6 +986,12 @@ components:
             $ref: '#/components/schemas/Error'
     Internal:
       description: An unexpected error (`INTERNAL`); quote the `request_id`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ReviewConflict:
+      description: The run is not completed (`EVAL_RUN_NOT_COMPLETED`), or `IDEMPOTENCY_IN_PROGRESS`.
       content:
         application/json:
           schema:
@@ -1796,7 +2068,8 @@ components:
           description: '`null` when the judge was not called or failed (the result says why).'
     EvalCaseDetail:
       type: object
-      required: [eval_run_id, position, reviewed, comparison, results, verdicts, updated_at]
+      required: [eval_run_id, position, reviewed, comparison, results, verdicts, needs_review, reviews,
+                 updated_at]
       properties:
         eval_run_id:
           $ref: '#/components/schemas/Uuid'
@@ -1820,6 +2093,16 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ExpectationResult'
+        needs_review:
+          type: array
+          description: Expectations a person should look at (`BASELINE:<id>`, `CANDIDATE:<id>`).
+          items:
+            type: string
+        reviews:
+          type: array
+          description: Every review of this case, oldest first.
+          items:
+            $ref: '#/components/schemas/HumanReview'
         verdicts:
           type: object
           required: [baseline, candidate]
@@ -1834,3 +2117,332 @@ components:
                 $ref: '#/components/schemas/JudgedExpectation'
         updated_at:
           $ref: '#/components/schemas/Timestamp'
+    ReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [side, expectation_id, status, note]
+      properties:
+        side:
+          type: string
+          enum: [BASELINE, CANDIDATE]
+        expectation_id:
+          type: string
+          minLength: 1
+          maxLength: 100
+        status:
+          type: string
+          enum: [PASS, FAIL]
+        note:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Why — kept with the review and in the audit log.
+    HumanReview:
+      type: object
+      required: [id, eval_run_id, scenario_name, side, expectation_id, original_status, original_label, status,
+                 note, reviewer, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        eval_run_id:
+          $ref: '#/components/schemas/Uuid'
+        scenario_name:
+          type: string
+        side:
+          type: string
+          enum: [BASELINE, CANDIDATE]
+        expectation_id:
+          type: string
+        original_status:
+          type: string
+          description: The result's status when it was reviewed.
+        original_label:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [PASS, FAIL]
+        note:
+          type: string
+        reviewer:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    ReviewResponse:
+      type: object
+      required: [review, classification, previous_classification, run]
+      properties:
+        review:
+          $ref: '#/components/schemas/HumanReview'
+        classification:
+          $ref: '#/components/schemas/Classification'
+        previous_classification:
+          $ref: '#/components/schemas/Classification'
+        run:
+          $ref: '#/components/schemas/EvalRun'
+    ReviewQueuePage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [eval_run_id, position, scenario_name, severity, classification, project_id, agent_name,
+                       baseline_version, candidate_version, finished_at, pending]
+            properties:
+              eval_run_id:
+                $ref: '#/components/schemas/Uuid'
+              position:
+                type: integer
+              scenario_name:
+                type: string
+              severity:
+                type: string
+              classification:
+                $ref: '#/components/schemas/Classification'
+              project_id:
+                $ref: '#/components/schemas/Uuid'
+              agent_name:
+                type: string
+              baseline_version:
+                type: string
+              candidate_version:
+                type: string
+              finished_at:
+                $ref: '#/components/schemas/Timestamp'
+              pending:
+                type: array
+                items:
+                  type: object
+                  required: [side, expectation_id, status, reason, critical]
+                  properties:
+                    side:
+                      type: string
+                      enum: [BASELINE, CANDIDATE]
+                    expectation_id:
+                      type: string
+                    status:
+                      type: [string, 'null']
+                    reason:
+                      type: [string, 'null']
+                    critical:
+                      type: boolean
+        next_cursor:
+          type: [string, 'null']
+    Criterion:
+      type: string
+      enum: [task_completion, intent_fidelity, relevance, rubric]
+      description: What the judge grades; `rubric` is a scenario's own rubric.
+    CalibrationRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, criterion, examples]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        criterion:
+          $ref: '#/components/schemas/Criterion'
+        examples:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, rubric, customer_message, answer, human_label]
+            properties:
+              id:
+                type: string
+                minLength: 1
+                maxLength: 100
+              rubric:
+                type: string
+                minLength: 1
+                maxLength: 4000
+              customer_message:
+                type: string
+                maxLength: 8000
+              answer:
+                type: string
+                maxLength: 8000
+              tool_calls:
+                type: array
+                maxItems: 30
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [ref, text]
+                  properties:
+                    ref:
+                      type: string
+                      minLength: 1
+                      maxLength: 100
+                    text:
+                      type: string
+                      minLength: 1
+                      maxLength: 2000
+              human_label:
+                type: string
+                enum: [pass, fail]
+    Calibration:
+      type: object
+      required: [id, organization_id, project_id, criterion, status, example_count, examples_sha256, judge,
+                 metrics, calibrated, reason, error, requested_by, created_at, started_at, finished_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        criterion:
+          $ref: '#/components/schemas/Criterion'
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, COMPLETED, FAILED]
+        example_count:
+          type: integer
+          minimum: 1
+        examples_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        judge:
+          anyOf:
+            - type: object
+              required: [provider, model, kind, prompt_version, prompt_sha256]
+              properties:
+                provider:
+                  type: string
+                model:
+                  type: string
+                kind:
+                  type: string
+                prompt_version:
+                  type: string
+                prompt_sha256:
+                  type: string
+            - type: 'null'
+        metrics:
+          anyOf:
+            - type: object
+              required: [examples, agreed, accuracy, kappa, confusion, errors]
+              properties:
+                examples:
+                  type: integer
+                agreed:
+                  type: integer
+                accuracy:
+                  type: number
+                kappa:
+                  type: [number, 'null']
+                  description: Cohen's kappa; `null` when everyone gave every example the same label.
+                confusion:
+                  type: object
+                  required: [true_pass, true_fail, false_pass, false_fail]
+                  properties:
+                    true_pass:
+                      type: integer
+                    true_fail:
+                      type: integer
+                    false_pass:
+                      type: integer
+                    false_fail:
+                      type: integer
+                errors:
+                  type: integer
+                  description: Examples the judge could not grade (counted as disagreements).
+            - type: 'null'
+        calibrated:
+          type: [boolean, 'null']
+        reason:
+          type: [string, 'null']
+        error:
+          type: [string, 'null']
+        requested_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        started_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        finished_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        disagreements:
+          type: array
+          items:
+            type: object
+            required: [id, human, judge]
+            properties:
+              id:
+                type: string
+              human:
+                type: string
+                enum: [pass, fail]
+              judge:
+                type: [string, 'null']
+                enum: [pass, fail, null]
+              score:
+                type: number
+              error:
+                type: string
+    CalibrationResponse:
+      type: object
+      required: [calibration]
+      properties:
+        calibration:
+          $ref: '#/components/schemas/Calibration'
+    CalibrationPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Calibration'
+        next_cursor:
+          type: [string, 'null']
+    JudgeDescription:
+      type: object
+      required: [judge, requirements, criteria]
+      properties:
+        judge:
+          type: object
+          required: [provider, model, kind, prompt_version, prompt_sha256]
+          properties:
+            provider:
+              type: string
+            model:
+              type: string
+            kind:
+              type: string
+            prompt_version:
+              type: string
+            prompt_sha256:
+              type: string
+        requirements:
+          type: object
+          required: [min_examples, min_agreement, min_kappa]
+          properties:
+            min_examples:
+              type: integer
+            min_agreement:
+              type: number
+            min_kappa:
+              type: number
+        criteria:
+          type: array
+          items:
+            type: object
+            required: [criterion, calibrated, calibration]
+            properties:
+              criterion:
+                $ref: '#/components/schemas/Criterion'
+              calibrated:
+                type: boolean
+              calibration:
+                anyOf:
+                  - $ref: '#/components/schemas/Calibration'
+                  - type: 'null'

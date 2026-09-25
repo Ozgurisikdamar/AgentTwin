@@ -34,10 +34,12 @@ from agenttwin_core.logx import get_logger
 from agenttwin_core.openapi_contract import Contract, ContractViolation, contract_path
 from agenttwin_core.testing import temp_database
 from agenttwin_core.web import Health, build_app
+from agenttwin_evaluation.calibrations import JudgesAPI
 from agenttwin_evaluation.clients import SimulationClient, TraceClient
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import FakeJudge, JudgeProvider
+from agenttwin_evaluation.reviews import ReviewsAPI
 from agenttwin_evaluation.runs import EvalRunsAPI
 from agenttwin_evaluation.store import SCHEMA, Store
 from agenttwin_evaluation.worker import EvalWorker
@@ -301,6 +303,8 @@ async def evaluation_stack(
         )
         DatasetsAPI(store=store, simulation=simulation, log=get_logger("api")).routes(app)
         EvalRunsAPI(store=store, log=get_logger("api")).routes(app)
+        ReviewsAPI(store=store, log=get_logger("api")).routes(app)
+        JudgesAPI(store=store, judge=worker.judge, log=get_logger("api")).routes(app)
         try:
             async with (
                 serve_app(app) as base,

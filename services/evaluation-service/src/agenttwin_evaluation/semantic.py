@@ -165,13 +165,29 @@ class SemanticJudging:
     judge: JudgeProvider
     budget: JudgeBudget = field(default_factory=JudgeBudget)
     cache: VerdictCache | None = None
-    # Whether the configured judge passed its latest calibration (§16.4); it
-    # is recorded with every verdict for the release gate to weigh.
-    calibrated: bool = False
+    # Whether the configured judge passed its latest calibration (§16.4) —
+    # for every criterion, or for the criteria named — recorded with every
+    # verdict for the release gate to weigh.
+    calibrated: bool | frozenset[str] = False
     timeout_s: float = 120.0
+    # The criteria this judging graded (for the run-level identity).
+    used: set[str] = field(default_factory=set)
 
-    def identity(self) -> dict[str, str]:
-        return judge_identity(self.judge) | {"calibrated": "true" if self.calibrated else "false"}
+    def is_calibrated(self, criterion: str) -> bool:
+        if isinstance(self.calibrated, bool):
+            return self.calibrated
+        return criterion in self.calibrated
+
+    def identity(self, criterion: str | None = None) -> dict[str, str]:
+        """The judge a verdict records; without a criterion, the run's: it
+        counts as calibrated only when every criterion it graded is."""
+        if criterion is not None:
+            ok = self.is_calibrated(criterion)
+        elif isinstance(self.calibrated, bool):
+            ok = self.calibrated
+        else:
+            ok = bool(self.used) and all(self.is_calibrated(c) for c in self.used)
+        return judge_identity(self.judge) | {"calibrated": "true" if ok else "false"}
 
     def _result(self, spec: Mapping[str, Any], index: int, **kw: Any) -> EvaluationResult:
         return EvaluationResult(
@@ -181,9 +197,9 @@ class SemanticJudging:
             **kw,
         )
 
-    def _config_evidence(self) -> Evidence:
-        j = self.identity()
-        state = "calibrated" if self.calibrated else "not calibrated"
+    def _config_evidence(self, criterion: str) -> Evidence:
+        j = self.identity(criterion)
+        state = "calibrated" if self.is_calibrated(criterion) else "not calibrated"
         return Evidence(
             kind="config",
             detail=f"Judged by {j['provider']} {j['model']} ({j['prompt_version']}, {state}).",
@@ -198,7 +214,8 @@ class SemanticJudging:
         answer: str | None,
         calls: Sequence[ToolCall],
     ) -> Judged:
-        identity = self.identity()
+        category = str(spec.get("category") or "")
+        identity = self.identity(category if category in CRITERIA else "rubric")
         if answer is None or not answer.strip():
             # Every criterion grades the reply; without one there is nothing
             # that could meet the rubric, and nothing worth paying a judge for.
@@ -232,7 +249,14 @@ class SemanticJudging:
         if self.cache is not None:
             hit = await self.cache.get(key)
             if hit is not None:
-                return Judged(self._graded(spec, index, hit), identity, hit, cached=True, cache_key=key)
+                self.used.add(request.criterion)
+                return Judged(
+                    self._graded(spec, index, hit, request.criterion),
+                    identity,
+                    hit,
+                    cached=True,
+                    cache_key=key,
+                )
         if not self.budget.allows():
             return Judged(
                 self._result(
@@ -256,7 +280,7 @@ class SemanticJudging:
                     status="ERROR",
                     reason=f"The judge could not evaluate this expectation ({err.kind}): {err}",
                     label="EVALUATION_ERROR",
-                    evidence=(self._config_evidence(),),
+                    evidence=(self._config_evidence(request.criterion),),
                 ),
                 identity,
                 cache_key=key,
@@ -270,7 +294,7 @@ class SemanticJudging:
                     status="ERROR",
                     reason="The judge could not evaluate this expectation (timeout).",
                     label="EVALUATION_ERROR",
-                    evidence=(self._config_evidence(),),
+                    evidence=(self._config_evidence(request.criterion),),
                 ),
                 identity,
                 cache_key=key,
@@ -278,12 +302,15 @@ class SemanticJudging:
         self.budget.record(verdict)
         if self.cache is not None:
             await self.cache.put(key, verdict, identity)
-        return Judged(self._graded(spec, index, verdict), identity, verdict, cache_key=key)
+        self.used.add(request.criterion)
+        return Judged(self._graded(spec, index, verdict, request.criterion), identity, verdict, cache_key=key)
 
-    def _graded(self, spec: Mapping[str, Any], index: int, verdict: JudgeVerdict) -> EvaluationResult:
+    def _graded(
+        self, spec: Mapping[str, Any], index: int, verdict: JudgeVerdict, criterion: str
+    ) -> EvaluationResult:
         threshold = float(spec.get("threshold", DEFAULT_THRESHOLD))
         passed = verdict.label == "pass" and verdict.score >= threshold
-        evidence = [self._config_evidence()]
+        evidence = [self._config_evidence(criterion)]
         for e in verdict.evidence:
             ref = e["ref"]
             kind = "tool_call" if ref.startswith("tool_call:") else "output"

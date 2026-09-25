@@ -200,7 +200,8 @@ function Why({ approval: a, policyId }: { approval: Approval; policyId: string |
               label: "Expires",
               value: (
                 <span title={a.expires_at}>
-                  {formatDateTime(a.expires_at)} ({due.text})
+                  {formatDateTime(a.expires_at)}
+                  {a.status === "PENDING" || a.status === "APPROVED" ? ` (${due.text})` : ""}
                 </span>
               ),
             },
@@ -257,7 +258,11 @@ function DecisionCard({ title, decision: d }: { title: string; decision: Decisio
               value: d.upstream_status === null ? null : `HTTP ${d.upstream_status}`,
             },
             { label: "Error", value: d.error_code },
-            { label: "Latency", value: d.latency_ms === null ? null : formatDuration(d.latency_ms) },
+            {
+              label: "Latency",
+              value:
+                d.latency_ms === null ? null : d.latency_ms < 1 ? "< 1 ms" : formatDuration(d.latency_ms),
+            },
             { label: "Idempotency key", value: d.idempotency_key ? <code>{d.idempotency_key}</code> : null },
             { label: "Decision id", value: <code>{d.id}</code> },
           ]}

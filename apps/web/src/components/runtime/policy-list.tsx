@@ -121,6 +121,7 @@ export function PolicyList() {
         <div className="w-56">
           <Label htmlFor="policy-tool">Tool</Label>
           <Input
+            key={toolParam}
             id="policy-tool"
             defaultValue={toolParam}
             placeholder="refund_payment"

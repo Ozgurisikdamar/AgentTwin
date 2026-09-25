@@ -23,7 +23,7 @@ const TRACE = /^[0-9a-f]{32}$/;
 function DecisionRow({ d, now, projectId }: { d: Decision; now: Date; projectId: string }) {
   return (
     <tr className="align-top" data-testid="decision-row" data-decision-id={d.id}>
-      <td className="px-3 py-2.5 text-slate-700" title={d.created_at}>
+      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700" title={d.created_at}>
         {formatRelative(d.created_at, now)}
       </td>
       <td className="px-3 py-2.5">
@@ -159,12 +159,27 @@ export function DecisionList() {
         <div className="w-48">
           <Label htmlFor="decision-tool">Tool</Label>
           <Input
+            key={tool}
             id="decision-tool"
             defaultValue={tool}
             placeholder="refund_payment"
             onBlur={(e) => update({ tool: e.target.value.trim() })}
             onKeyDown={(e) => {
               if (e.key === "Enter") update({ tool: e.currentTarget.value.trim() });
+            }}
+          />
+        </div>
+        <div className="w-80">
+          <Label htmlFor="decision-trace">Trace</Label>
+          <Input
+            key={traceId ?? ""}
+            id="decision-trace"
+            defaultValue={traceId ?? ""}
+            placeholder="32 hex characters"
+            className="font-mono text-xs"
+            onBlur={(e) => update({ trace_id: e.target.value.trim().toLowerCase() })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") update({ trace_id: e.currentTarget.value.trim().toLowerCase() });
             }}
           />
         </div>

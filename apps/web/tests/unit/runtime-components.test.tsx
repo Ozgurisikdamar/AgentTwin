@@ -282,6 +282,19 @@ describe("ApprovalDetail", () => {
     expect(screen.getByText("The approved run")).toBeInTheDocument();
     expect(screen.getByText("HTTP 200")).toBeInTheDocument();
     expect(screen.getByText(liveUsedApproval.decision_reason!)).toBeInTheDocument();
+    // A used request no longer counts down to its expiry.
+    expect(screen.queryByText(/\(in \d/)).not.toBeInTheDocument();
+  });
+
+  it("says a run faster than a millisecond took under one", async () => {
+    search = new URLSearchParams({ project_id: PROJECT });
+    const fast = {
+      ...liveUsedApproval,
+      used_decision: { ...liveUsedApproval.used_decision!, latency_ms: 0 },
+    };
+    stub(approvalAPI(fast));
+    renderAs(<ApprovalDetail approvalId={USED} />, ["read"]);
+    expect(await screen.findByText("< 1 ms")).toBeInTheDocument();
   });
 
   it("says when the request is not there", async () => {
@@ -329,8 +342,19 @@ describe("DecisionList", () => {
     expect(fetched).toContain(
       `/api/v1/policy-decisions?project_id=${PROJECT}&effect=require_approval&outcome=executed&tool=refund_payment&trace_id=${trace}&limit=50`,
     );
+    // The trace the page is filtered by is shown.
+    expect(screen.getByLabelText("Trace")).toHaveValue(trace);
     await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(replace).toHaveBeenCalledWith(`/approvals?project_id=${PROJECT}`, { scroll: false });
+  });
+
+  it("filters by a trace typed in", async () => {
+    const trace = liveTraceDecisions.items[0]!.trace_id!;
+    stub((url) => (url.startsWith("/api/v1/policy-decisions?") ? liveDecisions : catalog(url)));
+    renderAs(<DecisionList />, ["read"]);
+    await screen.findAllByTestId("decision-row");
+    await userEvent.type(screen.getByLabelText("Trace"), `${trace.toUpperCase()}{Enter}`);
+    expect(replace).toHaveBeenCalledWith(`/approvals?trace_id=${trace}`, { scroll: false });
   });
 
   it("ignores a malformed trace id instead of sending it", async () => {

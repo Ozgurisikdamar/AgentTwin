@@ -6,6 +6,7 @@ of the fake is held to the contract of the service that owns the path
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import threading
 from collections.abc import Iterator
@@ -47,6 +48,14 @@ class FakeAPI:
         self.impact_lag = 0
         self.impact_calls = 0
         self.impact_problems: list[dict[str, str]] = []
+        # Releases (id -> pair, change set, evaluations) and how their gates
+        # answer: undecided for the first ``gate_lag`` reads of a revision.
+        self.release_store: dict[str, dict[str, Any]] = {}
+        self.gate_outcomes = {"1.3.0": "BLOCK", "1.3.1": "PASS"}
+        self.gate_lag = 1
+        self.gate_incomplete = False
+        self.gate_unverified = False
+        self.keys: list[tuple[str, str, str | None]] = []
         self.checker = fake.ExchangeChecker()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -222,6 +231,55 @@ class FakeAPI:
             status, summary = self.evaluation
             run = self.eval_runs[path.rsplit("/", 1)[1]] | {"status": status, "counts": summary["counts"]}
             return 200, fake.eval_run_detail(run, summary if status == "COMPLETED" else None)
+        return self.respond_releases(method, path, body)
+
+    def _gate(self, release_id: str) -> dict[str, Any]:
+        rel = self.release_store[release_id]
+        polls = rel["evaluations"][-1]
+        if polls <= self.gate_lag:
+            return fake.release_gate(release_id=release_id, revision=len(rel["evaluations"]))
+        outcome = self.gate_outcomes[rel["pair"][1]]
+        gate = fake.release_gate(outcome, release_id=release_id, revision=len(rel["evaluations"]))
+        if self.gate_incomplete:
+            gate["decision"] = fake.gate_decision("BLOCK", incomplete=True)
+            gate["summary"] = fake.gate_decision_summary(gate["decision"])
+            gate |= {"effective_outcome": "BLOCK", "exit_code": 3, "ci_fails": True}
+        if self.gate_unverified:
+            gate["evidence_verified"] = False
+        return gate
+
+    def _release(self, release_id: str) -> dict[str, Any]:
+        rel = self.release_store[release_id]
+        base, candidate = rel["pair"]
+        return fake.release(
+            self._gate(release_id) if rel["evaluations"] else None,
+            id=release_id,
+            project_id=PROJECT,
+            change_set_id=rel["change_set_id"],
+            baseline_version=base,
+            candidate_version=candidate,
+            title=f"{base} -> {candidate} (demo)",
+        )
+
+    def respond_releases(self, method: str, path: str, body: Any) -> tuple[int, Any]:
+        if (method, path) == ("POST", "/api/v1/releases"):
+            n = len(self.release_store) + 1
+            release_id, cs_id = fake.uuid(0xD100 + n), fake.uuid(0xC180 + n)
+            pair = (body["baseline_version"], body["candidate_version"])
+            self.change_sets[cs_id] = pair
+            self.release_store[release_id] = {"pair": pair, "change_set_id": cs_id, "evaluations": []}
+            return 201, {"release": self._release(release_id), "gate": None}
+        if (method, path) == ("GET", "/api/v1/releases"):
+            items = [self._release(r) for r in reversed(self.release_store)]
+            return 200, {"items": items, "next_cursor": None}
+        if m := re.fullmatch(r"/api/v1/releases/([^/]+)/(evaluate|gate)", path):
+            release_id, what = m.groups()
+            evaluations = self.release_store[release_id]["evaluations"]
+            if (method, what) == ("POST", "evaluate"):
+                evaluations.append(0)
+                return 202, self._gate(release_id)
+            evaluations[-1] += 1
+            return 200, self._gate(release_id)
         return 404, fake.error("NOT_FOUND", path)
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
@@ -234,6 +292,7 @@ class FakeAPI:
                 if body and self.headers.get("Content-Type") == "application/json":
                     body = json.loads(body)
                 assert self.headers.get("X-AgentTwin-Api-Key") == "seed-key" or self.path == "/health/ready"
+                api.keys.append((method, self.path.split("?")[0], self.headers.get("Idempotency-Key")))
                 status, out = api.respond(method, self.path.split("?")[0], body)
                 api.checker.check(method, self.path, dict(self.headers.items()), raw, status, out)
                 data = json.dumps(out).encode()
@@ -587,3 +646,87 @@ def test_seed_imports_nothing_from_a_malformed_imports_file(
     assert code == 1, reason
     assert not [c for c in api.calls if "/imports/" in c], reason
     assert "POST /api/v1/twins" not in api.calls
+
+
+def test_seed_gates_the_demo_releases(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
+    # The graph takes in the registrations asynchronously: the release is
+    # evaluated only once its change is known.
+    api.impact_lag = 1
+    code, summary = seed(capsys, "--releases", "1.2.4:1.3.0, 1.2.4:1.3.1", "--release-timeout", "30")
+    assert code == 0
+    got = [
+        (r["baseline"], r["candidate"], r["effective_outcome"], r["exit_code"], r["created"], r["revision"])
+        for r in summary["releases"]
+    ]
+    assert got == [("1.2.4", "1.3.0", "BLOCK", 3, True, 1), ("1.2.4", "1.3.1", "PASS", 0, True, 1)]
+    blocked = summary["releases"][0]
+    assert blocked["rules"] == ["critical_failure"] and blocked["evidence_verified"] is True
+    # Created without an evaluation, retried safely, evaluated once.
+    created = [b for b in api.bodies["/api/v1/releases"] if b]
+    assert created == [
+        {
+            "project_id": PROJECT,
+            "agent": "support-refund-agent",
+            "baseline_version": "1.2.4",
+            "candidate_version": candidate,
+            "title": f"1.2.4 -> {candidate} (demo)",
+            "evaluate": False,
+        }
+        for candidate in ("1.3.0", "1.3.1")
+    ]
+    first = str(blocked["release_id"])
+    assert ("POST", "/api/v1/releases", "seed-release-1.2.4-1.3.0") in api.keys
+    assert ("POST", f"/api/v1/releases/{first}/evaluate", f"seed-evaluate-{first}") in api.keys
+    at = api.calls.index
+    cs = api.release_store[first]["change_set_id"]
+    assert (
+        at("POST /api/v1/releases")
+        < at(f"GET /api/v1/change-sets/{cs}/impact")
+        < at(f"POST /api/v1/releases/{first}/evaluate")
+        < at(f"GET /api/v1/releases/{first}/gate")
+    )
+    assert api.calls.count(f"GET /api/v1/change-sets/{cs}/impact") == 2  # the first answer lagged
+    assert {"createRelease", "listReleases", "evaluateRelease", "getReleaseGate"} <= api.checker.succeeded()
+
+    # Seeding again keeps the releases and their decisions.
+    before = len(api.calls)
+    code, again = seed(capsys, "--releases", "1.2.4:1.3.0")
+    assert code == 0
+    later = api.calls[before:]
+    assert "POST /api/v1/releases" not in later and not any(c.endswith("/evaluate") for c in later)
+    [same] = again["releases"]
+    assert (same["release_id"], same["created"], same["effective_outcome"]) == (first, False, "BLOCK")
+
+
+def test_seed_fails_on_a_gate_without_evidence(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
+    api.gate_incomplete = True
+    code, summary = seed(capsys, "--releases", "1.2.4:1.3.1", "--release-timeout", "30")
+    assert code == 1
+    [rel] = summary["releases"]
+    assert (rel["status"], rel["incomplete"], rel["effective_outcome"]) == ("DECIDED", True, "BLOCK")
+
+
+def test_seed_fails_on_a_gate_whose_evidence_does_not_verify(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str]
+) -> None:
+    api.gate_unverified = True
+    code, summary = seed(capsys, "--releases", "1.2.4:1.3.1", "--release-timeout", "30")
+    assert code == 1
+    [rel] = summary["releases"]
+    assert (rel["status"], rel["incomplete"], rel["evidence_verified"]) == ("DECIDED", False, False)
+
+
+def test_seed_fails_when_a_gate_does_not_decide(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
+    api.gate_lag = 1_000_000
+    code, summary = seed(capsys, "--releases", "1.2.4:1.3.0", "--release-timeout", "0")
+    assert code == 1
+    [rel] = summary["releases"]
+    assert rel["status"] is None and "did not decide" in rel["error"]
+
+
+@pytest.mark.parametrize("spec", ["1.2.4", "1.3.0:1.3.0", "1.2.4:9.9.9"])
+def test_seed_rejects_bad_releases_before_calling_the_api(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], spec: str
+) -> None:
+    assert seed(capsys, "--releases", spec) == (2, {})
+    assert api.calls == []

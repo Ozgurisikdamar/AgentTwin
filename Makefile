@@ -46,7 +46,7 @@ reset: ## Destroy local data and start fresh
 	$(MAKE) dev
 
 .PHONY: seed
-seed: env ## Load the demo workspace: agent, tool twin, scenarios, simulations, an evaluation run, verified traffic
+seed: env ## Load the demo workspace: agent, tool twin, scenarios, simulations, an evaluation run, gated releases, verified traffic
 	$(COMPOSE) run --rm seed
 
 .PHONY: demo

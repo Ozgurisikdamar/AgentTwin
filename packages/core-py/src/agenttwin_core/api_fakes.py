@@ -35,6 +35,10 @@ __all__ = [
     "error",
     "expectation_result",
     "expectation_spec",
+    "gate_decision",
+    "gate_decision_summary",
+    "gate_policy",
+    "gate_summary",
     "impact_scenario",
     "imported_catalog",
     "manifest",
@@ -42,6 +46,8 @@ __all__ = [
     "project",
     "queued_case",
     "registered_version",
+    "release",
+    "release_gate",
     "retrieval_step",
     "run",
     "run_detail",
@@ -67,6 +73,161 @@ def uuid(n: int) -> str:
 def sha256(c: str) -> str:
     """A fixed, valid SHA-256 digest (64 hex characters) for test data."""
     return (c * 64)[:64]
+
+
+# ------------------------------------------------------------------ releases
+
+
+def gate_policy(**over: Any) -> dict[str, Any]:
+    """A project's gate policy with every default resolved (``ResolvedGatePolicy``)."""
+    return {
+        "always_run_tags": ["critical", "security"],
+        "max_production_samples": 100,
+        "include_known_regressions": True,
+        "max_depth": 4,
+        "max_gate_cost_usd": 20,
+        "latency_regression_pct": 25,
+        "latency_regression_min_ms": 250,
+        "cost_regression_pct": 15,
+        "semantic_regression_drop": 0.1,
+        "judge_min_agreement": 0.8,
+        "allow_reviewer_override": True,
+        "warn_fails_ci": False,
+    } | over
+
+
+_EXIT_CODES = {"PASS": 0, "WARN": 2, "BLOCK": 3}
+
+
+def gate_decision(outcome: str = "BLOCK", **over: Any) -> dict[str, Any]:
+    """A gate decision (``GateDecision``); a BLOCK has one rule that fired."""
+    rules = over.pop("rules", None)
+    if rules is None:
+        rules = (
+            []
+            if outcome == "PASS"
+            else [
+                {
+                    "rule": "critical_failure" if outcome == "BLOCK" else "insufficient_coverage",
+                    "outcome": outcome,
+                    "title": "A critical scenario fails" if outcome == "BLOCK" else "Coverage is short",
+                    "statement": "A critical scenario must not fail on the candidate.",
+                    "evidence": [{"scenario": "refund-timeout-after-mutation", "summary": "It fails."}],
+                }
+            ]
+        )
+    return {
+        "outcome": outcome,
+        "incomplete": False,
+        "rules_version": "gate-rules/v1",
+        "summary": f"Gate {outcome}.",
+        "rules": rules,
+        "counts": {
+            "required": 1,
+            "evaluated": 1,
+            "passed": 0 if outcome == "BLOCK" else 1,
+            "failed": 1 if outcome == "BLOCK" else 0,
+            "incomplete": 0,
+            "new_critical_failures": 1 if outcome == "BLOCK" else 0,
+            "regressed": 0,
+            "improved": 0,
+            "known_regressions": 0,
+        },
+        "coverage": [{"name": "Required scenarios passed", "covered": 1, "total": 1, "missing": []}],
+        "risk_index": {"value": 30 if outcome == "BLOCK" else 0, "formula": "sum of factors", "factors": []},
+        "exit_code": _EXIT_CODES[outcome],
+        "ci_fails": outcome == "BLOCK",
+    } | over
+
+
+def gate_decision_summary(decision: Mapping[str, Any], **over: Any) -> dict[str, Any]:
+    """What a decision says at a glance (``GateDecisionSummary``)."""
+    counts = decision["counts"]
+    return {
+        "scenarios": counts["required"],
+        "evaluated": counts["evaluated"],
+        "new_critical_failures": counts["new_critical_failures"],
+        "regressed": counts["regressed"],
+        "failed": counts["failed"],
+        "rules": [r["rule"] for r in decision["rules"]],
+        "exit_code": decision["exit_code"],
+        "ci_fails": decision["ci_fails"],
+        "eval_run_status": "COMPLETED",
+        "cost": None,
+        "cost_delta_usd": None,
+        "latency_p95_delta_ms": None,
+    } | over
+
+
+def release_gate(outcome: str | None = None, **over: Any) -> dict[str, Any]:
+    """``getReleaseGate``: evaluating (``outcome`` None) or decided."""
+    decision = gate_decision(outcome) if outcome else None
+    return {
+        "release_id": uuid(0xD101),
+        "release_evaluation_id": uuid(0xD201),
+        "revision": 1,
+        "status": "DECIDED" if decision else "EVALUATING",
+        "requested_by": ACTOR,
+        "requested_at": NOW,
+        "decided_at": NOW if decision else None,
+        "eval_run_id": uuid(0xA003),
+        "policy": gate_policy(),
+        "suite": [],
+        "impact": change_impact(),
+        "decision": decision,
+        "summary": gate_decision_summary(decision) if decision else None,
+        "evidence_sha256": sha256("e") if decision else None,
+        "evidence_verified": True if decision else None,
+        "override": None,
+        "effective_outcome": outcome or "PENDING",
+        "exit_code": decision["exit_code"] if decision else None,
+        "ci_fails": decision["ci_fails"] if decision else None,
+    } | over
+
+
+def gate_summary(gate: Mapping[str, Any]) -> dict[str, Any]:
+    """A gate as release lists show it (``GateSummary``)."""
+    decision = gate["decision"]
+    return {
+        "revision": gate["revision"],
+        "status": gate["status"],
+        "outcome": decision["outcome"] if decision else None,
+        "effective_outcome": gate["effective_outcome"],
+        "incomplete": decision["incomplete"] if decision else None,
+        "risk_index": decision["risk_index"]["value"] if decision else None,
+        "summary": gate["summary"],
+        "requested_by": gate["requested_by"],
+        "requested_at": gate["requested_at"],
+        "decided_at": gate["decided_at"],
+        "eval_run_id": gate["eval_run_id"],
+        "overridden": gate["override"] is not None,
+    }
+
+
+def release(gate: Mapping[str, Any] | None = None, **over: Any) -> dict[str, Any]:
+    """A release (``Release``), with the summary of its latest ``gate``."""
+    base, candidate = over.pop("baseline_version", "1.2.4"), over.pop("candidate_version", "1.3.0")
+    return {
+        "id": uuid(0xD101),
+        "project_id": PROJECT,
+        "agent": {"id": uuid(0xB101), "name": "support-refund-agent"},
+        "change_set_id": uuid(0xC101),
+        "baseline": {"id": uuid(0xB201), "version": base},
+        "candidate": {"id": uuid(0xB202), "version": candidate},
+        "title": "",
+        "commit_sha": None,
+        "ci_url": None,
+        "created_by": ACTOR,
+        "created_at": NOW,
+        "changes": {
+            "items": 1,
+            "breaking": 0,
+            "seeds": 1,
+            "kinds": {"prompt": 1},
+            "confidence": {"exact": 1},
+        },
+        "gate": gate_summary(gate) if gate else None,
+    } | over
 
 
 # ------------------------------------------------------------ trace service

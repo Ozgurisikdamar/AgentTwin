@@ -27,6 +27,7 @@ STUCK = fake.uuid(0xA002)
 EVAL = fake.uuid(0xA003)
 DATASET = fake.uuid(0xA004)
 CHANGE_SET = fake.uuid(0xC101)
+RELEASE = fake.uuid(0xD101)
 
 
 class Stub:
@@ -35,6 +36,7 @@ class Stub:
         self.ready_after = 0  # number of 503s before /health/ready answers 200
         self.polls = 0
         self.eval_polls = 0
+        self.gate_polls = 0
         self.checker = fake.ExchangeChecker()
 
     def check(self, h: BaseHTTPRequestHandler, body: bytes, status: int, payload: Any) -> None:
@@ -150,6 +152,31 @@ class Stub:
             self.eval_polls += 1
             status = "COMPLETED" if self.eval_polls >= 2 else "RUNNING"
             return 200, fake.eval_run_detail(fake.eval_run(id=EVAL, status=status))
+        return self.releases(h, body)
+
+    def releases(self, h: BaseHTTPRequestHandler, body: bytes) -> tuple[int, Any]:
+        decided = fake.release_gate("BLOCK")
+        if h.command == "POST" and h.path == "/api/v1/releases":
+            req = json.loads(body)
+            if req["baseline_version"] == req["candidate_version"]:
+                return 400, fake.error("VALIDATION_FAILED", "The versions must differ.")
+            gate = fake.release_gate() if req.get("evaluate", True) else None
+            release = fake.release(
+                gate, baseline_version=req["baseline_version"], candidate_version=req["candidate_version"]
+            )
+            return 201, {"release": release, "gate": gate}
+        if h.command == "GET" and h.path.startswith("/api/v1/releases?"):
+            return 200, {"items": [fake.release(decided)], "next_cursor": None}
+        if h.command == "GET" and h.path == f"/api/v1/releases/{RELEASE}":
+            return 200, {"release": fake.release(decided), "revisions": [fake.gate_summary(decided)]}
+        if h.command == "POST" and h.path == f"/api/v1/releases/{RELEASE}/evaluate":
+            return 202, fake.release_gate(revision=2)
+        if h.command == "GET" and h.path.startswith(f"/api/v1/releases/{RELEASE}/gate"):
+            self.gate_polls += 1
+            revision = int(h.path.partition("revision=")[2] or 1)
+            if self.gate_polls < 2:
+                return 200, fake.release_gate(revision=revision)
+            return 200, fake.release_gate("BLOCK", revision=revision)
         return 404, fake.error("NOT_FOUND", "Not found.")
 
 
@@ -447,6 +474,62 @@ def test_tool_catalogs_and_change_impact(stub: tuple[Stub, str]) -> None:
     impact = client.change_set_impact(CHANGE_SET)
     assert impact["complete"] is True and [s["name"] for s in impact["scenarios"]] == ["refund-happy-path"]
     used = {"importOpenApi", "importMcp", "createChangeSet", "getChangeSetImpact"}
+    assert used <= state.checker.succeeded()
+
+
+def test_releases_and_their_gates(stub: tuple[Stub, str]) -> None:
+    state, url = stub
+    client = Client(url, KEY)
+    created = client.create_release(
+        PROJECT,
+        "support-refund-agent",
+        "1.2.4",
+        "1.3.0",
+        title="Refund flow rewrite",
+        git={"candidate_commit": "4e5f6a7b"},
+        ci_url="https://ci.example.com/runs/42",
+        idempotency_key="release-1.2.4-1.3.0",
+    )
+    assert created["release"]["id"] == RELEASE and created["gate"]["effective_outcome"] == "PENDING"
+    sent = state.requests[-1]
+    assert sent["headers"]["idempotency-key"] == "release-1.2.4-1.3.0"
+    # Unset options are left out: the service then evaluates at once.
+    assert json.loads(sent["body"]) == {
+        "project_id": PROJECT,
+        "agent": "support-refund-agent",
+        "baseline_version": "1.2.4",
+        "candidate_version": "1.3.0",
+        "title": "Refund flow rewrite",
+        "git": {"candidate_commit": "4e5f6a7b"},
+        "ci_url": "https://ci.example.com/runs/42",
+    }
+    unevaluated = client.create_release(PROJECT, "support-refund-agent", "1.2.4", "1.3.1", evaluate=False)
+    assert unevaluated["gate"] is None and json.loads(state.requests[-1]["body"])["evaluate"] is False
+    assert "idempotency-key" not in state.requests[-1]["headers"]
+    with pytest.raises(APIError) as e:
+        client.create_release(PROJECT, "support-refund-agent", "1.3.0", "1.3.0")
+    assert (e.value.status, e.value.code) == (400, "VALIDATION_FAILED")
+
+    listed = client.releases(PROJECT, agent="support-refund-agent", limit=10)
+    assert [r["gate"]["effective_outcome"] for r in listed] == ["BLOCK"]
+    assert state.requests[-1]["path"] == (
+        f"/api/v1/releases?project_id={PROJECT}&limit=10&agent=support-refund-agent"
+    )
+    detail = client.release(RELEASE)
+    assert [r["revision"] for r in detail["revisions"]] == [1]
+
+    # The gate is polled until it decides.
+    gate = client.wait_for_gate(RELEASE, timeout_s=5, interval_s=0.01)
+    assert gate["status"] == "DECIDED" and gate["exit_code"] == 3 and state.gate_polls == 2
+    again = client.evaluate_release(RELEASE, idempotency_key="release-evaluate-2")
+    assert again["revision"] == 2 and state.requests[-1]["headers"]["idempotency-key"] == "release-evaluate-2"
+    assert client.release_gate(RELEASE, revision=2)["revision"] == 2
+    assert state.requests[-1]["path"] == f"/api/v1/releases/{RELEASE}/gate?revision=2"
+    state.gate_polls = -1000  # never decides
+    with pytest.raises(APIError) as e:
+        client.wait_for_gate(RELEASE, timeout_s=0.05, interval_s=0.01)
+    assert e.value.code == "TIMEOUT" and RELEASE in e.value.message
+    used = {"createRelease", "listReleases", "getRelease", "evaluateRelease", "getReleaseGate"}
     assert used <= state.checker.succeeded()
 
 

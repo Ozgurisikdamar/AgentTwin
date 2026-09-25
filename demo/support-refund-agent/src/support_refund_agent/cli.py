@@ -427,6 +427,115 @@ def _impacts(
     return out
 
 
+def _settle_impact(client: Client, change_set_id: str, *, deadline: float, interval_s: float = 2.0) -> bool:
+    """Waits until the dependency graph knows every component a change set
+    changed (or ``deadline`` passes): a release evaluated before that pins
+    a suite from an impact that misses the change."""
+    while True:
+        impact = client.change_set_impact(change_set_id)
+        unresolved = ((impact.get("graph") or {}).get("unresolved")) or ()
+        if impact.get("complete") and not unresolved:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval_s)
+
+
+def _release_summary(release: Mapping[str, Any], gate: Mapping[str, Any], *, created: bool) -> dict[str, Any]:
+    decision = gate.get("decision") or {}
+    return {
+        "release_id": release.get("id"),
+        "baseline": (release.get("baseline") or {}).get("version"),
+        "candidate": (release.get("candidate") or {}).get("version"),
+        "created": created,
+        "revision": gate.get("revision"),
+        "status": gate.get("status"),
+        "outcome": decision.get("outcome"),
+        "effective_outcome": gate.get("effective_outcome"),
+        "exit_code": gate.get("exit_code"),
+        "incomplete": decision.get("incomplete"),
+        "rules": [str(r.get("rule")) for r in decision.get("rules") or ()],
+        "risk_index": (decision.get("risk_index") or {}).get("value"),
+        "evidence_sha256": gate.get("evidence_sha256"),
+        "evidence_verified": gate.get("evidence_verified"),
+    }
+
+
+def _release_healthy(summary: Mapping[str, Any]) -> bool:
+    """A gate the demo can show: it decided on complete evidence that still
+    verifies. BLOCK is expected (1.3.0 is the bad candidate)."""
+    return (
+        summary.get("status") == "DECIDED"
+        and summary.get("incomplete") is False
+        and summary.get("evidence_verified") is True
+    )
+
+
+def _gate_releases(
+    client: Client,
+    project_id: str,
+    agent: str,
+    pairs: Sequence[tuple[str, str]],
+    *,
+    impact_timeout_s: float,
+    gate_timeout_s: float,
+) -> list[dict[str, Any]]:
+    """A release of each pair, gated. A release of the pair from an earlier
+    seed is kept (its gate is not recomputed: decisions are immutable); a new
+    one is evaluated once the dependency graph knows its change."""
+    existing = client.releases(project_id, agent=agent)
+    out: list[dict[str, Any]] = []
+    for base, candidate in pairs:
+        known = [
+            r
+            for r in existing
+            if (r.get("baseline") or {}).get("version") == base
+            and (r.get("candidate") or {}).get("version") == candidate
+        ]
+        if known:
+            release, created = known[0], False
+        else:
+            release = client.create_release(
+                project_id,
+                agent,
+                base,
+                candidate,
+                title=f"{base} -> {candidate} (demo)",
+                evaluate=False,
+                idempotency_key=f"seed-release-{base}-{candidate}",
+            )["release"]
+            created = True
+        release_id = str(release["id"])
+        if release.get("gate") is None:
+            if not _settle_impact(
+                client, str(release["change_set_id"]), deadline=time.monotonic() + impact_timeout_s
+            ):
+                logging.error(
+                    "release %s -> %s: the dependency graph does not know the change yet", base, candidate
+                )
+            client.evaluate_release(release_id, idempotency_key=f"seed-evaluate-{release_id}")
+            logging.info("release %s -> %s evaluating: %s", base, candidate, release_id)
+        try:
+            gate = client.wait_for_gate(release_id, timeout_s=gate_timeout_s)
+        except APIError as err:
+            logging.error("release %s -> %s: %s", base, candidate, err)
+            out.append(
+                {"release_id": release_id, "baseline": base, "candidate": candidate, "created": created}
+                | {"status": None, "error": str(err)}
+            )
+            continue
+        summary = _release_summary(release, gate, created=created)
+        logging.info(
+            "release %s -> %s: %s (exit code %s)",
+            base,
+            candidate,
+            summary["effective_outcome"],
+            summary["exit_code"],
+        )
+        out.append(summary)
+    return out
+
+
 def _evaluation_summary(detail: Mapping[str, Any]) -> dict[str, Any]:
     run = detail.get("run") or {}
     summary = detail.get("summary") or {}
@@ -499,6 +608,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
     try:
         pair = _parse_pair(args.evaluate)
         changes = _parse_pairs(args.changes, "--changes")
+        release_pairs = _parse_pairs(args.releases, "--releases")
     except ValueError as err:
         logging.error("%s", err)
         return 2
@@ -508,6 +618,12 @@ def cmd_seed(args: argparse.Namespace) -> int:
     unknown_pairs = [c for c in changes if any(v not in store.versions for v in c)]
     if unknown_pairs:
         logging.error("--changes: unknown agent version(s) in %s; known: %s", unknown_pairs, store.versions)
+        return 2
+    unknown_releases = [c for c in release_pairs if any(v not in store.versions for v in c)]
+    if unknown_releases:
+        logging.error(
+            "--releases: unknown agent version(s) in %s; known: %s", unknown_releases, store.versions
+        )
         return 2
     started: list[tuple[str, str]] = []
     change_sets: list[dict[str, Any]] = []
@@ -629,6 +745,35 @@ def cmd_seed(args: argparse.Namespace) -> int:
                 impact.get("unresolved"),
             )
 
+    # Releases last: their evaluation pins a suite from the change's impact,
+    # which needs the dependency graph to know what was just registered.
+    releases: list[dict[str, Any]] = []
+    if release_pairs:
+        try:
+            releases = _gate_releases(
+                client,
+                project_id,
+                store.get(release_pairs[0][1]).name,
+                release_pairs,
+                impact_timeout_s=args.impact_timeout,
+                gate_timeout_s=args.release_timeout,
+            )
+        except APIError as err:
+            logging.error("releases: %s", err)
+            releases = [
+                {"baseline": b, "candidate": c, "status": None, "error": str(err)} for b, c in release_pairs
+            ]
+    for rel in releases:
+        if not _release_healthy(rel):
+            logging.error(
+                "the gate of release %s -> %s is not usable: status %s, incomplete %s, verified %s",
+                rel.get("baseline"),
+                rel.get("candidate"),
+                rel.get("status"),
+                rel.get("incomplete"),
+                rel.get("evidence_verified") if rel.get("status") else rel.get("error"),
+            )
+
     verified = [r["verified_outcome"] for r in records if r.get("verified_outcome")]
     summary = {
         "project_id": project_id,
@@ -636,6 +781,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
         "catalogs": catalogs,
         **assurance,
         "change_sets": impacts,
+        "releases": releases,
         "simulations": simulations,
         "dataset": suite,
         "evaluation": evaluation,
@@ -658,6 +804,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
         and all(_healthy(s) for s in simulations)
         and (evaluation is None or _evaluation_healthy(evaluation))
         and all(_impact_settled(i) for i in impacts)
+        and all(_release_healthy(r) for r in releases)
     )
     return 0 if ok else 1
 
@@ -771,6 +918,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="",
         metavar="BASE:CANDIDATE[,...]",
         help="compare versions: a change set each, with the scenarios the change requires and why",
+    )
+    s.add_argument(
+        "--releases",
+        default="",
+        metavar="BASELINE:CANDIDATE[,...]",
+        help="gate a release of each CANDIDATE against its BASELINE (an earlier seed's release is kept)",
+    )
+    s.add_argument(
+        "--release-timeout",
+        type=float,
+        default=900.0,
+        help="seconds to wait for each release's gate to decide",
     )
     s.add_argument(
         "--impact-timeout",

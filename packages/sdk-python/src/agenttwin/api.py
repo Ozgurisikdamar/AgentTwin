@@ -3,7 +3,8 @@
 Authenticates with a project API key (``X-AgentTwin-Api-Key``). Covers what
 an agent codebase or its CI needs: finding the project, registering agent
 manifests, tool twins and scenarios, running simulations, keeping datasets,
-evaluating a candidate version against its baseline and recording outcomes.
+evaluating a candidate version against its baseline, gating a release and
+recording outcomes.
 Errors carry the API's machine-readable code (``APIError.code``) and never
 include the key.
 """
@@ -451,6 +452,100 @@ class Client:
             if time.monotonic() >= deadline:
                 raise APIError(
                     0, "TIMEOUT", f"evaluation run {eval_run_id} is still {status} after {timeout_s:.0f}s"
+                )
+            time.sleep(interval_s)
+
+    # -------------------------------------------------------------- releases
+    def create_release(
+        self,
+        project_id: str,
+        agent: str,
+        baseline_version: str,
+        candidate_version: str,
+        *,
+        title: str | None = None,
+        git: Mapping[str, Any] | None = None,
+        declared: Sequence[Mapping[str, Any]] | None = None,
+        ci_url: str | None = None,
+        evaluate: bool | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Creates a release of a candidate version against its baseline and,
+        unless ``evaluate`` is false, starts its first evaluation:
+        ``{release, gate}``. Every call creates a release; pass an
+        ``idempotency_key`` so a retried request answers the first one."""
+        body: dict[str, Any] = {
+            "project_id": project_id,
+            "agent": agent,
+            "baseline_version": baseline_version,
+            "candidate_version": candidate_version,
+        }
+        optional = (
+            ("title", title),
+            ("git", dict(git) if git is not None else None),
+            ("declared", [dict(d) for d in declared] if declared is not None else None),
+            ("ci_url", ci_url),
+            ("evaluate", evaluate),
+        )
+        body |= {k: v for k, v in optional if v is not None}
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        result: dict[str, Any] = self.request("POST", "/api/v1/releases", json_body=body, headers=headers)
+        return result
+
+    def releases(
+        self, project_id: str, *, agent: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """The project's releases, newest first (the first ``limit``), each
+        with the gate of its latest evaluation."""
+        query = {"project_id": project_id, "limit": str(limit)}
+        if agent is not None:
+            query["agent"] = agent
+        body = self.request("GET", "/api/v1/releases", query=query)
+        items: list[dict[str, Any]] = body.get("items", []) if isinstance(body, dict) else []
+        return items
+
+    def release(self, release_id: str) -> dict[str, Any]:
+        """A release and the gate of each of its evaluations, newest first."""
+        result: dict[str, Any] = self.request(
+            "GET", f"/api/v1/releases/{urllib.parse.quote(release_id, safe='')}"
+        )
+        return result
+
+    def evaluate_release(self, release_id: str, *, idempotency_key: str | None = None) -> dict[str, Any]:
+        """Starts a new evaluation (revision) of a release; its gate."""
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        result: dict[str, Any] = self.request(
+            "POST", f"/api/v1/releases/{urllib.parse.quote(release_id, safe='')}/evaluate", headers=headers
+        )
+        return result
+
+    def release_gate(self, release_id: str, *, revision: int | None = None) -> dict[str, Any]:
+        """The gate of the latest evaluation, or of ``revision``: its
+        decision with the evidence, and ``exit_code`` for CI (0 pass,
+        2 warn, 3 block; ``None`` while evaluating)."""
+        query = {"revision": str(revision)} if revision is not None else None
+        result: dict[str, Any] = self.request(
+            "GET", f"/api/v1/releases/{urllib.parse.quote(release_id, safe='')}/gate", query=query
+        )
+        return result
+
+    def wait_for_gate(
+        self,
+        release_id: str,
+        *,
+        revision: int | None = None,
+        timeout_s: float = 1800.0,
+        interval_s: float = 2.0,
+    ) -> dict[str, Any]:
+        """Polls until the gate decides (``status`` ``DECIDED``)."""
+        deadline = time.monotonic() + timeout_s
+        while True:
+            gate = self.release_gate(release_id, revision=revision)
+            if gate.get("status") == "DECIDED":
+                return gate
+            if time.monotonic() >= deadline:
+                raise APIError(
+                    0, "TIMEOUT", f"the gate of release {release_id} did not decide within {timeout_s:.0f}s"
                 )
             time.sleep(interval_s)
 

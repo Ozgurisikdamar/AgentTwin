@@ -64,6 +64,14 @@ class FakeAPI:
         self.regression_lag = 0
         self.inbox_reads = 0
         self.keys: list[tuple[str, str, str | None]] = []
+        # Runtime containment: tool endpoints (tool -> body), policies (name
+        # -> policy, documents), the activations asked, the policies whose
+        # tests fail, and the approval requests.
+        self.endpoints: dict[str, Any] = {}
+        self.policy_store: dict[str, dict[str, Any]] = {}
+        self.activations: list[tuple[str, int]] = []
+        self.failing_policies: set[str] = set()
+        self.approvals: list[dict[str, Any]] = []
         self.checker = fake.ExchangeChecker()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -304,6 +312,62 @@ class FakeAPI:
             [occurrence] = detail["occurrences"]
             detail["occurrences"] = [occurrence | {"trace_id": t} for t in self.occurrences[group["id"]]]
             return 200, detail
+        return self.respond_runtime(method, path, body)
+
+    def respond_runtime(self, method: str, path: str, body: Any) -> tuple[int, Any]:
+        if method == "PUT" and path.startswith("/api/v1/tool-endpoints/"):
+            tool = path.rsplit("/", 1)[1]
+            created = self._created(f"endpoint:{tool}")
+            self.endpoints[tool] = body
+            endpoint = fake.tool_endpoint(
+                tool,
+                url=body["url"],
+                risk=body["risk"],
+                timeout_ms=body.get("timeout_ms", 10000),
+                forward_headers=body.get("forward_headers", []),
+                idempotency="required" if body["risk"] == "WRITE_IRREVERSIBLE" else "optional",
+            )
+            return (201 if created else 200), endpoint
+        if (method, path) == ("GET", "/api/v1/policies"):
+            return 200, {"items": [p["policy"] for p in self.policy_store.values()]}
+        if (method, path) == ("POST", "/api/v1/policies"):
+            spec = yaml.safe_load(body["document"])
+            name = spec["metadata"]["name"]
+            if name in self.policy_store:
+                return 409, fake.error("POLICY_EXISTS", f"A policy named {name} exists.")
+            pid = fake.uuid(0xF200 + len(self.policy_store) + 1)
+            policy = fake.policy(pid, name=name, tool=spec["spec"]["tool"])
+            self.policy_store[name] = {"policy": policy, "documents": [body["document"]]}
+            return 201, {"policy": policy, "version": fake.policy_version(pid)}
+        if m := re.fullmatch(r"/api/v1/policies/([^/]+)/(versions|activate)", path):
+            [entry] = [e for e in self.policy_store.values() if e["policy"]["id"] == m.group(1)]
+            policy, docs = entry["policy"], entry["documents"]
+            if m.group(2) == "activate":
+                self.activations.append((policy["name"], body["version"]))
+                policy["active"] = {"id": fake.uuid(0xF300 + body["version"]), "version": body["version"]}
+                policy |= {"activated_by": fake.ACTOR, "activated_at": fake.NOW}
+                return 200, policy
+            created = body["document"] != docs[-1]
+            if created:
+                docs.append(body["document"])
+                policy["latest_version"] = len(docs)
+            version = fake.policy_version(policy["id"], len(docs))
+            return (201 if created else 200), {"policy": policy, "version": version, "created": created}
+        if (method, path) == ("POST", "/api/v1/policies/test"):
+            [entry] = [e for e in self.policy_store.values() if e["policy"]["id"] == body["policy_id"]]
+            report = fake.policy_test_report(tool=entry["policy"]["tool"])
+            if entry["policy"]["name"] in self.failing_policies:
+                failed = report["results"][0] | {"passed": False, "why": "expected allow"}
+                problem = {"field": "spec.tests[0]", "message": "fails"}
+                report |= {
+                    "passed": False,
+                    "results": [failed],
+                    "activatable": False,
+                    "activation_problems": [problem],
+                }
+            return 200, report
+        if (method, path) == ("GET", "/api/v1/approvals"):
+            return 200, {"items": self.approvals}
         return 404, fake.error("NOT_FOUND", path)
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
@@ -331,6 +395,9 @@ class FakeAPI:
 
             def do_POST(self) -> None:
                 self._reply("POST")
+
+            def do_PUT(self) -> None:
+                self._reply("PUT")
 
             def log_message(self, *args: Any) -> None:
                 pass
@@ -923,3 +990,167 @@ def test_seed_reports_the_inbox_without_an_incident(api: FakeAPI, capsys: pytest
 def test_seed_rejects_an_unknown_incident_version(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
     assert seed(capsys, "--incident", "9.9.9") == (2, {})
     assert api.calls == []
+
+
+# ---------------------------------------------------------------- containment
+
+CONTAINED_TRACE = "c" * 32
+
+
+@pytest.fixture
+def contained(api: FakeAPI, monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Stubs the contained conversation (its behaviour against the gateway
+    is tested in test_containment): the gateway holds the refund, so a
+    pending approval request names its trace. Returns the requests sent."""
+    from support_refund_agent import cli
+
+    sent: list[Any] = []
+    monkeypatch.setattr(cli, "_create_order", lambda url, customer, total: f"ORD-{int(total)}")
+
+    def run(agent_url: str, req: Any) -> dict[str, Any]:
+        sent.append(req)
+        api.approvals = [
+            fake.approval(fake.uuid(0xF400), trace_id="d" * 32),
+            fake.approval(fake.uuid(0xF401), trace_id=CONTAINED_TRACE),
+        ]
+        return {"trace_id": CONTAINED_TRACE.upper(), "business_outcome": "REFUND_AWAITING_APPROVAL"}
+
+    monkeypatch.setattr(cli, "_http_run", run)
+    return sent
+
+
+def test_seed_contains_the_agent_and_leaves_a_refund_awaiting_approval(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], contained: list[Any]
+) -> None:
+    code, summary = seed(capsys, "--contain", "1.3.1", "--tools-url", "http://demo-tools:8091/")
+    assert code == 0
+    got = summary["containment"]
+    # Every tool of the latest manifest, with its risk, at the tools API.
+    risks = {e["tool"]: e["risk"] for e in got["endpoints"]}
+    assert risks["refund_payment"] == "WRITE_IRREVERSIBLE" and risks["lookup_order"] == "READ"
+    assert risks["export_customer_data"] == "ADMIN" and len(risks) == 7
+    assert api.endpoints["refund_payment"] == {
+        "project_id": PROJECT,
+        "url": "http://demo-tools:8091/tools/refund_payment",
+        "risk": "WRITE_IRREVERSIBLE",
+        "kind": "http",
+        "timeout_ms": 5000,
+        "forward_headers": ["X-AgentTwin-Tenant"],
+    }
+    # Each policy tested, then activated.
+    assert [
+        (p["name"], p["tool"], p["version"], p["passed"], p["active_version"]) for p in got["policies"]
+    ] == [
+        ("refund-limits", "refund_payment", 1, True, 1),
+        ("customer-data-export", "export_customer_data", 1, True, 1),
+    ]
+    assert got["policies"][0]["thresholds"] == ["args.amount > 100"]
+    assert api.activations == [("refund-limits", 1), ("customer-data-export", 1)]
+    # The contained refund over the limit: not waited for, held for a person.
+    [req] = contained
+    assert (req.version, req.contained, req.approval_wait_s, req.customer_id) == (
+        "1.3.1",
+        True,
+        0.0,
+        "CUS-100",
+    )
+    assert "ORD-180" in req.input and "$150" in req.input
+    attempt = got["attempt"]
+    assert (attempt["trace_id"], attempt["business_outcome"]) == (CONTAINED_TRACE, "REFUND_AWAITING_APPROVAL")
+    assert (attempt["approval"]["id"], attempt["approval"]["status"]) == (fake.uuid(0xF401), "PENDING")
+    used = {"putToolEndpoint", "createPolicy", "testPolicy", "activatePolicy", "listApprovals"}
+    assert used <= api.checker.succeeded()
+
+
+def test_seed_keeps_active_policies_on_a_second_run(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], contained: list[Any]
+) -> None:
+    assert seed(capsys, "--contain", "1.3.1")[0] == 0
+    code, summary = seed(capsys, "--contain", "1.3.1")
+    assert code == 0
+    # The same documents: no new version, nothing activated again.
+    assert [p["version"] for p in summary["containment"]["policies"]] == [1, 1]
+    assert api.activations == [("refund-limits", 1), ("customer-data-export", 1)]
+    assert {"listPolicies", "addPolicyVersion"} <= api.checker.succeeded()
+
+
+def test_seed_does_not_activate_a_policy_whose_tests_fail(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], contained: list[Any]
+) -> None:
+    api.failing_policies = {"refund-limits"}
+    code, summary = seed(capsys, "--contain", "1.3.1")
+    assert code == 1
+    [refund, export] = summary["containment"]["policies"]
+    assert (refund["passed"], refund["active_version"], refund["problems"][0]["field"]) == (
+        False,
+        None,
+        "spec.tests[0]",
+    )
+    assert export["active_version"] == 1
+    assert api.activations == [("customer-data-export", 1)]
+
+
+@pytest.mark.parametrize(
+    ("answer", "approvals"),
+    [
+        # The gateway let the refund through: nothing waits for a person.
+        ({"trace_id": CONTAINED_TRACE, "business_outcome": "REFUND_COMPLETED"}, []),
+        # Held, but no approval request names the trace.
+        ({"trace_id": CONTAINED_TRACE, "business_outcome": "REFUND_AWAITING_APPROVAL"}, []),
+        # A request waits for a person, yet the agent says the refund went through.
+        (
+            {"trace_id": CONTAINED_TRACE, "business_outcome": "REFUND_COMPLETED"},
+            [fake.approval(fake.uuid(0xF402), trace_id=CONTAINED_TRACE)],
+        ),
+    ],
+)
+def test_seed_fails_when_the_over_limit_refund_is_not_held(
+    api: FakeAPI,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    answer: dict[str, Any],
+    approvals: list[Any],
+) -> None:
+    from support_refund_agent import cli
+
+    monkeypatch.setattr(cli, "_create_order", lambda url, customer, total: "ORD-180")
+    monkeypatch.setattr(cli, "_http_run", lambda url, req: answer)
+    api.approvals = approvals
+    code, summary = seed(capsys, "--contain", "1.3.1")
+    assert code == 1
+    assert summary["containment"]["attempt"]["business_outcome"] == answer["business_outcome"]
+
+
+def test_seed_fails_when_the_gateway_rejects_containment(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], contained: list[Any]
+) -> None:
+    api.policy_store["refund-limits"] = {"policy": fake.policy(fake.uuid(0xF299)), "documents": []}
+    # A policy of that name exists but this key cannot list it.
+    api.respond_runtime = _hide_policies(api.respond_runtime)  # type: ignore[method-assign]
+    code, summary = seed(capsys, "--contain", "1.3.1")
+    assert code == 1
+    assert "refund-limits" in summary["containment"]["error"]
+    assert contained == []
+
+
+def _hide_policies(respond: Any) -> Any:
+    def wrapped(method: str, path: str, body: Any) -> tuple[int, Any]:
+        if (method, path) == ("GET", "/api/v1/policies"):
+            return 200, {"items": []}
+        out: tuple[int, Any] = respond(method, path, body)
+        return out
+
+    return wrapped
+
+
+def test_seed_rejects_an_unknown_contained_version(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
+    assert seed(capsys, "--contain", "9.9.9") == (2, {})
+    assert api.calls == []
+
+
+def test_seed_without_containment_touches_no_runtime_route(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, summary = seed(capsys)
+    assert code == 0 and summary["containment"] is None
+    assert not any("tool-endpoints" in c or "policies" in c or "approvals" in c for c in api.calls)

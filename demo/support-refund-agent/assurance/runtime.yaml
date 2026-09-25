@@ -1,0 +1,14 @@
+# The demo's runtime containment (ADR-0033): where the runtime gateway calls
+# the agent's tools, and the policies that decide each call. The seed
+# registers every tool the latest manifest declares, with the risk the
+# manifest gives it, at `<tools API>/tools/<tool>` (the tools API is
+# DEMO_TOOLS_URL; its host must be in RUNTIME_EGRESS_PRIVATE_HOSTS), then
+# creates each policy (or adds a version), tests it and activates it.
+endpoints:
+  timeoutMs: 5000
+  # The tools API scopes every call to the tenant. The caller's role is not
+  # passed on: an agent may not claim one.
+  forwardHeaders: [X-AgentTwin-Tenant]
+policies:
+  - policies/refund-limits.yaml
+  - policies/customer-data-export.yaml

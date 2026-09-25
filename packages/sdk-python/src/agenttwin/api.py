@@ -681,11 +681,250 @@ class Client:
         )
         return result
 
+    # --------------------------------------------------- runtime containment
+    def put_tool_endpoint(
+        self,
+        project_id: str,
+        tool: str,
+        *,
+        url: str,
+        risk: str,
+        kind: str = "http",
+        timeout_ms: int | None = None,
+        idempotency: str | None = None,
+        forward_headers: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        """Registers (or replaces) where the runtime gateway calls ``tool``
+        (ADR-0033). The URL's host must be in the gateway's egress
+        allowlist. Needs ``policy.write``."""
+        body: dict[str, Any] = {"project_id": project_id, "url": url, "risk": risk, "kind": kind}
+        if timeout_ms is not None:
+            body["timeout_ms"] = timeout_ms
+        if idempotency is not None:
+            body["idempotency"] = idempotency
+        if forward_headers is not None:
+            body["forward_headers"] = list(forward_headers)
+        result: dict[str, Any] = self.request("PUT", _tool_endpoint_path(tool), json_body=body)
+        return result
+
+    def tool_endpoints(self, project_id: str) -> list[dict[str, Any]]:
+        body = self.request("GET", "/api/v1/tool-endpoints", query={"project_id": project_id})
+        return _items(body)
+
+    def policies(self, project_id: str, *, tool: str | None = None) -> list[dict[str, Any]]:
+        """The project's runtime policies, optionally those guarding ``tool``."""
+        query = {"project_id": project_id} | ({"tool": tool} if tool else {})
+        return _items(self.request("GET", "/api/v1/policies", query=query))
+
+    def policy(self, policy_id: str, project_id: str) -> dict[str, Any]:
+        """A policy, its active version and every version."""
+        result: dict[str, Any] = self.request(
+            "GET", _policy_path(policy_id), query={"project_id": project_id}
+        )
+        return result
+
+    def create_policy(
+        self, project_id: str, document: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """Stores a policy document (YAML or JSON) as version 1 of a new
+        policy; nothing is activated. ``POLICY_EXISTS`` if its name is taken
+        (:meth:`apply_policy` adds a version then)."""
+        result: dict[str, Any] = self.request(
+            "POST",
+            "/api/v1/policies",
+            json_body={"project_id": project_id, "document": document},
+            headers=_idempotency(idempotency_key),
+        )
+        return result
+
+    def add_policy_version(
+        self, policy_id: str, project_id: str, document: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """Stores the document as the policy's next version; a document that
+        decides what the latest version decides returns it (``created``
+        false)."""
+        result: dict[str, Any] = self.request(
+            "POST",
+            _policy_path(policy_id, "versions"),
+            json_body={"project_id": project_id, "document": document},
+            headers=_idempotency(idempotency_key),
+        )
+        return result
+
+    def apply_policy(self, project_id: str, document: str) -> dict[str, Any]:
+        """Creates the policy, or adds the document as its next version when
+        a policy of its name exists: ``{policy, version, created}``."""
+        try:
+            created = self.create_policy(project_id, document)
+            return {"policy": created["policy"], "version": created["version"], "created": True}
+        except APIError as err:
+            if err.code != "POLICY_EXISTS":
+                raise
+        name = _policy_name(document)
+        for p in self.policies(project_id):
+            if p.get("name") == name:
+                return self.add_policy_version(str(p["id"]), project_id, document)
+        raise APIError(409, "POLICY_EXISTS", f"policy {name!r} exists but is not visible to this key")
+
+    def test_policy(
+        self,
+        project_id: str,
+        *,
+        document: str | None = None,
+        policy_id: str | None = None,
+        version: int | None = None,
+        cases: Sequence[Mapping[str, Any]] | None = None,
+        base: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Decides a draft document (or a saved version) against its tests,
+        the extra ``cases`` and around every numeric threshold. Stores
+        nothing."""
+        if (document is None) == (policy_id is None):
+            raise ValueError("give a document or a policy_id, not both")
+        body: dict[str, Any] = {"project_id": project_id}
+        if document is not None:
+            body["document"] = document
+        if policy_id is not None:
+            body["policy_id"] = policy_id
+        if version is not None:
+            body["version"] = version
+        if cases:
+            body["cases"] = [dict(c) for c in cases]
+        if base is not None:
+            body["base"] = dict(base)
+        result: dict[str, Any] = self.request("POST", "/api/v1/policies/test", json_body=body)
+        return result
+
+    def activate_policy(
+        self,
+        policy_id: str,
+        project_id: str,
+        version: int,
+        *,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Makes the version active from the next call on (only a tested
+        version whose tests all pass). Needs ``policy.activate``."""
+        body: dict[str, Any] = {"project_id": project_id, "version": version}
+        if reason is not None:
+            body["reason"] = reason
+        result: dict[str, Any] = self.request(
+            "POST", _policy_path(policy_id, "activate"), json_body=body, headers=_idempotency(idempotency_key)
+        )
+        return result
+
+    def deactivate_policy(
+        self, policy_id: str, project_id: str, reason: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = self.request(
+            "POST",
+            _policy_path(policy_id, "deactivate"),
+            json_body={"project_id": project_id, "reason": reason},
+            headers=_idempotency(idempotency_key),
+        )
+        return result
+
+    def approvals(
+        self, project_id: str, *, status: str | None = None, tool: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Approval requests, newest first (the first ``limit``)."""
+        query = {"project_id": project_id, "limit": str(limit)}
+        if status is not None:
+            query["status"] = status
+        if tool is not None:
+            query["tool"] = tool
+        return _items(self.request("GET", "/api/v1/approvals", query=query))
+
+    def approval(self, approval_id: str, project_id: str) -> dict[str, Any]:
+        """The exact action waiting for a person, its expiry and history."""
+        result: dict[str, Any] = self.request(
+            "GET", _approval_path(approval_id), query={"project_id": project_id}
+        )
+        return result
+
+    def approve(
+        self, approval_id: str, project_id: str, reason: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """Approves the exact action (once). Needs ``approval.decide``."""
+        return self._decide(approval_id, "approve", project_id, reason, idempotency_key)
+
+    def deny_approval(
+        self, approval_id: str, project_id: str, reason: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        return self._decide(approval_id, "deny", project_id, reason, idempotency_key)
+
+    def _decide(
+        self, approval_id: str, action: str, project_id: str, reason: str, idempotency_key: str | None
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = self.request(
+            "POST",
+            _approval_path(approval_id, action),
+            json_body={"project_id": project_id, "reason": reason},
+            headers=_idempotency(idempotency_key),
+        )
+        return result
+
+    def policy_decisions(
+        self,
+        project_id: str,
+        *,
+        tool: str | None = None,
+        outcome: str | None = None,
+        effect: str | None = None,
+        trace_id: str | None = None,
+        approval_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """The gateway's decisions, newest first (the first ``limit``)."""
+        pairs = (
+            ("tool", tool),
+            ("outcome", outcome),
+            ("effect", effect),
+            ("trace_id", trace_id.lower() if trace_id else None),
+            ("approval_id", approval_id),
+        )
+        query = {"project_id": project_id, "limit": str(limit)} | {k: v for k, v in pairs if v}
+        return _items(self.request("GET", "/api/v1/policy-decisions", query=query))
+
     def record_outcome(self, trace_id: str, outcome: Mapping[str, Any]) -> dict[str, Any]:
         result: dict[str, Any] = self.request(
             "POST", f"/api/v1/traces/{trace_id.lower()}/outcome", json_body=dict(outcome)
         )
         return result
+
+
+def _items(body: Any) -> list[dict[str, Any]]:
+    items = body.get("items", []) if isinstance(body, dict) else []
+    return [i for i in items if isinstance(i, dict)]
+
+
+def _tool_endpoint_path(tool: str) -> str:
+    return f"/api/v1/tool-endpoints/{urllib.parse.quote(tool, safe='')}"
+
+
+def _policy_path(policy_id: str, action: str | None = None) -> str:
+    path = f"/api/v1/policies/{urllib.parse.quote(policy_id, safe='')}"
+    return f"{path}/{action}" if action else path
+
+
+def _approval_path(approval_id: str, action: str | None = None) -> str:
+    path = f"/api/v1/approvals/{urllib.parse.quote(approval_id, safe='')}"
+    return f"{path}/{action}" if action else path
+
+
+def _policy_name(document: str) -> str:
+    """``metadata.name`` of a policy document (YAML or JSON)."""
+    try:
+        import yaml  # optional: only needed to read a YAML document
+
+        doc = yaml.safe_load(document)
+    except ImportError:
+        doc = json.loads(document)
+    name = doc.get("metadata", {}).get("name") if isinstance(doc, dict) else None
+    if not isinstance(name, str) or not name:
+        raise ValueError("the policy document has no metadata.name")
+    return name
 
 
 def _regression_path(regression_id: str, action: str | None = None) -> str:

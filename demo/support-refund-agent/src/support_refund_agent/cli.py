@@ -127,8 +127,8 @@ def cmd_serve_agent(args: argparse.Namespace) -> int:
     return 0
 
 
-def _http_run(agent_url: str, req: RunRequest, *, wait_s: float = 0.0) -> dict[str, Any]:
-    body = {
+def _http_run(agent_url: str, req: RunRequest) -> dict[str, Any]:
+    body: dict[str, Any] = {
         "input": req.input,
         "customer_id": req.customer_id,
         "tenant": req.tenant,
@@ -136,13 +136,16 @@ def _http_run(agent_url: str, req: RunRequest, *, wait_s: float = 0.0) -> dict[s
         "run_context": {"source": req.source, "environment": req.environment},
         "contained": req.contained,
     }
+    wait_s = req.approval_wait_s or 0.0
+    if req.contained and req.approval_wait_s is not None:
+        body["approval_wait_s"] = req.approval_wait_s
     headers = {"Content-Type": "application/json"}
     if token := os.environ.get("DEMO_AGENT_TOKEN"):
         headers["Authorization"] = f"Bearer {token}"
     http_req = urllib.request.Request(  # noqa: S310 - URL from the operator's configuration
         agent_url.rstrip("/") + "/run", data=json.dumps(body).encode(), headers=headers, method="POST"
     )
-    # A contained run may wait for a person's approval.
+    # A contained run may wait for a person's approval; the client waits too.
     timeout = 60 + (wait_s if req.contained else 0.0)
     with urllib.request.urlopen(http_req, timeout=timeout) as resp:  # noqa: S310
         result: dict[str, Any] = json.loads(resp.read())
@@ -179,9 +182,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         version=args.version,
         source="production",
         contained=args.contained,
+        approval_wait_s=args.approval_wait if args.contained else None,
     )
     if args.agent_url:
-        result = _http_run(args.agent_url, req, wait_s=args.approval_wait)
+        result = _http_run(args.agent_url, req)
     else:
         telemetry = _telemetry()
         result = _agent(telemetry, args.tools_url).run(req).to_json()
@@ -721,6 +725,128 @@ def _incident_healthy(incident: Mapping[str, Any]) -> bool:
     return not incident.get("regression_expected") or incident.get("regression") is not None
 
 
+def _contain(
+    client: Client, project_id: str, directory: Path, tools_url: str, tool_risks: Mapping[str, str]
+) -> dict[str, Any]:
+    """The runtime containment ``runtime.yaml`` describes (ADR-0033): every
+    tool registered with the runtime gateway at ``<tools_url>/tools/<tool>``
+    with its manifest risk, then each policy created (or given the document
+    as a new version), tested and activated. Unchanged content changes
+    nothing on the server."""
+    spec = yaml.safe_load((directory / "runtime.yaml").read_text(encoding="utf-8")) or {}
+    endpoint = spec.get("endpoints") or {}
+    base = tools_url.rstrip("/")
+    endpoints = []
+    for tool, risk in sorted(tool_risks.items()):
+        client.put_tool_endpoint(
+            project_id,
+            tool,
+            url=f"{base}/tools/{tool}",
+            risk=risk,
+            timeout_ms=endpoint.get("timeoutMs"),
+            forward_headers=endpoint.get("forwardHeaders"),
+        )
+        endpoints.append({"tool": tool, "risk": risk})
+    logging.info("runtime gateway: %d tool endpoints registered", len(endpoints))
+    policies = []
+    for rel in spec.get("policies") or []:
+        document = (directory / rel).read_text(encoding="utf-8")
+        applied = client.apply_policy(project_id, document)
+        policy, version = applied["policy"], int(applied["version"]["version"])
+        report = client.test_policy(project_id, policy_id=str(policy["id"]), version=version)
+        summary: dict[str, Any] = {
+            "name": policy["name"],
+            "tool": policy["tool"],
+            "version": version,
+            "tests": len(report.get("results") or []),
+            "passed": bool(report.get("passed")),
+            "thresholds": sorted(
+                {f"{b['path']} {b['op']} {b['value']:g}" for b in report.get("boundaries") or []}
+            ),
+            "undecided": report.get("undecided") or [],
+            "active_version": (policy.get("active") or {}).get("version"),
+        }
+        if not report.get("activatable"):
+            summary["problems"] = report.get("activation_problems") or []
+        elif summary["active_version"] != version:
+            active = client.activate_policy(
+                str(policy["id"]), project_id, version, reason="seeded: its tests pass"
+            )
+            summary["active_version"] = (active.get("active") or {}).get("version")
+        logging.info(
+            "policy %s v%d guards %s: %d tests %s, active v%s",
+            summary["name"],
+            version,
+            summary["tool"],
+            summary["tests"],
+            "pass" if summary["passed"] else "FAIL",
+            summary["active_version"],
+        )
+        policies.append(summary)
+    return {"endpoints": endpoints, "policies": policies}
+
+
+def _over_limit_attempt(
+    client: Client, project_id: str, args: argparse.Namespace, version: str
+) -> dict[str, Any]:
+    """A contained conversation that asks for a refund over the automatic
+    limit: the gateway holds it for a person's approval and the agent does
+    not wait (the approval request stays pending, for the approvals page)."""
+    order_id = _create_order(args.tools_url, args.customer, 180.0)
+    req = RunRequest(
+        input=f"Hi! One item in {order_id} arrived broken. Can I get a refund of $150?",
+        customer_id=args.customer,
+        version=version,
+        source="production",
+        contained=True,
+        approval_wait_s=0.0,
+    )
+    result = _http_run(args.agent_url, req)
+    trace_id = str(result.get("trace_id") or "").lower()
+    pending = [
+        a
+        for a in client.approvals(project_id, status="PENDING", tool="refund_payment", limit=200)
+        if str(a.get("trace_id") or "") == trace_id
+    ]
+    approval = pending[0] if pending else None
+    attempt = {
+        "version": version,
+        "order_id": order_id,
+        "trace_id": trace_id,
+        "business_outcome": result.get("business_outcome"),
+        "approval": None
+        if approval is None
+        else {
+            "id": approval["id"],
+            "status": approval["status"],
+            "summary": approval["summary"],
+            "rule": approval["rule"],
+            "expires_at": approval["expires_at"],
+        },
+    }
+    logging.info(
+        "contained over-limit refund on %s (order %s): %s, approval %s",
+        version,
+        order_id,
+        attempt["business_outcome"],
+        approval["id"] if approval else "not found",
+    )
+    return attempt
+
+
+def _containment_healthy(containment: Mapping[str, Any]) -> bool:
+    """Every policy passes its tests and is active; the over-limit refund
+    waits for a person. A failed containment (``{"error": ...}``) has no
+    policies."""
+    policies = containment.get("policies") or []
+    if not policies or not all(p["passed"] and p["active_version"] == p["version"] for p in policies):
+        return False
+    attempt = containment.get("attempt")
+    return attempt is None or (
+        attempt.get("business_outcome") == "REFUND_AWAITING_APPROVAL" and attempt.get("approval") is not None
+    )
+
+
 def cmd_seed(args: argparse.Namespace) -> int:
     """Loads the demo workspace. Idempotent for manifests, the tool twin and
     the scenarios; every run adds another batch of production traffic and
@@ -754,6 +880,9 @@ def cmd_seed(args: argparse.Namespace) -> int:
         return 2
     if args.incident and args.incident not in store.versions:
         logging.error("--incident: unknown agent version %s; known: %s", args.incident, store.versions)
+        return 2
+    if args.contain and args.contain not in store.versions:
+        logging.error("--contain: unknown agent version %s; known: %s", args.contain, store.versions)
         return 2
     started: list[tuple[str, str]] = []
     change_sets: list[dict[str, Any]] = []
@@ -942,6 +1071,23 @@ def cmd_seed(args: argparse.Namespace) -> int:
                 rel.get("evidence_verified") if rel.get("status") else rel.get("error"),
             )
 
+    # Containment: the policies the runtime gateway decides with, and an
+    # over-limit refund held for a person's approval.
+    containment: dict[str, Any] | None = None
+    if args.contain:
+        try:
+            latest = store.get(store.versions[-1])
+            containment = _contain(client, project_id, args.assurance_dir, args.tools_url, latest.tool_risks)
+            containment["attempt"] = _over_limit_attempt(client, project_id, args, args.contain)
+        except APIError as err:
+            logging.error("containment: %s", err)
+            containment = {"error": str(err)}
+        except (OSError, ValueError, KeyError, yaml.YAMLError) as err:
+            logging.error("containment: %s", err)
+            containment = {"error": str(err)}
+        if not _containment_healthy(containment):
+            logging.error("containment is not usable: %s", json.dumps(containment, sort_keys=True))
+
     verified = [r["verified_outcome"] for r in records if r.get("verified_outcome")]
     summary = {
         "project_id": project_id,
@@ -954,6 +1100,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
         "dataset": suite,
         "evaluation": evaluation,
         "incident": incident,
+        "containment": containment,
         "regressions": inbox,
         "conversations": len(records),
         "verified_outcomes": len(verified),
@@ -976,6 +1123,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
         and all(_impact_settled(i) for i in impacts)
         and all(_release_healthy(r) for r in releases)
         and (incident is None or (_incident_healthy(incident) and "error" not in inbox))
+        and (containment is None or _containment_healthy(containment))
     )
     return 0 if ok else 1
 
@@ -1044,7 +1192,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         default=_approval_wait_s(),
         metavar="SECONDS",
-        help="how long the HTTP client waits for a contained run that is waiting for an approval",
+        help="how long a contained run waits for a person to approve an action (0: it does not wait)",
     )
     s.set_defaults(fn=cmd_run)
 
@@ -1132,6 +1280,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=120.0,
         help="seconds to wait for the incident to reach the regression inbox",
     )
+    s.add_argument(
+        "--contain",
+        metavar="VERSION",
+        help="register the tools and policies of runtime.yaml with the runtime gateway, then send a "
+        "contained refund over the limit on VERSION: it waits for a person's approval",
+    )
+    s.add_argument("--customer", default="CUS-100", help="the customer of the contained refund")
     s.set_defaults(fn=cmd_seed)
 
     args = p.parse_args(argv)

@@ -27,6 +27,7 @@ __all__ = [
     "agent_version",
     "agent_version_detail",
     "approval",
+    "approval_detail",
     "approval_token",
     "case_detail",
     "case_summary",
@@ -45,6 +46,10 @@ __all__ = [
     "imported_catalog",
     "manifest",
     "outcome",
+    "policy",
+    "policy_decision",
+    "policy_test_report",
+    "policy_version",
     "project",
     "promoted_regression",
     "queued_case",
@@ -58,6 +63,7 @@ __all__ = [
     "run",
     "run_detail",
     "scenario",
+    "tool_endpoint",
     "tool_step",
     "trace",
     "twin",
@@ -1285,6 +1291,142 @@ def approval(approval_id: str, **over: Any) -> dict[str, Any]:
         "created_at": NOW,
         "updated_at": NOW,
     } | over
+
+
+def tool_endpoint(tool: str = "refund_payment", **over: Any) -> dict[str, Any]:
+    """A registered tool endpoint of the runtime gateway (``putToolEndpoint``)."""
+    return {
+        "tool": tool,
+        "kind": "http",
+        "url": f"http://demo-tools:8091/tools/{tool}",
+        "risk": "WRITE_IRREVERSIBLE",
+        "timeout_ms": 10000,
+        "idempotency": "required",
+        "forward_headers": ["X-AgentTwin-Tenant"],
+        "updated_by": ACTOR,
+        "created_at": NOW,
+        "updated_at": NOW,
+    } | over
+
+
+def policy(policy_id: str, **over: Any) -> dict[str, Any]:
+    """A runtime policy (``listPolicies``, ``activatePolicy``)."""
+    return {
+        "id": policy_id,
+        "name": "refund-limits",
+        "tool": "refund_payment",
+        "description": "Refunds over the automatic limit need a person.",
+        "latest_version": 1,
+        "active": None,
+        "activated_by": None,
+        "activated_at": None,
+        "created_by": ACTOR,
+        "created_at": NOW,
+        "updated_at": NOW,
+    } | over
+
+
+def policy_version(policy_id: str, version: int = 1, **over: Any) -> dict[str, Any]:
+    """A stored policy version (``createPolicy``, ``addPolicyVersion``)."""
+    return {
+        "id": uuid(0xF100 + version),
+        "policy_id": policy_id,
+        "version": version,
+        "document": "apiVersion: agenttwin.dev/v1\nkind: Policy\n",
+        "spec": {"apiVersion": "agenttwin.dev/v1", "kind": "Policy"},
+        "spec_hash": sha256("c"),
+        "created_by": ACTOR,
+        "created_at": NOW,
+        "active": False,
+    } | over
+
+
+def policy_test_report(**over: Any) -> dict[str, Any]:
+    """What a policy decided in its tests (``testPolicy``)."""
+    decision = {
+        "policy": "refund-limits",
+        "effect": "require_approval",
+        "rule": "over-automatic-limit",
+        "message": "Refunds over 100 USD need a person's approval.",
+        "matched": [{"rule": "over-automatic-limit", "effect": "require_approval"}],
+        "fail_mode_applied": False,
+    }
+    return {
+        "tool": "refund_payment",
+        "spec_hash": sha256("c"),
+        "passed": True,
+        "results": [
+            {"name": "over the limit", "expect": "require_approval", "decision": decision, "passed": True}
+        ],
+        "boundaries": [
+            {
+                "rule": "over-automatic-limit",
+                "path": "args.amount",
+                "op": ">",
+                "value": 100,
+                "integer": True,
+                "probes": [
+                    {"value": 100, "effect": "allow", "fail_mode_applied": False},
+                    {
+                        "value": 101,
+                        "effect": "require_approval",
+                        "rule": "over-automatic-limit",
+                        "fail_mode_applied": False,
+                    },
+                ],
+            }
+        ],
+        "undecided": [],
+        "tool_risk": "WRITE_IRREVERSIBLE",
+        "activatable": True,
+        "activation_problems": [],
+    } | over
+
+
+def policy_decision(decision_id: str, **over: Any) -> dict[str, Any]:
+    """A decision of the runtime gateway (``listPolicyDecisions``)."""
+    return {
+        "id": decision_id,
+        "tool": "refund_payment",
+        "risk": "WRITE_IRREVERSIBLE",
+        "agent": "support-refund-agent",
+        "agent_version": "1.3.1",
+        "environment": "production",
+        "subject": ACTOR,
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "action_hash": sha256("a"),
+        "arguments": {"order_id": "ORD-1003", "amount": 150},
+        "summary": "refund_payment order_id=ORD-1003 amount=150",
+        "effect": "require_approval",
+        "outcome": "approval_required",
+        "policy": "refund-limits",
+        "policy_version_id": uuid(0xF001),
+        "rule": "over-automatic-limit",
+        "message": "Refunds over 100 USD need a person's approval.",
+        "decisions": [],
+        "fail_mode_applied": False,
+        "approval_id": None,
+        "idempotency_key": "refund-ORD-1003-150.00",
+        "limits": None,
+        "upstream_status": None,
+        "error_code": None,
+        "latency_ms": None,
+        "created_at": NOW,
+        "completed_at": None,
+    } | over
+
+
+def approval_detail(approval_id: str, **over: Any) -> dict[str, Any]:
+    """An approval with the decision that asked for it (``getApproval``)."""
+    return (
+        approval(approval_id)
+        | {
+            "decision": policy_decision(uuid(0xF002), approval_id=approval_id),
+            "used_decision": None,
+            "attempts": [],
+        }
+        | over
+    )
 
 
 def approval_token(approval_id: str) -> dict[str, Any]:

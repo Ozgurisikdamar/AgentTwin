@@ -10,6 +10,7 @@ from __future__ import annotations
 import http.client
 import json
 import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -87,6 +88,8 @@ class ToolClient:
     #: for a person, then is repeated with the token and the same key.
     gateway: Gateway | None = None
     approval_wait_s: float = 0.0
+    #: Seconds spent on calls that waited for a person's decision.
+    approval_waited_s: float = 0.0
 
     def call(
         self,
@@ -140,6 +143,7 @@ class ToolClient:
                     approval_id=r.refusal.approval_id if r.refusal else None,
                 )
 
+        began = time.monotonic()
         try:
             r = gateway.call_approved(
                 name,
@@ -154,6 +158,8 @@ class ToolClient:
             # No answer: the call may have happened; a retry with the same
             # key is deduplicated by the gateway.
             return ToolOutcome(status="error", error_code="GATEWAY_UNREACHABLE", message=err.message)
+        if r.approval is not None:
+            self.approval_waited_s += time.monotonic() - began
         return _gateway_outcome(r)
 
     def search_kb(self, run: AgentRun, query: str, limit: int = 3) -> list[dict[str, Any]]:

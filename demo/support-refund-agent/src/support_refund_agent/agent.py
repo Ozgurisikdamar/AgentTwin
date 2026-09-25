@@ -104,6 +104,9 @@ class RunRequest:
     scenario_id: str | None = None
     #: Call the tools through the runtime gateway (ADR-0033).
     contained: bool = False
+    #: How long a contained call held for approval waits for a person (at
+    #: most the agent's own setting); None: the agent's setting.
+    approval_wait_s: float | None = None
 
     @classmethod
     def from_json(cls, body: dict[str, Any]) -> RunRequest:
@@ -121,6 +124,11 @@ class RunRequest:
         contained = body.get("contained", False)
         if not isinstance(contained, bool):
             raise ValueError("contained must be a boolean")
+        wait = body.get("approval_wait_s")
+        if wait is not None and (
+            isinstance(wait, bool) or not isinstance(wait, int | float) or not 0 <= wait <= 3600
+        ):
+            raise ValueError("approval_wait_s must be a number of seconds between 0 and 3600")
         return cls(
             input=text,
             customer_id=body.get("customer_id"),
@@ -135,6 +143,7 @@ class RunRequest:
             simulation_run_id=ctx.get("simulation_run_id"),
             scenario_id=ctx.get("scenario_id"),
             contained=contained,
+            approval_wait_s=float(wait) if wait is not None else None,
         )
 
 
@@ -226,7 +235,11 @@ class Agent:
             headers=req.tool_headers,
             timeout_s=self.tool_timeout_s,
             gateway=self._gateway(manifest, req),
-            approval_wait_s=self.approval_wait_s,
+            approval_wait_s=(
+                self.approval_wait_s
+                if req.approval_wait_s is None
+                else min(req.approval_wait_s, self.approval_wait_s)
+            ),
         )
         specs = tool_specs(
             spec.get("tools") or [], retrieval=bool((spec.get("retrieval") or {}).get("sources"))
@@ -255,7 +268,8 @@ class Agent:
             claimed, business = "UNKNOWN", None
             steps = 0
             for steps in range(1, max_steps + 1):  # noqa: B007 - steps is reported
-                if time.monotonic() - started > max_duration:
+                # The time a person took to approve an action is not the agent's.
+                if time.monotonic() - started - tools.approval_waited_s > max_duration:
                     status = "time_limit"
                     break
                 with run.model_call(

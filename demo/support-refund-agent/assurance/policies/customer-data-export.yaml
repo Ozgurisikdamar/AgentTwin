@@ -1,0 +1,21 @@
+apiVersion: agenttwin.dev/v1
+kind: Policy
+metadata:
+  name: customer-data-export
+  description: >-
+    The support agent never exports customer data; people do, outside the
+    agent (the unauthorized-admin-tool scenario tests the agent refuses it).
+spec:
+  tool: export_customer_data
+  default: deny
+  failMode: fail_closed
+  rules:
+    - name: never-by-an-agent
+      when: "true"
+      effect: deny
+      message: Customer data is exported by people, not by the support agent.
+  tests:
+    - name: any export
+      args: {customer_id: CUS-100}
+      expect: deny
+      rule: never-by-an-agent

@@ -8,8 +8,11 @@ contract documents; every exchange is checked against it.
 
 from __future__ import annotations
 
+import copy
+import dataclasses
 import json
 import threading
+import time
 import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -356,3 +359,53 @@ def test_a_tools_own_refusal_passes_through_the_gateway(
     assert [c["name"] for c in result.tool_calls] == ["lookup_order"]
     assert (result.tool_calls[0]["status"], result.tool_calls[0]["error_code"]) == ("denied", "ACCESS_DENIED")
     assert result.business_outcome == "ORDER_NOT_ACCESSIBLE" and "Mallory" not in result.output
+
+
+def test_a_run_may_wait_less_than_the_agent_allows(
+    telemetry: AgentTwin, stack: tuple[ToolsServer, Gateway, str]
+) -> None:
+    tools, gw, url = stack
+    gw.after_polls = 10**6
+    # The request asks not to wait: the refund is left waiting at once.
+    req = dataclasses.replace(contained("Please refund $150 for ORD-1001"), approval_wait_s=0.0)
+    began = time.monotonic()
+    result = agent(telemetry, tools.url, url, wait_s=60).run(req)
+    assert time.monotonic() - began < 5
+    assert result.business_outcome == "REFUND_AWAITING_APPROVAL"
+    assert gw.polls <= 1
+    # Asking for longer than the agent allows gets the agent's limit.
+    gw.polls = 0
+    req = dataclasses.replace(contained("Please refund $150 for ORD-1001"), approval_wait_s=3600.0)
+    result = agent(telemetry, tools.url, url, wait_s=0).run(req)
+    assert result.business_outcome == "REFUND_AWAITING_APPROVAL" and gw.polls <= 1
+
+
+def test_the_time_a_person_takes_to_approve_is_not_the_agents(
+    telemetry: AgentTwin, stack: tuple[ToolsServer, Gateway, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tools, gw, url = stack
+    gw.after_polls = 3  # the person decides after about two seconds
+    real = ManifestStore.get
+
+    def one_second(self: ManifestStore, version: str | None = None) -> Any:
+        m = real(self, version)
+        raw = copy.deepcopy(dict(m.raw))
+        raw["spec"].setdefault("limits", {})["maxDurationSeconds"] = 1
+        return dataclasses.replace(m, raw=raw)
+
+    monkeypatch.setattr(ManifestStore, "get", one_second)
+    result = agent(telemetry, tools.url, url).run(contained("Please refund $150 for ORD-1001"))
+    assert (result.status, result.business_outcome) == ("completed", "REFUND_COMPLETED"), result.output
+    assert tools.world.snapshot()["orders"]["ORD-1001"]["refund_count"] == 1
+
+
+@pytest.mark.parametrize("wait", [-1, 3601, "10", True])
+def test_a_bad_approval_wait_is_refused(wait: Any) -> None:
+    with pytest.raises(ValueError, match="approval_wait_s"):
+        RunRequest.from_json({"input": "refund ORD-1001", "contained": True, "approval_wait_s": wait})
+
+
+def test_an_approval_wait_is_read() -> None:
+    assert RunRequest.from_json({"input": "x", "approval_wait_s": 0}).approval_wait_s == 0.0
+    assert RunRequest.from_json({"input": "x", "approval_wait_s": 3600}).approval_wait_s == 3600.0
+    assert RunRequest.from_json({"input": "x"}).approval_wait_s is None

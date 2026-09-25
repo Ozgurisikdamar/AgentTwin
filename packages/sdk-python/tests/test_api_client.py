@@ -29,6 +29,9 @@ DATASET = fake.uuid(0xA004)
 CHANGE_SET = fake.uuid(0xC101)
 RELEASE = fake.uuid(0xD101)
 REGRESSION = fake.uuid(0xE001)
+POLICY = fake.uuid(0xF010)
+APPROVAL = fake.uuid(0xF020)
+ACTOR = fake.ACTOR
 
 
 class Stub:
@@ -39,6 +42,7 @@ class Stub:
         self.eval_polls = 0
         self.gate_polls = 0
         self.checker = fake.ExchangeChecker()
+        self.policy_exists = False
 
     def check(self, h: BaseHTTPRequestHandler, body: bytes, status: int, payload: Any) -> None:
         self.checker.check(h.command, h.path, dict(h.headers.items()), body, status, payload)
@@ -204,6 +208,50 @@ class Stub:
             return 200, {"regression": fake.regression(id=into, occurrence_count=2), "merged": merged}
         if h.command == "POST" and h.path == f"{base}/promote":
             return 201, fake.promoted_regression(group)
+        return self.runtime(h, body)
+
+    def runtime(self, h: BaseHTTPRequestHandler, body: bytes) -> tuple[int, Any]:
+        sent = json.loads(body) if body else {}
+        policy = f"/api/v1/policies/{POLICY}"
+        approval = f"/api/v1/approvals/{APPROVAL}"
+        if h.command == "PUT" and h.path.startswith("/api/v1/tool-endpoints/"):
+            tool = h.path.rsplit("/", 1)[1]
+            return 201, fake.tool_endpoint(tool, url=sent["url"], risk=sent["risk"])
+        if h.command == "GET" and h.path == f"/api/v1/tool-endpoints?project_id={PROJECT}":
+            return 200, {"items": [fake.tool_endpoint()]}
+        if h.command == "GET" and h.path.startswith("/api/v1/policies?"):
+            return 200, {"items": [fake.policy(POLICY)]}
+        if h.command == "GET" and h.path == f"{policy}?project_id={PROJECT}":
+            return 200, fake.policy(POLICY) | {"versions": []}
+        if h.command == "POST" and h.path == "/api/v1/policies":
+            if self.policy_exists:
+                return 409, fake.error("POLICY_EXISTS", "A policy of that name exists.")
+            return 201, {"policy": fake.policy(POLICY), "version": fake.policy_version(POLICY)}
+        if h.command == "POST" and h.path == f"{policy}/versions":
+            added = fake.policy_version(POLICY, 2)
+            return 201, {"policy": fake.policy(POLICY, latest_version=2), "version": added, "created": True}
+        if h.command == "POST" and h.path == "/api/v1/policies/test":
+            return 200, fake.policy_test_report()
+        if h.command == "POST" and h.path in (f"{policy}/activate", f"{policy}/deactivate"):
+            active = {"id": fake.uuid(0xF101), "version": sent.get("version", 1)}
+            if h.path.endswith("deactivate"):
+                return 200, fake.policy(POLICY)
+            return 200, fake.policy(POLICY, active=active, activated_by=ACTOR, activated_at=fake.NOW)
+        if h.command == "GET" and h.path.startswith("/api/v1/approvals?"):
+            return 200, {"items": [fake.approval(APPROVAL)]}
+        if h.command == "GET" and h.path == f"{approval}?project_id={PROJECT}":
+            return 200, fake.approval_detail(APPROVAL)
+        if h.command == "POST" and h.path in (f"{approval}/approve", f"{approval}/deny"):
+            status = "APPROVED" if h.path.endswith("approve") else "DENIED"
+            return 200, fake.approval(
+                APPROVAL,
+                status=status,
+                decided_by=ACTOR,
+                decided_at=fake.NOW,
+                decision_reason=sent["reason"],
+            )
+        if h.command == "GET" and h.path.startswith("/api/v1/policy-decisions?"):
+            return 200, {"items": [fake.policy_decision(fake.uuid(0xF002))]}
         return 404, fake.error("NOT_FOUND", "Not found.")
 
 
@@ -221,7 +269,7 @@ def stub() -> Iterator[tuple[Stub, str]]:
             self.end_headers()
             self.wfile.write(raw)
 
-        do_GET = do_POST = do_PATCH = _serve
+        do_GET = do_POST = do_PATCH = do_PUT = _serve
 
         def log_message(self, *args: Any) -> None:
             pass
@@ -624,6 +672,146 @@ def test_regressions_triage_and_promotion(stub: tuple[Stub, str]) -> None:
         "promoteRegression",
     }
     assert used <= state.checker.succeeded()
+
+
+DOCUMENT = """apiVersion: agenttwin.dev/v1
+kind: Policy
+metadata: {name: refund-limits}
+spec:
+  tool: refund_payment
+  rules:
+    - {name: over-automatic-limit, when: "args.amount > 100", effect: require_approval}
+  tests:
+    - {name: over the limit, args: {amount: 150}, expect: require_approval}
+"""
+
+
+def test_runtime_endpoints_policies_approvals_and_decisions(stub: tuple[Stub, str]) -> None:
+    state, url = stub
+    client = Client(url, KEY)
+    registered = client.put_tool_endpoint(
+        PROJECT,
+        "refund_payment",
+        url="http://demo-tools:8091/tools/refund_payment",
+        risk="WRITE_IRREVERSIBLE",
+        timeout_ms=5000,
+        idempotency="required",
+        forward_headers=["X-AgentTwin-Tenant"],
+    )
+    assert registered["tool"] == "refund_payment"
+    sent = state.requests[-1]
+    assert (sent["method"], sent["path"]) == ("PUT", "/api/v1/tool-endpoints/refund_payment")
+    assert json.loads(sent["body"]) == {
+        "project_id": PROJECT,
+        "url": "http://demo-tools:8091/tools/refund_payment",
+        "risk": "WRITE_IRREVERSIBLE",
+        "kind": "http",
+        "timeout_ms": 5000,
+        "idempotency": "required",
+        "forward_headers": ["X-AgentTwin-Tenant"],
+    }
+    client.put_tool_endpoint(
+        PROJECT, "lookup_order", url="http://demo-tools:8091/tools/lookup_order", risk="READ"
+    )
+    assert json.loads(state.requests[-1]["body"]) == {
+        "project_id": PROJECT,
+        "url": "http://demo-tools:8091/tools/lookup_order",
+        "risk": "READ",
+        "kind": "http",
+    }
+    assert [e["tool"] for e in client.tool_endpoints(PROJECT)] == ["refund_payment"]
+
+    # Applied: created the first time, a new version once the name is taken.
+    applied = client.apply_policy(PROJECT, DOCUMENT)
+    assert (applied["created"], applied["version"]["version"]) == (True, 1)
+    assert json.loads(state.requests[-1]["body"]) == {"project_id": PROJECT, "document": DOCUMENT}
+    state.policy_exists = True
+    again = client.apply_policy(PROJECT, DOCUMENT)
+    assert (again["created"], again["version"]["version"]) == (True, 2)
+    assert [r["path"] for r in state.requests[-3:]] == [
+        "/api/v1/policies",
+        f"/api/v1/policies?project_id={PROJECT}",
+        f"/api/v1/policies/{POLICY}/versions",
+    ]
+    # A name taken by a policy this key cannot see.
+    with pytest.raises(APIError) as e:
+        client.apply_policy(PROJECT, DOCUMENT.replace("refund-limits", "other-policy"))
+    assert e.value.code == "POLICY_EXISTS"
+    with pytest.raises(ValueError, match=r"metadata\.name"):
+        client.apply_policy(PROJECT, "kind: Policy\n")
+    assert client.policies(PROJECT, tool="refund_payment")[0]["id"] == POLICY
+    assert state.requests[-1]["path"] == f"/api/v1/policies?project_id={PROJECT}&tool=refund_payment"
+    assert client.policy(POLICY, PROJECT)["versions"] == []
+
+    report = client.test_policy(
+        PROJECT, document=DOCUMENT, cases=[{"name": "small", "args": {"amount": 40}, "expect": "allow"}]
+    )
+    assert report["passed"] is True
+    assert json.loads(state.requests[-1]["body"])["cases"] == [
+        {"name": "small", "args": {"amount": 40}, "expect": "allow"}
+    ]
+    client.test_policy(PROJECT, policy_id=POLICY, version=1, base={"args": {"amount": 100}})
+    assert json.loads(state.requests[-1]["body"]) == {
+        "project_id": PROJECT,
+        "policy_id": POLICY,
+        "version": 1,
+        "base": {"args": {"amount": 100}},
+    }
+    with pytest.raises(ValueError, match="not both"):
+        client.test_policy(PROJECT)
+    with pytest.raises(ValueError, match="not both"):
+        client.test_policy(PROJECT, document=DOCUMENT, policy_id=POLICY)
+
+    active = client.activate_policy(POLICY, PROJECT, 1, reason="tested", idempotency_key="activate-refund-1")
+    assert active["active"]["version"] == 1
+    assert state.requests[-1]["headers"]["idempotency-key"] == "activate-refund-1"
+    assert json.loads(state.requests[-1]["body"]) == {"project_id": PROJECT, "version": 1, "reason": "tested"}
+    assert client.deactivate_policy(POLICY, PROJECT, "paused")["active"] is None
+
+    [pending] = client.approvals(PROJECT, status="PENDING", tool="refund_payment", limit=5)
+    assert pending["id"] == APPROVAL
+    assert state.requests[-1]["path"] == (
+        f"/api/v1/approvals?project_id={PROJECT}&limit=5&status=PENDING&tool=refund_payment"
+    )
+    assert client.approval(APPROVAL, PROJECT)["decision"]["approval_id"] == APPROVAL
+    approved = client.approve(
+        APPROVAL, PROJECT, "the customer's claim checks out", idempotency_key="approve-1"
+    )
+    assert (approved["status"], approved["decision_reason"]) == (
+        "APPROVED",
+        "the customer's claim checks out",
+    )
+    assert state.requests[-1]["headers"]["idempotency-key"] == "approve-1"
+    assert client.deny_approval(APPROVAL, PROJECT, "not eligible")["status"] == "DENIED"
+
+    [d] = client.policy_decisions(PROJECT, tool="refund_payment", trace_id="4BF92F3577B34DA6A3CE929D0E0E4736")
+    assert d["outcome"] == "approval_required"
+    assert state.requests[-1]["path"] == (
+        f"/api/v1/policy-decisions?project_id={PROJECT}&limit=50&tool=refund_payment"
+        "&trace_id=4bf92f3577b34da6a3ce929d0e0e4736"
+    )
+    client.policy_decisions(PROJECT, outcome="denied", effect="deny", approval_id=APPROVAL, limit=10)
+    assert state.requests[-1]["path"] == (
+        f"/api/v1/policy-decisions?project_id={PROJECT}&limit=10&outcome=denied&effect=deny"
+        f"&approval_id={APPROVAL}"
+    )
+    used = {
+        "putToolEndpoint",
+        "listToolEndpoints",
+        "listPolicies",
+        "getPolicy",
+        "createPolicy",
+        "addPolicyVersion",
+        "testPolicy",
+        "activatePolicy",
+        "deactivatePolicy",
+        "listApprovals",
+        "getApproval",
+        "approveApproval",
+        "denyApproval",
+        "listPolicyDecisions",
+    }
+    assert used <= state.checker.succeeded(), used - state.checker.succeeded()
 
 
 @pytest.mark.parametrize(

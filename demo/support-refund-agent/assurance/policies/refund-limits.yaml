@@ -1,0 +1,48 @@
+apiVersion: agenttwin.dev/v1
+kind: Policy
+metadata:
+  name: refund-limits
+  description: >-
+    A refund is the support agent's only irreversible action. Up to 100 USD
+    the agent refunds on its own; above that a person approves the exact
+    refund. A refund over 1000 USD, or a second refund in one conversation,
+    is refused.
+spec:
+  tool: refund_payment
+  default: allow
+  failMode: fail_closed
+  approval:
+    # A person has an hour to decide; the approved refund then runs once.
+    expiresInSeconds: 3600
+  rules:
+    - name: over-automatic-limit
+      when: "args.amount > 100"
+      effect: require_approval
+      message: Refunds over 100 USD need a person's approval.
+    - name: over-finance-limit
+      when: "args.amount > 1000"
+      effect: deny
+      message: Refunds over 1000 USD are issued by finance, not by an agent.
+    - name: one-refund-per-conversation
+      when: "trace.calls >= 1"
+      effect: deny
+      message: A conversation may issue one refund; a second one is refused.
+  tests:
+    - {name: a small refund, args: {order_id: ORD-1001, amount: 40}, expect: allow}
+    - {name: at the limit, args: {order_id: ORD-1001, amount: 100}, expect: allow}
+    - name: over the limit
+      args: {order_id: ORD-1001, amount: 150}
+      expect: require_approval
+      rule: over-automatic-limit
+    - name: over the finance limit
+      args: {order_id: ORD-1001, amount: 1500}
+      expect: deny
+      rule: over-finance-limit
+    - name: a second refund in the conversation
+      args: {order_id: ORD-1001, amount: 20}
+      context: {traceCalls: 1}
+      expect: deny
+      rule: one-refund-per-conversation
+    - name: no amount
+      args: {order_id: ORD-1001}
+      expect: deny

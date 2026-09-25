@@ -11,7 +11,8 @@ info:
     edge), which authenticates the caller, applies rate limits and
     `Idempotency-Key`, and forwards the request to the simulation service. The
     `/twin/v1` paths are not public: agents under test call them on the URL
-    they receive in `tools_base_url`.
+    they receive in `tools_base_url`. Nor are the `/internal/v1` paths: the
+    evaluation service calls them with a short-lived internal token (ADR-0009).
 
     **Conventions.**
     * Every response carries `X-Request-Id`; errors are
@@ -41,6 +42,8 @@ tags:
     description: Runs of an agent version against scenarios (ADR-0017).
   - name: Twin runtime
     description: The tool endpoint agents call during a simulation case (ADR-0011).
+  - name: Internal
+    description: Operations for other AgentTwin services (internal token).
 security:
   - bearerAuth: []
   - apiKey: []
@@ -489,7 +492,10 @@ paths:
         agent; `details.runnable`), `AGENT_VERSION_NOT_FOUND`,
         `SCENARIO_NOT_FOUND` (`details.missing`), `NO_SCENARIOS`,
         `TOO_MANY_SCENARIOS`, `SCENARIO_INVALID` (a scenario cannot run against
-        its twin; `details.scenarios`), `INVALID_PARAMETER`, `INVALID_REQUEST`.
+        its twin; `details.scenarios`), `INVALID_PARAMETER` (including
+        `eval_run_id` or a `side` other than `SINGLE`: the runs of an
+        evaluation are created in pairs by the evaluation service),
+        `INVALID_REQUEST`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/Organization'
@@ -799,6 +805,82 @@ paths:
         '500':
           $ref: '#/components/responses/Internal'
 
+  /internal/v1/simulation-pairs:
+    servers:
+      - url: http://{host}
+        description: The simulation service, on the internal network.
+        variables:
+          host:
+            default: simulation-service:8084
+    post:
+      operationId: startSimulationPair
+      tags: [Internal]
+      summary: Start the baseline and candidate runs of an evaluation
+      description: |
+        Queues two runs of one agent — the baseline version and the candidate
+        version — in one transaction, over one pinned suite: the same scenario
+        versions, twin definitions and seeds, so the agent version is the only
+        difference between them (ADR-0023). Both runs carry the evaluation run
+        id and their side, and their completion events
+        (`simulation.run_completed.v1`) say so.
+
+        One pair per evaluation run: repeating the request answers the pair
+        with `200` and `created: false` (a worker that retries after a crash
+        gets the same runs); a different request for the same evaluation run is
+        `409 PAIR_CONFLICT`. Service callers only.
+
+        `400` codes are those of `POST /api/v1/simulations`;
+        `AGENT_VERSION_NOT_FOUND` names the side (`details.side`).
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSimulationPairRequest'
+      responses:
+        '200':
+          description: The evaluation run already has this pair.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationPair'
+        '201':
+          description: Both runs are queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationPair'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          description: The caller is not a service (`FORBIDDEN`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            The evaluation run already has a pair requested differently
+            (`PAIR_CONFLICT`; `details.baseline_run_id`, `details.candidate_run_id`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
 webhooks:
   agentRun:
     post:
@@ -857,6 +939,13 @@ components:
       type: http
       scheme: bearer
       description: The token an operator configured for the agent endpoint (`SIMULATION_AGENT_ENDPOINTS`).
+    internalToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A short-lived internal token minted by another AgentTwin service for
+        the principal it acts for (audience `simulation-service`, ADR-0009).
 
   parameters:
     IdempotencyKey:
@@ -1454,12 +1543,107 @@ components:
         eval_run_id:
           type: [string, 'null']
           format: uuid
-          description: The release evaluation this run belongs to.
+          description: |
+            Reserved: the evaluation service sets it on the runs it creates in
+            pairs (`POST /internal/v1/simulation-pairs`). Leave it unset.
         side:
           $ref: '#/components/schemas/Side'
         release_id:
           type: [string, 'null']
           maxLength: 200
+
+    StartSimulationPairRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, eval_run_id, agent, baseline_version, candidate_version]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        eval_run_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        baseline_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+        candidate_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: May equal `baseline_version` (the same version twice shows how repeatable it is).
+        scenarios:
+          type: [array, 'null']
+          maxItems: 500
+          description: Scenario names (default every scenario that applies to the agent).
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,98}$
+        tags:
+          type: [array, 'null']
+          maxItems: 50
+          description: Scenarios with any of these tags.
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_:.-]{0,62}$
+        seed:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 4294967295
+          description: The seed of both runs (default random); it is pinned either way.
+        release_id:
+          type: [string, 'null']
+          maxLength: 200
+        requested_by:
+          type: [string, 'null']
+          pattern: '^(user|apikey|service):[A-Za-z0-9._@:-]{1,200}$'
+          description: Who asked for the evaluation; the runs are attributed to them (default the calling service).
+    PairCase:
+      type: object
+      description: One case of the pair's suite, with its id in each run.
+      required:
+        [position, scenario_id, scenario_name, severity, seed, tenant, baseline_case_id, candidate_case_id]
+      properties:
+        position:
+          type: integer
+          minimum: 0
+        scenario_id:
+          $ref: '#/components/schemas/Uuid'
+        scenario_name:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        seed:
+          type: integer
+          minimum: 0
+        tenant:
+          type: [string, 'null']
+        baseline_case_id:
+          $ref: '#/components/schemas/Uuid'
+        candidate_case_id:
+          $ref: '#/components/schemas/Uuid'
+    SimulationPair:
+      type: object
+      required: [eval_run_id, created, seed, baseline, candidate, cases]
+      properties:
+        eval_run_id:
+          $ref: '#/components/schemas/Uuid'
+        created:
+          type: boolean
+          description: '`false` when the evaluation run already had this pair (a repeated request).'
+        seed:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        baseline:
+          $ref: '#/components/schemas/PinnedRun'
+        candidate:
+          $ref: '#/components/schemas/PinnedRun'
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/PairCase'
 
     Run:
       type: object
@@ -1632,6 +1816,18 @@ components:
               type: [array, 'null']
               items:
                 type: string
+        pair:
+          type: object
+          description: The evaluation this run is one side of (runs created in pairs only).
+          required: [eval_run_id, side, counterpart_run_id]
+          properties:
+            eval_run_id:
+              $ref: '#/components/schemas/Uuid'
+            side:
+              type: string
+              enum: [BASELINE, CANDIDATE]
+            counterpart_run_id:
+              $ref: '#/components/schemas/Uuid'
     PinnedRun:
       allOf:
         - $ref: '#/components/schemas/Run'

@@ -47,6 +47,11 @@ def test_builders_are_valid_contract_payloads(contract: Contract) -> None:
     for status in ("QUEUED", "RUNNING", "EVALUATING", "COMPLETED", "FAILED", "CANCELLED"):
         contract.check_schema("PinnedRun", fake.run(status=status))
     contract.check_schema("QueuedCase", fake.queued_case(3, "refund-happy-path"))
+    pair = fake.simulation_pair(fake.uuid(0xA001), ["refund-timeout-after-mutation", "refund-happy-path"])
+    contract.check_schema("SimulationPair", pair)
+    assert pair["baseline"]["pinning"]["scenarios"] == pair["candidate"]["pinning"]["scenarios"]
+    assert fake.owner("/internal/v1/simulation-pairs") == "simulation-service"
+    assert fake.owner("/internal/v1/agent-versions") == "control-plane"
     cases = [
         fake.case_summary(i, f"s{i}", status)
         for i, status in enumerate(("PENDING", "RUNNING", "PASSED", "FAILED", "ERRORED", "CANCELLED"))

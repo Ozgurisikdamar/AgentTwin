@@ -12,7 +12,7 @@ service would reject, without a test failing.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -322,6 +322,58 @@ def case_summary(position: int, name: str, status: str, **over: Any) -> dict[str
     } | over
 
 
+def simulation_pair(
+    eval_run_id: str, names: Sequence[str], *, created: bool = True, **over: Any
+) -> dict[str, Any]:
+    """``startSimulationPair``: two queued runs over one suite (``names`` in
+    run order), baseline 1.2.4 and candidate 1.3.0 unless overridden."""
+    base_id, cand_id = uuid(0xE101), uuid(0xE102)
+    pinned = [
+        {
+            "scenario": name,
+            "scenario_version_id": uuid(0xD100 + i),
+            "spec_hash": sha256("abcdef0123456789"[i % 16]),
+            "twin": "demo-co-support",
+            "twin_definition_id": uuid(0xC101),
+            "twin_version": 1,
+            "twin_spec_hash": sha256("c"),
+            "seed": 42 + i,
+        }
+        for i, name in enumerate(names)
+    ]
+
+    def side(run_id: str, side_: str, version: str, other: str) -> dict[str, Any]:
+        out = run(
+            id=run_id, agent_version=version, side=side_, eval_run_id=eval_run_id, case_count=len(names)
+        )
+        out["pinning"] = out["pinning"] | {
+            "scenarios": pinned,
+            "pair": {"eval_run_id": eval_run_id, "side": side_, "counterpart_run_id": other},
+        }
+        return out
+
+    return {
+        "eval_run_id": eval_run_id,
+        "created": created,
+        "seed": 42,
+        "baseline": side(base_id, "BASELINE", over.pop("baseline_version", "1.2.4"), cand_id),
+        "candidate": side(cand_id, "CANDIDATE", over.pop("candidate_version", "1.3.0"), base_id),
+        "cases": [
+            {
+                "position": i,
+                "scenario_id": uuid(0xD000 + i),
+                "scenario_name": name,
+                "severity": "critical",
+                "seed": 42 + i,
+                "tenant": None,
+                "baseline_case_id": uuid(0xF100 + i),
+                "candidate_case_id": uuid(0xF200 + i),
+            }
+            for i, name in enumerate(names)
+        ],
+    } | over
+
+
 def run_detail(run_: Mapping[str, Any], cases: list[dict[str, Any]]) -> dict[str, Any]:
     """``getSimulation``: the run, its cases and no transitions."""
     return {"run": dict(run_), "cases": cases, "transitions": []}
@@ -546,6 +598,7 @@ _ROUTES: tuple[tuple[str, str], ...] = (
     ("/api/v1/scenarios", "simulation-service"),
     ("/api/v1/simulations", "simulation-service"),
     ("/twin/v1", "simulation-service"),
+    ("/internal/v1/simulation-pairs", "simulation-service"),
     ("/internal/v1", "control-plane"),
     ("/api/v1", "control-plane"),
 )

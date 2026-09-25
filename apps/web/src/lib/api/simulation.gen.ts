@@ -189,7 +189,10 @@ export interface paths {
          *     agent; `details.runnable`), `AGENT_VERSION_NOT_FOUND`,
          *     `SCENARIO_NOT_FOUND` (`details.missing`), `NO_SCENARIOS`,
          *     `TOO_MANY_SCENARIOS`, `SCENARIO_INVALID` (a scenario cannot run against
-         *     its twin; `details.scenarios`), `INVALID_PARAMETER`, `INVALID_REQUEST`.
+         *     its twin; `details.scenarios`), `INVALID_PARAMETER` (including
+         *     `eval_run_id` or a `side` other than `SINGLE`: the runs of an
+         *     evaluation are created in pairs by the evaluation service),
+         *     `INVALID_REQUEST`.
          */
         post: operations["startSimulation"];
         delete?: never;
@@ -307,6 +310,39 @@ export interface paths {
         get: operations["searchTwinKnowledgeBase"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/v1/simulation-pairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the baseline and candidate runs of an evaluation
+         * @description Queues two runs of one agent — the baseline version and the candidate
+         *     version — in one transaction, over one pinned suite: the same scenario
+         *     versions, twin definitions and seeds, so the agent version is the only
+         *     difference between them (ADR-0023). Both runs carry the evaluation run
+         *     id and their side, and their completion events
+         *     (`simulation.run_completed.v1`) say so.
+         *
+         *     One pair per evaluation run: repeating the request answers the pair
+         *     with `200` and `created: false` (a worker that retries after a crash
+         *     gets the same runs); a different request for the same evaluation run is
+         *     `409 PAIR_CONFLICT`. Service callers only.
+         *
+         *     `400` codes are those of `POST /api/v1/simulations`;
+         *     `AGENT_VERSION_NOT_FOUND` names the side (`details.side`).
+         */
+        post: operations["startSimulationPair"];
         delete?: never;
         options?: never;
         head?: never;
@@ -543,11 +579,49 @@ export interface components {
             seed?: number | null;
             /**
              * Format: uuid
-             * @description The release evaluation this run belongs to.
+             * @description Reserved: the evaluation service sets it on the runs it creates in
+             *     pairs (`POST /internal/v1/simulation-pairs`). Leave it unset.
              */
             eval_run_id?: string | null;
             side?: components["schemas"]["Side"];
             release_id?: string | null;
+        };
+        StartSimulationPairRequest: {
+            project_id: components["schemas"]["Uuid"];
+            eval_run_id: components["schemas"]["Uuid"];
+            agent: string;
+            baseline_version: string;
+            /** @description May equal `baseline_version` (the same version twice shows how repeatable it is). */
+            candidate_version: string;
+            /** @description Scenario names (default every scenario that applies to the agent). */
+            scenarios?: string[] | null;
+            /** @description Scenarios with any of these tags. */
+            tags?: string[] | null;
+            /** @description The seed of both runs (default random); it is pinned either way. */
+            seed?: number | null;
+            release_id?: string | null;
+            /** @description Who asked for the evaluation; the runs are attributed to them (default the calling service). */
+            requested_by?: string | null;
+        };
+        /** @description One case of the pair's suite, with its id in each run. */
+        PairCase: {
+            position: number;
+            scenario_id: components["schemas"]["Uuid"];
+            scenario_name: string;
+            severity: components["schemas"]["Severity"];
+            seed: number;
+            tenant: string | null;
+            baseline_case_id: components["schemas"]["Uuid"];
+            candidate_case_id: components["schemas"]["Uuid"];
+        };
+        SimulationPair: {
+            eval_run_id: components["schemas"]["Uuid"];
+            /** @description `false` when the evaluation run already had this pair (a repeated request). */
+            created: boolean;
+            seed: number;
+            baseline: components["schemas"]["PinnedRun"];
+            candidate: components["schemas"]["PinnedRun"];
+            cases: components["schemas"]["PairCase"][];
         };
         Run: {
             id: components["schemas"]["Uuid"];
@@ -617,6 +691,13 @@ export interface components {
             selection: {
                 scenarios: string[] | null;
                 tags: string[] | null;
+            };
+            /** @description The evaluation this run is one side of (runs created in pairs only). */
+            pair?: {
+                eval_run_id: components["schemas"]["Uuid"];
+                /** @enum {string} */
+                side: "BASELINE" | "CANDIDATE";
+                counterpart_run_id: components["schemas"]["Uuid"];
             };
         };
         PinnedRun: components["schemas"]["Run"] & {
@@ -1928,6 +2009,67 @@ export interface operations {
             401: components["responses"]["TwinCredential"];
             409: components["responses"]["CaseNotRunning"];
             500: components["responses"]["Internal"];
+        };
+    };
+    startSimulationPair: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSimulationPairRequest"];
+            };
+        };
+        responses: {
+            /** @description The evaluation run already has this pair. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulationPair"];
+                };
+            };
+            /** @description Both runs are queued. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulationPair"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description The caller is not a service (`FORBIDDEN`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /**
+             * @description The evaluation run already has a pair requested differently
+             *     (`PAIR_CONFLICT`; `details.baseline_run_id`, `details.candidate_run_id`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["Internal"];
+            503: components["responses"]["Unavailable"];
         };
     };
     runAgent: {

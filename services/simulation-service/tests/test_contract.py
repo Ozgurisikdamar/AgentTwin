@@ -76,7 +76,7 @@ def test_operations_are_exactly_the_service_routes() -> None:
     served = service_routes()
     assert served - documented == set(), "routes the contract does not document"
     assert documented - served == set(), "documented operations the service does not serve"
-    assert len(served) == 16
+    assert len(served) == 17
 
 
 def test_each_surface_uses_its_own_credentials() -> None:
@@ -84,6 +84,8 @@ def test_each_surface_uses_its_own_credentials() -> None:
         where = f"{method} {path}"
         if path.startswith("/api/"):
             assert "security" not in op, f"{where}: the public API uses the edge's credentials"
+        elif path.startswith("/internal/"):
+            assert op["security"] == [{"internalToken": []}], f"{where}: services call with an internal token"
         else:
             assert op["security"] == [{"caseToken": []}], f"{where}: the twin endpoint takes a case token"
 

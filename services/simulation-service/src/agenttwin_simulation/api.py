@@ -9,6 +9,8 @@ Runs       GET /api/v1/simulations/capabilities
            POST /api/v1/simulations · GET /api/v1/simulations
            GET /api/v1/simulations/{id} · GET /api/v1/simulations/{id}/cases/{case_id}
            POST /api/v1/simulations/{id}/cancel
+Internal   POST /internal/v1/simulation-pairs (the evaluation service: a
+           baseline and a candidate run over one pinned suite)
 
 Resources of projects outside the caller's scope answer 404 (no probing).
 """
@@ -27,8 +29,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from agenttwin.hashing import content_hash
 from agenttwin_core import errors
-from agenttwin_core.auth import Permission, Principal
+from agenttwin_core.auth import Permission, Principal, Role
 from agenttwin_core.db import Conn, transaction
 from agenttwin_core.errors import APIError
 from agenttwin_core.evaluators import Registry
@@ -36,7 +39,7 @@ from agenttwin_core.events import Envelope, write_outbox
 from agenttwin_core.ids import new_id, valid_uuid
 from agenttwin_core.jobs import JobStatus
 from agenttwin_core.logx import Log, request_id_var
-from agenttwin_core.web import query_int, read_model, require, require_project
+from agenttwin_core.web import principal, query_int, read_model, require, require_project
 from agenttwin_simulation.cases import case_seed, case_tenant
 from agenttwin_simulation.clients import ControlPlaneClient, UpstreamError
 from agenttwin_simulation.config import SimulationConfig
@@ -67,6 +70,7 @@ _RUN_STATUSES = frozenset(
     {"QUEUED", "PREPARING", "RUNNING", "EVALUATING", "COMPLETED", "FAILED", "CANCELLED"}
 )
 _SEVERITIES = frozenset({"critical", "high", "medium", "low"})
+_ACTOR = r"^(user|apikey|service):[A-Za-z0-9._@:-]{1,200}$"
 
 
 # ---------------------------------------------------------------- request bodies
@@ -97,9 +101,45 @@ class RunBody(_Strict):
     scenarios: list[str] | None = Field(default=None, max_length=MAX_CASES)
     tags: list[str] | None = Field(default=None, max_length=50)
     seed: int | None = Field(default=None, ge=0, le=4_294_967_295)
+    # Reserved for the runs of an evaluation, which the evaluation service
+    # creates in pairs (``POST /internal/v1/simulation-pairs``); a public
+    # request leaves them unset.
     eval_run_id: str | None = None
     side: Literal["SINGLE", "BASELINE", "CANDIDATE"] = "SINGLE"
     release_id: str | None = Field(default=None, max_length=200)
+
+
+class PairBody(_Strict):
+    """A baseline and a candidate run of one evaluation run."""
+
+    project_id: str
+    eval_run_id: str
+    agent: str = Field(pattern=_AGENT)
+    baseline_version: str = Field(min_length=1, max_length=100)
+    candidate_version: str = Field(min_length=1, max_length=100)
+    scenarios: list[str] | None = Field(default=None, max_length=MAX_CASES)
+    tags: list[str] | None = Field(default=None, max_length=50)
+    seed: int | None = Field(default=None, ge=0, le=4_294_967_295)
+    release_id: str | None = Field(default=None, max_length=200)
+    # Who asked for the evaluation (the runs are attributed to them); the
+    # calling service when unset.
+    requested_by: str | None = Field(default=None, pattern=_ACTOR)
+
+    def request_sha256(self) -> str:
+        """What a repeat of this request must match to answer the same pair.
+        Order and duplicates of the selection do not change which scenarios run."""
+        return content_hash(
+            {
+                "project_id": self.project_id.lower(),
+                "agent": self.agent,
+                "baseline_version": self.baseline_version,
+                "candidate_version": self.candidate_version,
+                "scenarios": sorted(set(self.scenarios)) if self.scenarios is not None else None,
+                "tags": sorted(set(self.tags)) if self.tags is not None else None,
+                "seed": self.seed,
+                "release_id": self.release_id,
+            }
+        )
 
 
 # ---------------------------------------------------------------- rendering
@@ -331,6 +371,91 @@ def _problem(code: str, message: str, check: ScenarioCheck | list[str]) -> APIEr
     else:
         details = {"problems": check}
     return errors.invalid(code, message, details)
+
+
+class _PairExists(Exception):
+    """A concurrent request created the evaluation run's pair first."""
+
+
+def _plan_cases(
+    rows: Sequence[Row], twins: Mapping[str, Row], run_seed: int
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The cases of a run (without ids) and what the run pins about each: its
+    scenario version, twin definition and seed. Both runs of a pair are built
+    from one plan."""
+    cases: list[dict[str, Any]] = []
+    pinned: list[dict[str, Any]] = []
+    for i, r in enumerate(rows):
+        doc = r["document"]
+        twin = twins[str(doc["spec"].get("twin") or "")]
+        seed = case_seed(run_seed, r["name"], doc["spec"].get("seed"))
+        cases.append(
+            {
+                "position": i,
+                "scenario_id": r["id"],
+                "scenario_version_id": r["version_id"],
+                "scenario_name": r["name"],
+                "severity": r["severity"],
+                "twin_definition_id": twin["id"],
+                "seed": seed,
+                "tenant": case_tenant(doc),
+            }
+        )
+        pinned.append(
+            {
+                "scenario": r["name"],
+                "scenario_version_id": str(r["version_id"]),
+                "spec_hash": r["spec_hash"],
+                "twin": twin["name"],
+                "twin_definition_id": str(twin["id"]),
+                "twin_version": twin["version"],
+                "twin_spec_hash": twin["spec_hash"],
+                "seed": seed,
+            }
+        )
+    return cases, pinned
+
+
+def _requested_event(run: Mapping[str, Any], correlation: str) -> Envelope:
+    return Envelope.new(
+        "simulation.run_requested.v1",
+        PRODUCER,
+        str(run["organization_id"]),
+        str(run["project_id"]),
+        correlation,
+        {"run_id": run["id"], "eval_run_id": run["eval_run_id"], "side": run["side"]},
+    )
+
+
+def _queued_case(c: Mapping[str, Any]) -> dict[str, Any]:
+    return _pick(c, ("id", "position", "scenario_id", "scenario_name", "severity", "seed", "tenant"))
+
+
+def _pair_json(
+    eval_run_id: str,
+    baseline: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    baseline_cases: Sequence[Mapping[str, Any]],
+    candidate_cases: Sequence[Mapping[str, Any]],
+    *,
+    created: bool,
+) -> dict[str, Any]:
+    """Both runs, and each case of the suite with its id on either side."""
+    by_position = {int(c["position"]): c for c in candidate_cases}
+    cases = []
+    for b in sorted(baseline_cases, key=lambda c: int(c["position"])):
+        c = by_position[int(b["position"])]
+        cases.append(_queued_case(b) | {"baseline_case_id": str(b["id"]), "candidate_case_id": str(c["id"])})
+    for case in cases:
+        del case["id"]
+    return {
+        "eval_run_id": eval_run_id,
+        "created": created,
+        "seed": (baseline.get("pinning") or {}).get("seed"),
+        "baseline": run_json(baseline, pinning=True),
+        "candidate": run_json(candidate, pinning=True),
+        "cases": cases,
+    }
 
 
 # ---------------------------------------------------------------- the API
@@ -598,6 +723,13 @@ class SimulationAPI:
             _check_uuid(body.project_id, "project_id")
             _check_uuid(body.eval_run_id, "eval_run_id")
             p = require_project(request, Permission.SIMULATION_RUN, body.project_id)
+            if body.eval_run_id is not None or body.side != "SINGLE":
+                raise errors.invalid(
+                    "INVALID_PARAMETER",
+                    "eval_run_id and side are set by the evaluation service, which creates the "
+                    "baseline and candidate runs of an evaluation together; leave them unset.",
+                    {"field": "eval_run_id" if body.eval_run_id is not None else "side"},
+                )
             return await self._create_run(p, body)
 
         @app.get("/api/v1/simulations")
@@ -662,42 +794,63 @@ class SimulationAPI:
             final = JobStatus(row["status"]).terminal
             return JSONResponse({"run": run_json(row)}, status_code=200 if final else 202)
 
+        @app.post("/internal/v1/simulation-pairs")
+        async def create_pair(request: Request) -> JSONResponse:
+            p = principal(request)
+            if p.role is not Role.SERVICE:
+                raise errors.forbidden()
+            body = await read_model(request, PairBody)
+            _check_uuid(body.project_id, "project_id")
+            _check_uuid(body.eval_run_id, "eval_run_id")
+            if not p.can_access_project(body.project_id):
+                raise errors.not_found()
+            return await self._create_pair(p, body)
+
     # -- run creation -----------------------------------------------------------
 
-    async def _create_run(self, p: Principal, body: RunBody) -> JSONResponse:
-        project = body.project_id
-        if body.agent not in self.cfg.agent_endpoints:
+    def _check_selection(self, agent: str, scenarios: list[str] | None, tags: list[str] | None) -> None:
+        if agent not in self.cfg.agent_endpoints:
             raise errors.invalid(
                 "AGENT_NOT_RUNNABLE",
-                f"This deployment cannot run agent {body.agent!r}: no endpoint is configured for it "
+                f"This deployment cannot run agent {agent!r}: no endpoint is configured for it "
                 "(SIMULATION_AGENT_ENDPOINTS).",
                 {"runnable": sorted(self.cfg.agent_endpoints)},
             )
-        for tag in body.tags or []:
+        for tag in tags or []:
             if not _TAG.match(tag):
                 raise errors.invalid("INVALID_PARAMETER", f"Invalid tag {tag!r}.", {"field": "tags"})
-        for name in body.scenarios or []:
+        for name in scenarios or []:
             if not re.match(_NAME, name):
                 raise errors.invalid(
                     "INVALID_PARAMETER", f"Invalid scenario name {name!r}.", {"field": "scenarios"}
                 )
+
+    async def _agent_version(
+        self, p: Principal, project: str, agent: str, version: str, side: str | None = None
+    ) -> Mapping[str, Any]:
         try:
-            version = await self.control_plane.agent_version(
-                p.org_id, project, body.agent, body.agent_version
-            )
+            found = await self.control_plane.agent_version(p.org_id, project, agent, version)
         except UpstreamError as err:
             self.log.warn("agent version lookup failed", error=str(err))
             raise errors.unavailable(
                 "The control plane could not be reached to resolve the agent version."
             ) from None
-        if version is None:
+        if found is None:
             raise errors.invalid(
                 "AGENT_VERSION_NOT_FOUND",
-                f"Agent {body.agent!r} has no registered version {body.agent_version!r} in this project.",
+                f"Agent {agent!r} has no registered version {version!r} in this project.",
+                {"side": side} if side else None,
             )
-        rows = await self.store.scenarios_for_run(project, body.agent, body.scenarios, body.tags)
-        if body.scenarios:
-            missing = sorted(set(body.scenarios) - {r["name"] for r in rows})
+        return found
+
+    async def _suite(
+        self, project: str, agent: str, scenarios: list[str] | None, tags: list[str] | None
+    ) -> tuple[list[Row], dict[str, Row]]:
+        """The selected scenarios at their latest versions, with the twin each
+        runs against, checked against each other — before anything is written."""
+        rows = await self.store.scenarios_for_run(project, agent, scenarios, tags)
+        if scenarios:
+            missing = sorted(set(scenarios) - {r["name"] for r in rows})
             if missing:
                 raise errors.invalid(
                     "SCENARIO_NOT_FOUND",
@@ -734,59 +887,52 @@ class SimulationAPI:
                 "Some scenarios cannot run against their twins.",
                 {"scenarios": problems},
             )
-        run_seed = body.seed if body.seed is not None else secrets.randbits(32)
-        run_id = new_id()
-        correlation = request_id_var.get() or run_id
-        cases: list[dict[str, Any]] = []
-        pinned: list[dict[str, Any]] = []
-        for i, r in enumerate(rows):
-            doc = r["document"]
-            twin = twins[str(doc["spec"].get("twin") or "")]
-            assert twin is not None  # noqa: S101 - checked above
-            seed = case_seed(run_seed, r["name"], doc["spec"].get("seed"))
-            cases.append(
-                {
-                    "id": new_id(),
-                    "position": i,
-                    "scenario_id": r["id"],
-                    "scenario_version_id": r["version_id"],
-                    "scenario_name": r["name"],
-                    "severity": r["severity"],
-                    "twin_definition_id": twin["id"],
-                    "seed": seed,
-                    "tenant": case_tenant(doc),
-                }
-            )
-            pinned.append(
-                {
-                    "scenario": r["name"],
-                    "scenario_version_id": str(r["version_id"]),
-                    "spec_hash": r["spec_hash"],
-                    "twin": twin["name"],
-                    "twin_definition_id": str(twin["id"]),
-                    "twin_version": twin["version"],
-                    "twin_spec_hash": twin["spec_hash"],
-                    "seed": seed,
-                }
-            )
-        pinning = {
+        return rows, {name: twin for name, twin in twins.items() if twin is not None}
+
+    def _pinning(
+        self,
+        *,
+        correlation: str,
+        run_seed: int,
+        agent: str,
+        version: str,
+        found: Mapping[str, Any],
+        pinned: list[dict[str, Any]],
+        selection: Mapping[str, Any],
+        pair: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        out: dict[str, Any] = {
             "correlation_id": correlation,
             "seed": run_seed,
             "agent": {
-                "name": body.agent,
-                "version": body.agent_version,
-                "version_id": version.get("id"),
-                "manifest_sha256": version.get("manifest_sha256"),
-                "prompt_sha256": version.get("prompt_sha256"),
-                "model_provider": version.get("model_provider"),
-                "model_name": version.get("model_name"),
-                "commit_sha": version.get("commit_sha"),
+                "name": agent,
+                "version": version,
+                "version_id": found.get("id"),
+                "manifest_sha256": found.get("manifest_sha256"),
+                "prompt_sha256": found.get("prompt_sha256"),
+                "model_provider": found.get("model_provider"),
+                "model_name": found.get("model_name"),
+                "commit_sha": found.get("commit_sha"),
             },
             "scenarios": pinned,
             "evaluators": self.registry.versions(),
             "engine": ENGINE_VERSION,
-            "selection": {"scenarios": body.scenarios, "tags": body.tags},
+            "selection": dict(selection),
         }
+        if pair is not None:
+            out["pair"] = dict(pair)
+        return out
+
+    async def _create_run(self, p: Principal, body: RunBody) -> JSONResponse:
+        project = body.project_id
+        self._check_selection(body.agent, body.scenarios, body.tags)
+        version = await self._agent_version(p, project, body.agent, body.agent_version)
+        rows, twins = await self._suite(project, body.agent, body.scenarios, body.tags)
+        run_seed = body.seed if body.seed is not None else secrets.randbits(32)
+        run_id = new_id()
+        correlation = request_id_var.get() or run_id
+        suite, pinned = _plan_cases(rows, twins, run_seed)
+        cases = [c | {"id": new_id()} for c in suite]
         run = {
             "id": run_id,
             "organization_id": p.org_id,
@@ -794,26 +940,23 @@ class SimulationAPI:
             "agent_name": body.agent,
             "agent_version": body.agent_version,
             "agent_version_id": version.get("id"),
-            "side": body.side,
-            "eval_run_id": body.eval_run_id,
+            "side": "SINGLE",
+            "eval_run_id": None,
             "release_id": body.release_id,
             "requested_by": p.actor,
-            "pinning": pinning,
+            "pinning": self._pinning(
+                correlation=correlation,
+                run_seed=run_seed,
+                agent=body.agent,
+                version=body.agent_version,
+                found=version,
+                pinned=pinned,
+                selection={"scenarios": body.scenarios, "tags": body.tags},
+            ),
         }
         async with transaction(self.store.pool) as conn:
             row = await self.store.insert_run(conn, run, cases)
-            await write_outbox(
-                conn,
-                SCHEMA,
-                Envelope.new(
-                    "simulation.run_requested.v1",
-                    PRODUCER,
-                    p.org_id,
-                    project,
-                    correlation,
-                    {"run_id": run_id, "eval_run_id": body.eval_run_id, "side": body.side},
-                ),
-            )
+            await write_outbox(conn, SCHEMA, _requested_event(run, correlation))
         self.log.info(
             "simulation run requested",
             run_id=run_id,
@@ -823,15 +966,118 @@ class SimulationAPI:
             seed=run_seed,
         )
         return JSONResponse(
-            {
-                "run": run_json(row, pinning=True),
-                "cases": [
-                    _pick(c, ("id", "position", "scenario_id", "scenario_name", "severity", "seed", "tenant"))
-                    for c in cases
-                ],
-            },
+            {"run": run_json(row, pinning=True), "cases": [_queued_case(c) for c in cases]},
             status_code=202,
         )
+
+    async def _create_pair(self, p: Principal, body: PairBody) -> JSONResponse:
+        """Both runs of an evaluation in one transaction, over one suite: the
+        same scenario versions, twin definitions and seeds, so the agent
+        version is the only difference between them. One pair per evaluation
+        run; a repeat of the request answers it (``200``), a different
+        request for the same evaluation run is a conflict."""
+        project, eval_run = body.project_id, body.eval_run_id
+        request_sha = body.request_sha256()
+        existing = await self.store.get_pair(eval_run)
+        if existing is not None:
+            return await self._existing_pair(p, existing, request_sha)
+        self._check_selection(body.agent, body.scenarios, body.tags)
+        found = {
+            "BASELINE": await self._agent_version(p, project, body.agent, body.baseline_version, "baseline"),
+            "CANDIDATE": await self._agent_version(
+                p, project, body.agent, body.candidate_version, "candidate"
+            ),
+        }
+        versions = {"BASELINE": body.baseline_version, "CANDIDATE": body.candidate_version}
+        rows, twins = await self._suite(project, body.agent, body.scenarios, body.tags)
+        run_seed = body.seed if body.seed is not None else secrets.randbits(32)
+        suite, pinned = _plan_cases(rows, twins, run_seed)
+        ids = {"BASELINE": new_id(), "CANDIDATE": new_id()}
+        correlation = request_id_var.get() or eval_run
+        requested_by = body.requested_by or p.actor
+        runs: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+        for side, other in (("BASELINE", "CANDIDATE"), ("CANDIDATE", "BASELINE")):
+            run = {
+                "id": ids[side],
+                "organization_id": p.org_id,
+                "project_id": project,
+                "agent_name": body.agent,
+                "agent_version": versions[side],
+                "agent_version_id": found[side].get("id"),
+                "side": side,
+                "eval_run_id": eval_run,
+                "release_id": body.release_id,
+                "requested_by": requested_by,
+                "pinning": self._pinning(
+                    correlation=correlation,
+                    run_seed=run_seed,
+                    agent=body.agent,
+                    version=versions[side],
+                    found=found[side],
+                    pinned=pinned,
+                    selection={"scenarios": body.scenarios, "tags": body.tags},
+                    pair={"eval_run_id": eval_run, "side": side, "counterpart_run_id": ids[other]},
+                ),
+            }
+            runs.append((run, [c | {"id": new_id()} for c in suite]))
+        pair = {
+            "eval_run_id": eval_run,
+            "organization_id": p.org_id,
+            "project_id": project,
+            "baseline_run_id": ids["BASELINE"],
+            "candidate_run_id": ids["CANDIDATE"],
+            "request_sha256": request_sha,
+            "requested_by": requested_by,
+        }
+        try:
+            async with transaction(self.store.pool) as conn:
+                # The pair row first: a concurrent request for the same
+                # evaluation run waits on its key, then finds the pair.
+                if not await self.store.claim_pair(conn, pair):
+                    raise _PairExists
+                inserted = [await self.store.insert_run(conn, run, cases) for run, cases in runs]
+                for run, _ in runs:
+                    await write_outbox(conn, SCHEMA, _requested_event(run, correlation))
+        except _PairExists:
+            raced = await self.store.get_pair(eval_run)
+            if raced is None:  # pragma: no cover - the conflicting row committed
+                raise errors.unavailable() from None
+            return await self._existing_pair(p, raced, request_sha)
+        self.log.info(
+            "simulation pair requested",
+            eval_run_id=eval_run,
+            baseline=ids["BASELINE"],
+            candidate=ids["CANDIDATE"],
+            cases=len(suite),
+            seed=run_seed,
+        )
+        return JSONResponse(
+            _pair_json(eval_run, inserted[0], inserted[1], runs[0][1], runs[1][1], created=True),
+            status_code=201,
+        )
+
+    async def _existing_pair(self, p: Principal, pair: Row, request_sha: str) -> JSONResponse:
+        if not _accessible(p, pair):
+            raise errors.not_found()
+        baseline_id, candidate_id = str(pair["baseline_run_id"]), str(pair["candidate_run_id"])
+        if pair["request_sha256"] != request_sha:
+            raise errors.conflict(
+                "PAIR_CONFLICT",
+                "This evaluation run already has baseline and candidate runs, requested differently.",
+                {"baseline_run_id": baseline_id, "candidate_run_id": candidate_id},
+            )
+        baseline, candidate = await self.store.get_run(baseline_id), await self.store.get_run(candidate_id)
+        if baseline is None or candidate is None:  # pragma: no cover - the pair's foreign keys
+            raise errors.not_found()
+        body = _pair_json(
+            str(pair["eval_run_id"]),
+            baseline,
+            candidate,
+            await self.store.run_cases(baseline_id),
+            await self.store.run_cases(candidate_id),
+            created=False,
+        )
+        return JSONResponse(body, status_code=200)
 
     async def _case_detail(self, case: Row) -> dict[str, Any]:
         twin_row = await self.store.twin_by_id(str(case["twin_definition_id"]))

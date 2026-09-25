@@ -11,13 +11,14 @@ import uuid
 
 import pytest
 
-from agenttwin_core.auth import Principal, Role
+from agenttwin_core.auth import Principal, Role, service_principal
 from sim_testutil import AGENT, ORG, PROJECT, running_cases, scenario_yaml, simulation_stack, twin_yaml
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
 HAPPY = "refund-happy-path"
 VIEWER = Principal(org_id=ORG, actor="user:viewer", role=Role.VIEWER, project_ids=(PROJECT,))
+EVALUATION = service_principal("evaluation-service", ORG, PROJECT)
 
 
 async def test_every_operation_is_exercised_and_answers_as_documented() -> None:
@@ -79,6 +80,24 @@ async def test_every_operation_is_exercised_and_answers_as_documented() -> None:
         stopping = await s.ok("POST", f"/api/v1/simulations/{second}/cancel", status=202)
         assert stopping["run"]["cancel_requested"] is True
 
+        # -- the evaluation service's pair of runs ------------------------------------
+        eval_run = str(uuid.uuid4())
+        pair_body = {
+            "project_id": PROJECT,
+            "eval_run_id": eval_run,
+            "agent": AGENT,
+            "baseline_version": "1.2.4",
+            "candidate_version": "1.3.0",
+            "scenarios": [HAPPY],
+        }
+        created = await s.call("POST", "/internal/v1/simulation-pairs", pair_body, as_=EVALUATION)
+        assert created.status_code == 201 and created.json()["created"] is True
+        replayed = await s.call("POST", "/internal/v1/simulation-pairs", pair_body, as_=EVALUATION)
+        assert replayed.status_code == 200 and replayed.json()["created"] is False
+        conflict = await s.call(
+            "POST", "/internal/v1/simulation-pairs", pair_body | {"seed": 1}, as_=EVALUATION
+        )
+
         archived = await s.ok("POST", f"/api/v1/scenarios/{scenario_id}/archive")
         assert archived["scenario"]["archived"] is True
 
@@ -117,6 +136,8 @@ async def test_every_operation_is_exercised_and_answers_as_documented() -> None:
                 409,
                 "RUN_CANCELLED",
             ),
+            (conflict, 409, "PAIR_CONFLICT"),
+            (await s.call("POST", "/internal/v1/simulation-pairs", pair_body), 403, "FORBIDDEN"),
         ]
         assert [(r.status_code, r.json()["error"]["code"]) for r, _, _ in refusals] == [
             (status, code) for _, status, code in refusals

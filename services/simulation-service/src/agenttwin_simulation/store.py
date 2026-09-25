@@ -343,6 +343,34 @@ class Store:
         await self.add_transition(conn, str(run["id"]), None, JobStatus.QUEUED, "requested")
         return row
 
+    # ------------------------------------------------------------ pairs
+
+    async def claim_pair(self, conn: Conn, pair: Mapping[str, Any]) -> bool:
+        """Writes an evaluation run's pair row (its runs follow in the same
+        transaction; the foreign keys are checked at commit). False when the
+        evaluation run already has a pair: a concurrent claim waits on the key
+        until the first transaction ends."""
+        row = await self._one(
+            conn,
+            """INSERT INTO simulation_pair (eval_run_id, organization_id, project_id, baseline_run_id,
+                   candidate_run_id, request_sha256, requested_by)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (eval_run_id) DO NOTHING RETURNING eval_run_id""",
+            (
+                pair["eval_run_id"],
+                pair["organization_id"],
+                pair["project_id"],
+                pair["baseline_run_id"],
+                pair["candidate_run_id"],
+                pair["request_sha256"],
+                pair["requested_by"],
+            ),
+        )
+        return row is not None
+
+    async def get_pair(self, eval_run_id: str) -> Row | None:
+        return await self.one("SELECT * FROM simulation_pair WHERE eval_run_id = %s", (eval_run_id,))
+
     async def add_transition(
         self, conn: Conn, run_id: str, from_status: str | None, to_status: str, reason: str | None
     ) -> None:

@@ -256,10 +256,10 @@ async def test_run_requests_are_checked_before_anything_is_queued() -> None:
         assert await s.store.all("SELECT id FROM simulation_run") == []
 
         # Every scenario of the agent runs when none is named.
-        run = await s.ok(
-            "POST", "/api/v1/simulations", req(release_id="rel-42", side="CANDIDATE"), status=202
-        )
-        assert run["run"]["release_id"] == "rel-42" and run["run"]["side"] == "CANDIDATE"
+        # (A public run is a single run: the sides of an evaluation are created
+        # in pairs, ADR-0023, test_simulation_pairs_integration.py.)
+        run = await s.ok("POST", "/api/v1/simulations", req(release_id="rel-42"), status=202)
+        assert run["run"]["release_id"] == "rel-42" and run["run"]["side"] == "SINGLE"
         assert [c["scenario_name"] for c in run["cases"]] == [HAPPY]
         # The control plane was asked as the simulation service of this project.
         assert s.control_plane.calls[-1] == {"project_id": PROJECT, "agent": AGENT, "version": "1.2.4"}

@@ -6443,6 +6443,10 @@
               "\"PENDING\"",
               "\"RUNNING\""
             ],
+            "/run/pinning/pair/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
             "/run/side": [
               "\"BASELINE\"",
               "\"CANDIDATE\"",
@@ -6551,6 +6555,11 @@
               "prompt_sha256",
               "version",
               "version_id"
+            ],
+            "/run/pinning/pair": [
+              "counterpart_run_id",
+              "eval_run_id",
+              "side"
             ],
             "/run/pinning/scenarios/[]": [
               "scenario",
@@ -6763,6 +6772,18 @@
             ],
             "/run/pinning/evaluators": [
               "object"
+            ],
+            "/run/pinning/pair": [
+              "object"
+            ],
+            "/run/pinning/pair/counterpart_run_id": [
+              "string"
+            ],
+            "/run/pinning/pair/eval_run_id": [
+              "string"
+            ],
+            "/run/pinning/pair/side": [
+              "string"
             ],
             "/run/pinning/scenarios": [
               "array"
@@ -8599,6 +8620,10 @@
               "\"low\"",
               "\"medium\""
             ],
+            "/run/pinning/pair/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
             "/run/side": [
               "\"BASELINE\"",
               "\"CANDIDATE\"",
@@ -8674,6 +8699,11 @@
               "prompt_sha256",
               "version",
               "version_id"
+            ],
+            "/run/pinning/pair": [
+              "counterpart_run_id",
+              "eval_run_id",
+              "side"
             ],
             "/run/pinning/scenarios/[]": [
               "scenario",
@@ -8827,6 +8857,18 @@
             ],
             "/run/pinning/evaluators": [
               "object"
+            ],
+            "/run/pinning/pair": [
+              "object"
+            ],
+            "/run/pinning/pair/counterpart_run_id": [
+              "string"
+            ],
+            "/run/pinning/pair/eval_run_id": [
+              "string"
+            ],
+            "/run/pinning/pair/side": [
+              "string"
             ],
             "/run/pinning/scenarios": [
               "array"
@@ -9515,6 +9557,1322 @@
               "boolean"
             ],
             "/twin/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /internal/v1/simulation-pairs": {
+      "parameters": {},
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "agent",
+              "baseline_version",
+              "candidate_version",
+              "eval_run_id",
+              "project_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/baseline_version": [
+              "string"
+            ],
+            "/candidate_version": [
+              "string"
+            ],
+            "/eval_run_id": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/release_id": [
+              "null",
+              "string"
+            ],
+            "/requested_by": [
+              "null",
+              "string"
+            ],
+            "/scenarios": [
+              "array",
+              "null"
+            ],
+            "/scenarios/[]": [
+              "string"
+            ],
+            "/seed": [
+              "integer",
+              "null"
+            ],
+            "/tags": [
+              "array",
+              "null"
+            ],
+            "/tags/[]": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/baseline/pinning/pair/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
+            "/baseline/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/baseline/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/candidate/pinning/pair/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
+            "/candidate/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/candidate/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/cases/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ]
+          },
+          "required": {
+            "/": [
+              "baseline",
+              "candidate",
+              "cases",
+              "created",
+              "eval_run_id",
+              "seed"
+            ],
+            "/baseline": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/baseline/pinning": [
+              "agent",
+              "correlation_id",
+              "engine",
+              "evaluators",
+              "scenarios",
+              "seed",
+              "selection"
+            ],
+            "/baseline/pinning/agent": [
+              "commit_sha",
+              "manifest_sha256",
+              "model_name",
+              "model_provider",
+              "name",
+              "prompt_sha256",
+              "version",
+              "version_id"
+            ],
+            "/baseline/pinning/pair": [
+              "counterpart_run_id",
+              "eval_run_id",
+              "side"
+            ],
+            "/baseline/pinning/scenarios/[]": [
+              "scenario",
+              "scenario_version_id",
+              "seed",
+              "spec_hash",
+              "twin",
+              "twin_definition_id",
+              "twin_spec_hash",
+              "twin_version"
+            ],
+            "/baseline/pinning/selection": [
+              "scenarios",
+              "tags"
+            ],
+            "/candidate": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/candidate/pinning": [
+              "agent",
+              "correlation_id",
+              "engine",
+              "evaluators",
+              "scenarios",
+              "seed",
+              "selection"
+            ],
+            "/candidate/pinning/agent": [
+              "commit_sha",
+              "manifest_sha256",
+              "model_name",
+              "model_provider",
+              "name",
+              "prompt_sha256",
+              "version",
+              "version_id"
+            ],
+            "/candidate/pinning/pair": [
+              "counterpart_run_id",
+              "eval_run_id",
+              "side"
+            ],
+            "/candidate/pinning/scenarios/[]": [
+              "scenario",
+              "scenario_version_id",
+              "seed",
+              "spec_hash",
+              "twin",
+              "twin_definition_id",
+              "twin_spec_hash",
+              "twin_version"
+            ],
+            "/candidate/pinning/selection": [
+              "scenarios",
+              "tags"
+            ],
+            "/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/baseline": [
+              "object"
+            ],
+            "/baseline/agent_name": [
+              "string"
+            ],
+            "/baseline/agent_version": [
+              "string"
+            ],
+            "/baseline/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/attempts": [
+              "integer"
+            ],
+            "/baseline/cancel_requested": [
+              "boolean"
+            ],
+            "/baseline/cancelled": [
+              "integer"
+            ],
+            "/baseline/case_count": [
+              "integer"
+            ],
+            "/baseline/created_at": [
+              "string"
+            ],
+            "/baseline/critical_failures": [
+              "integer"
+            ],
+            "/baseline/error": [
+              "null",
+              "string"
+            ],
+            "/baseline/errored": [
+              "integer"
+            ],
+            "/baseline/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/failed": [
+              "integer"
+            ],
+            "/baseline/finished_at": [
+              "null",
+              "string"
+            ],
+            "/baseline/finished_cases": [
+              "integer"
+            ],
+            "/baseline/id": [
+              "string"
+            ],
+            "/baseline/organization_id": [
+              "string"
+            ],
+            "/baseline/passed": [
+              "integer"
+            ],
+            "/baseline/pinning": [
+              "object"
+            ],
+            "/baseline/pinning/agent": [
+              "object"
+            ],
+            "/baseline/pinning/agent/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/manifest_sha256": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/model_name": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/model_provider": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/name": [
+              "string"
+            ],
+            "/baseline/pinning/agent/prompt_sha256": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/version": [
+              "string"
+            ],
+            "/baseline/pinning/agent/version_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/correlation_id": [
+              "string"
+            ],
+            "/baseline/pinning/engine": [
+              "string"
+            ],
+            "/baseline/pinning/evaluators": [
+              "object"
+            ],
+            "/baseline/pinning/pair": [
+              "object"
+            ],
+            "/baseline/pinning/pair/counterpart_run_id": [
+              "string"
+            ],
+            "/baseline/pinning/pair/eval_run_id": [
+              "string"
+            ],
+            "/baseline/pinning/pair/side": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios": [
+              "array"
+            ],
+            "/baseline/pinning/scenarios/[]": [
+              "object"
+            ],
+            "/baseline/pinning/scenarios/[]/scenario": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/scenario_version_id": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/seed": [
+              "integer"
+            ],
+            "/baseline/pinning/scenarios/[]/spec_hash": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin_definition_id": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin_spec_hash": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin_version": [
+              "integer"
+            ],
+            "/baseline/pinning/seed": [
+              "integer"
+            ],
+            "/baseline/pinning/selection": [
+              "object"
+            ],
+            "/baseline/pinning/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/baseline/pinning/selection/scenarios/[]": [
+              "string"
+            ],
+            "/baseline/pinning/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/baseline/pinning/selection/tags/[]": [
+              "string"
+            ],
+            "/baseline/project_id": [
+              "string"
+            ],
+            "/baseline/release_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/requested_by": [
+              "string"
+            ],
+            "/baseline/side": [
+              "string"
+            ],
+            "/baseline/started_at": [
+              "null",
+              "string"
+            ],
+            "/baseline/status": [
+              "string"
+            ],
+            "/baseline/updated_at": [
+              "string"
+            ],
+            "/candidate": [
+              "object"
+            ],
+            "/candidate/agent_name": [
+              "string"
+            ],
+            "/candidate/agent_version": [
+              "string"
+            ],
+            "/candidate/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/attempts": [
+              "integer"
+            ],
+            "/candidate/cancel_requested": [
+              "boolean"
+            ],
+            "/candidate/cancelled": [
+              "integer"
+            ],
+            "/candidate/case_count": [
+              "integer"
+            ],
+            "/candidate/created_at": [
+              "string"
+            ],
+            "/candidate/critical_failures": [
+              "integer"
+            ],
+            "/candidate/error": [
+              "null",
+              "string"
+            ],
+            "/candidate/errored": [
+              "integer"
+            ],
+            "/candidate/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/failed": [
+              "integer"
+            ],
+            "/candidate/finished_at": [
+              "null",
+              "string"
+            ],
+            "/candidate/finished_cases": [
+              "integer"
+            ],
+            "/candidate/id": [
+              "string"
+            ],
+            "/candidate/organization_id": [
+              "string"
+            ],
+            "/candidate/passed": [
+              "integer"
+            ],
+            "/candidate/pinning": [
+              "object"
+            ],
+            "/candidate/pinning/agent": [
+              "object"
+            ],
+            "/candidate/pinning/agent/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/manifest_sha256": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/model_name": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/model_provider": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/name": [
+              "string"
+            ],
+            "/candidate/pinning/agent/prompt_sha256": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/version": [
+              "string"
+            ],
+            "/candidate/pinning/agent/version_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/correlation_id": [
+              "string"
+            ],
+            "/candidate/pinning/engine": [
+              "string"
+            ],
+            "/candidate/pinning/evaluators": [
+              "object"
+            ],
+            "/candidate/pinning/pair": [
+              "object"
+            ],
+            "/candidate/pinning/pair/counterpart_run_id": [
+              "string"
+            ],
+            "/candidate/pinning/pair/eval_run_id": [
+              "string"
+            ],
+            "/candidate/pinning/pair/side": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios": [
+              "array"
+            ],
+            "/candidate/pinning/scenarios/[]": [
+              "object"
+            ],
+            "/candidate/pinning/scenarios/[]/scenario": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/scenario_version_id": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/seed": [
+              "integer"
+            ],
+            "/candidate/pinning/scenarios/[]/spec_hash": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin_definition_id": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin_spec_hash": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin_version": [
+              "integer"
+            ],
+            "/candidate/pinning/seed": [
+              "integer"
+            ],
+            "/candidate/pinning/selection": [
+              "object"
+            ],
+            "/candidate/pinning/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/candidate/pinning/selection/scenarios/[]": [
+              "string"
+            ],
+            "/candidate/pinning/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/candidate/pinning/selection/tags/[]": [
+              "string"
+            ],
+            "/candidate/project_id": [
+              "string"
+            ],
+            "/candidate/release_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/requested_by": [
+              "string"
+            ],
+            "/candidate/side": [
+              "string"
+            ],
+            "/candidate/started_at": [
+              "null",
+              "string"
+            ],
+            "/candidate/status": [
+              "string"
+            ],
+            "/candidate/updated_at": [
+              "string"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/cases/[]/position": [
+              "integer"
+            ],
+            "/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/cases/[]/seed": [
+              "integer"
+            ],
+            "/cases/[]/severity": [
+              "string"
+            ],
+            "/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/eval_run_id": [
+              "string"
+            ],
+            "/seed": [
+              "integer"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/baseline/pinning/pair/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
+            "/baseline/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/baseline/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/candidate/pinning/pair/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
+            "/candidate/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/candidate/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/cases/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ]
+          },
+          "required": {
+            "/": [
+              "baseline",
+              "candidate",
+              "cases",
+              "created",
+              "eval_run_id",
+              "seed"
+            ],
+            "/baseline": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/baseline/pinning": [
+              "agent",
+              "correlation_id",
+              "engine",
+              "evaluators",
+              "scenarios",
+              "seed",
+              "selection"
+            ],
+            "/baseline/pinning/agent": [
+              "commit_sha",
+              "manifest_sha256",
+              "model_name",
+              "model_provider",
+              "name",
+              "prompt_sha256",
+              "version",
+              "version_id"
+            ],
+            "/baseline/pinning/pair": [
+              "counterpart_run_id",
+              "eval_run_id",
+              "side"
+            ],
+            "/baseline/pinning/scenarios/[]": [
+              "scenario",
+              "scenario_version_id",
+              "seed",
+              "spec_hash",
+              "twin",
+              "twin_definition_id",
+              "twin_spec_hash",
+              "twin_version"
+            ],
+            "/baseline/pinning/selection": [
+              "scenarios",
+              "tags"
+            ],
+            "/candidate": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/candidate/pinning": [
+              "agent",
+              "correlation_id",
+              "engine",
+              "evaluators",
+              "scenarios",
+              "seed",
+              "selection"
+            ],
+            "/candidate/pinning/agent": [
+              "commit_sha",
+              "manifest_sha256",
+              "model_name",
+              "model_provider",
+              "name",
+              "prompt_sha256",
+              "version",
+              "version_id"
+            ],
+            "/candidate/pinning/pair": [
+              "counterpart_run_id",
+              "eval_run_id",
+              "side"
+            ],
+            "/candidate/pinning/scenarios/[]": [
+              "scenario",
+              "scenario_version_id",
+              "seed",
+              "spec_hash",
+              "twin",
+              "twin_definition_id",
+              "twin_spec_hash",
+              "twin_version"
+            ],
+            "/candidate/pinning/selection": [
+              "scenarios",
+              "tags"
+            ],
+            "/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/baseline": [
+              "object"
+            ],
+            "/baseline/agent_name": [
+              "string"
+            ],
+            "/baseline/agent_version": [
+              "string"
+            ],
+            "/baseline/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/attempts": [
+              "integer"
+            ],
+            "/baseline/cancel_requested": [
+              "boolean"
+            ],
+            "/baseline/cancelled": [
+              "integer"
+            ],
+            "/baseline/case_count": [
+              "integer"
+            ],
+            "/baseline/created_at": [
+              "string"
+            ],
+            "/baseline/critical_failures": [
+              "integer"
+            ],
+            "/baseline/error": [
+              "null",
+              "string"
+            ],
+            "/baseline/errored": [
+              "integer"
+            ],
+            "/baseline/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/failed": [
+              "integer"
+            ],
+            "/baseline/finished_at": [
+              "null",
+              "string"
+            ],
+            "/baseline/finished_cases": [
+              "integer"
+            ],
+            "/baseline/id": [
+              "string"
+            ],
+            "/baseline/organization_id": [
+              "string"
+            ],
+            "/baseline/passed": [
+              "integer"
+            ],
+            "/baseline/pinning": [
+              "object"
+            ],
+            "/baseline/pinning/agent": [
+              "object"
+            ],
+            "/baseline/pinning/agent/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/manifest_sha256": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/model_name": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/model_provider": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/name": [
+              "string"
+            ],
+            "/baseline/pinning/agent/prompt_sha256": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/agent/version": [
+              "string"
+            ],
+            "/baseline/pinning/agent/version_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/pinning/correlation_id": [
+              "string"
+            ],
+            "/baseline/pinning/engine": [
+              "string"
+            ],
+            "/baseline/pinning/evaluators": [
+              "object"
+            ],
+            "/baseline/pinning/pair": [
+              "object"
+            ],
+            "/baseline/pinning/pair/counterpart_run_id": [
+              "string"
+            ],
+            "/baseline/pinning/pair/eval_run_id": [
+              "string"
+            ],
+            "/baseline/pinning/pair/side": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios": [
+              "array"
+            ],
+            "/baseline/pinning/scenarios/[]": [
+              "object"
+            ],
+            "/baseline/pinning/scenarios/[]/scenario": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/scenario_version_id": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/seed": [
+              "integer"
+            ],
+            "/baseline/pinning/scenarios/[]/spec_hash": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin_definition_id": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin_spec_hash": [
+              "string"
+            ],
+            "/baseline/pinning/scenarios/[]/twin_version": [
+              "integer"
+            ],
+            "/baseline/pinning/seed": [
+              "integer"
+            ],
+            "/baseline/pinning/selection": [
+              "object"
+            ],
+            "/baseline/pinning/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/baseline/pinning/selection/scenarios/[]": [
+              "string"
+            ],
+            "/baseline/pinning/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/baseline/pinning/selection/tags/[]": [
+              "string"
+            ],
+            "/baseline/project_id": [
+              "string"
+            ],
+            "/baseline/release_id": [
+              "null",
+              "string"
+            ],
+            "/baseline/requested_by": [
+              "string"
+            ],
+            "/baseline/side": [
+              "string"
+            ],
+            "/baseline/started_at": [
+              "null",
+              "string"
+            ],
+            "/baseline/status": [
+              "string"
+            ],
+            "/baseline/updated_at": [
+              "string"
+            ],
+            "/candidate": [
+              "object"
+            ],
+            "/candidate/agent_name": [
+              "string"
+            ],
+            "/candidate/agent_version": [
+              "string"
+            ],
+            "/candidate/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/attempts": [
+              "integer"
+            ],
+            "/candidate/cancel_requested": [
+              "boolean"
+            ],
+            "/candidate/cancelled": [
+              "integer"
+            ],
+            "/candidate/case_count": [
+              "integer"
+            ],
+            "/candidate/created_at": [
+              "string"
+            ],
+            "/candidate/critical_failures": [
+              "integer"
+            ],
+            "/candidate/error": [
+              "null",
+              "string"
+            ],
+            "/candidate/errored": [
+              "integer"
+            ],
+            "/candidate/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/failed": [
+              "integer"
+            ],
+            "/candidate/finished_at": [
+              "null",
+              "string"
+            ],
+            "/candidate/finished_cases": [
+              "integer"
+            ],
+            "/candidate/id": [
+              "string"
+            ],
+            "/candidate/organization_id": [
+              "string"
+            ],
+            "/candidate/passed": [
+              "integer"
+            ],
+            "/candidate/pinning": [
+              "object"
+            ],
+            "/candidate/pinning/agent": [
+              "object"
+            ],
+            "/candidate/pinning/agent/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/manifest_sha256": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/model_name": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/model_provider": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/name": [
+              "string"
+            ],
+            "/candidate/pinning/agent/prompt_sha256": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/agent/version": [
+              "string"
+            ],
+            "/candidate/pinning/agent/version_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/pinning/correlation_id": [
+              "string"
+            ],
+            "/candidate/pinning/engine": [
+              "string"
+            ],
+            "/candidate/pinning/evaluators": [
+              "object"
+            ],
+            "/candidate/pinning/pair": [
+              "object"
+            ],
+            "/candidate/pinning/pair/counterpart_run_id": [
+              "string"
+            ],
+            "/candidate/pinning/pair/eval_run_id": [
+              "string"
+            ],
+            "/candidate/pinning/pair/side": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios": [
+              "array"
+            ],
+            "/candidate/pinning/scenarios/[]": [
+              "object"
+            ],
+            "/candidate/pinning/scenarios/[]/scenario": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/scenario_version_id": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/seed": [
+              "integer"
+            ],
+            "/candidate/pinning/scenarios/[]/spec_hash": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin_definition_id": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin_spec_hash": [
+              "string"
+            ],
+            "/candidate/pinning/scenarios/[]/twin_version": [
+              "integer"
+            ],
+            "/candidate/pinning/seed": [
+              "integer"
+            ],
+            "/candidate/pinning/selection": [
+              "object"
+            ],
+            "/candidate/pinning/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/candidate/pinning/selection/scenarios/[]": [
+              "string"
+            ],
+            "/candidate/pinning/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/candidate/pinning/selection/tags/[]": [
+              "string"
+            ],
+            "/candidate/project_id": [
+              "string"
+            ],
+            "/candidate/release_id": [
+              "null",
+              "string"
+            ],
+            "/candidate/requested_by": [
+              "string"
+            ],
+            "/candidate/side": [
+              "string"
+            ],
+            "/candidate/started_at": [
+              "null",
+              "string"
+            ],
+            "/candidate/status": [
+              "string"
+            ],
+            "/candidate/updated_at": [
+              "string"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/cases/[]/position": [
+              "integer"
+            ],
+            "/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/cases/[]/seed": [
+              "integer"
+            ],
+            "/cases/[]/severity": [
+              "string"
+            ],
+            "/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/eval_run_id": [
+              "string"
+            ],
+            "/seed": [
               "integer"
             ]
           }

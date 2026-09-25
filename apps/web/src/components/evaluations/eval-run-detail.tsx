@@ -390,7 +390,18 @@ export function EvalRunDetailView({ runId }: { runId: string }) {
   });
   const run = detail.data?.run;
   const active = run ? isRunActive(run.status) : false;
+  const finished = run != null && !active;
+  const datasetId = run?.selection.dataset?.id;
   const now = useTicker(active);
+  useEffect(() => {
+    // A finished run changes each case's latest result on its dataset, the
+    // list of runs and what waits for review: drop copies cached before it
+    // finished, or the dataset keeps saying "not evaluated yet".
+    if (!finished) return;
+    void qc.invalidateQueries({ queryKey: ["eval-runs"] });
+    void qc.invalidateQueries({ queryKey: ["review-queue"] });
+    if (datasetId) void qc.invalidateQueries({ queryKey: ["dataset", datasetId] });
+  }, [qc, runId, finished, datasetId]);
   const cancelKey = useActionKey("eval-cancel");
   const againKey = useActionKey("eval-again");
 

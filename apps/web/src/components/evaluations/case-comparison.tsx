@@ -267,6 +267,10 @@ function ReviewForm({
       void qc.invalidateQueries({ queryKey: ["eval-case", runId, scenario] });
       void qc.invalidateQueries({ queryKey: ["eval-run", runId] });
       void qc.invalidateQueries({ queryKey: ["review-queue"] });
+      // The case may be classified again: the run list's counts and the
+      // dataset's latest results move with it.
+      void qc.invalidateQueries({ queryKey: ["eval-runs"] });
+      void qc.invalidateQueries({ queryKey: ["dataset"] });
       onClose(res);
     },
     onSettled: (_data, error) => key.settle(error),

@@ -327,7 +327,7 @@ export function NewEvaluation() {
                     checked={suite === "dataset"}
                     onChange={() => setSuite("dataset")}
                   />
-                  Dataset
+                  From a dataset
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input
@@ -337,7 +337,7 @@ export function NewEvaluation() {
                     checked={suite === "scenarios"}
                     onChange={() => setSuite("scenarios")}
                   />
-                  Scenarios
+                  Pick scenarios
                 </label>
               </div>
             </CardHeader>

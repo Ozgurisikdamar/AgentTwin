@@ -54,12 +54,15 @@ afterEach(() => {
   push.mockReset();
 });
 
-function renderAs(ui: ReactNode, permissions: string[]) {
+function renderAs(
+  ui: ReactNode,
+  permissions: string[],
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   const me = {
     user: { id: "u-1", email: "e@demo.agenttwin.dev", display_name: "Eve" },
     permissions,
   } as unknown as Me;
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MeProvider me={me}>{ui}</MeProvider>
@@ -144,6 +147,40 @@ describe("EvalRunDetailView", () => {
     expect(screen.getByTestId("eval-pinning")).toHaveTextContent("not calibrated");
     // Read-only users get no actions.
     expect(screen.queryByRole("button", { name: /Run again/ })).not.toBeInTheDocument();
+  });
+
+  it("drops the dataset's cached results once the run has finished, and only then", async () => {
+    const dataset = liveEvalRun.run.selection.dataset!.id;
+    const cached = (qc: QueryClient) => {
+      qc.setQueryData(["dataset", dataset, "1"], liveDataset);
+      qc.setQueryData(["eval-runs", "", "", "", ""], { pages: [], pageParams: [] });
+      qc.setQueryData(["review-queue", ""], { pages: [], pageParams: [] });
+    };
+    const stale = (qc: QueryClient) =>
+      [
+        ["dataset", dataset, "1"],
+        ["eval-runs", "", "", "", ""],
+        ["review-queue", ""],
+      ].map((key) => qc.getQueryState(key)?.isInvalidated);
+
+    const running = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    cached(running);
+    stub((url) =>
+      url === `/api/v1/eval-runs/${RUN}`
+        ? { ...liveEvalRun, run: { ...liveEvalRun.run, status: "RUNNING", finished_at: null } }
+        : { items: [] },
+    );
+    const first = renderAs(<EvalRunDetailView runId={RUN} />, ["read"], running);
+    await screen.findByTestId("eval-run-id");
+    expect(stale(running)).toEqual([false, false, false]);
+    first.unmount();
+
+    const done = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    cached(done);
+    stub((url) => (url === `/api/v1/eval-runs/${RUN}` ? liveEvalRun : { items: [] }));
+    renderAs(<EvalRunDetailView runId={RUN} />, ["read"], done);
+    await screen.findByTestId("eval-verdict");
+    await vi.waitFor(() => expect(stale(done)).toEqual([true, true, true]));
   });
 
   it("runs the same pair on the same pinned suite and seed again", async () => {
@@ -254,7 +291,11 @@ describe("EvalCaseView", () => {
       run: liveEvalRun.run,
     } satisfies ReviewResponse;
     stubCase(() => response);
-    renderAs(<EvalCaseView runId={RUN} scenario={SCENARIO} />, ["read", "review.write"]);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const dataset = liveEvalRun.run.selection.dataset!.id;
+    qc.setQueryData(["dataset", dataset, ""], liveDataset);
+    qc.setQueryData(["eval-runs", "", "", "", ""], { pages: [], pageParams: [] });
+    renderAs(<EvalCaseView runId={RUN} scenario={SCENARIO} />, ["read", "review.write"], qc);
     await userEvent.click(
       await screen.findByRole("button", { name: "Review reply-admits-unconfirmed-refund on the candidate" }),
     );
@@ -281,6 +322,9 @@ describe("EvalCaseView", () => {
       "The case stays new critical failure.",
     );
     expect(screen.queryByTestId("review-form")).not.toBeInTheDocument();
+    // A review can classify the case again: the dataset and the run list are refetched.
+    expect(qc.getQueryState(["dataset", dataset, ""])?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(["eval-runs", "", "", "", ""])?.isInvalidated).toBe(true);
   });
 
   it("shows why a review was refused", async () => {

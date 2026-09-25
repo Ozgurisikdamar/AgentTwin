@@ -213,6 +213,9 @@ def test_twins_scenarios_and_simulations(stub: tuple[Stub, str]) -> None:
         "seed": 7,
         "release_id": "rel-1",
     }
+    assert "idempotency-key" not in state.requests[-1]["headers"]
+    client.start_simulation(PROJECT, "agent", "1.2.4", idempotency_key="ci-build-42:1.2.4")
+    assert state.requests[-1]["headers"]["idempotency-key"] == "ci-build-42:1.2.4"
     done = client.wait_for_simulation("run-1", timeout_s=10, interval_s=0.01)
     assert done["run"]["status"] == "COMPLETED" and state.polls == 3
     with pytest.raises(APIError) as e:

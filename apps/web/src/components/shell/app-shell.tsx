@@ -1,12 +1,13 @@
 "use client";
 
-import { Activity, Bot, LayoutDashboard, LogOut } from "lucide-react";
+import { Activity, Bot, FlaskConical, LayoutDashboard, ListChecks, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { humanize } from "@/lib/format";
 import type { Me } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { MeProvider } from "./me-context";
 
 interface NavItem {
   href: string;
@@ -17,6 +18,8 @@ interface NavItem {
 // Sections appear here as they ship (see docs/plan/implementation-board.md).
 const NAV: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { href: "/simulations", label: "Simulations", icon: FlaskConical },
+  { href: "/scenarios", label: "Scenarios", icon: ListChecks },
   { href: "/traces", label: "Traces", icon: Activity },
   { href: "/agents", label: "Agents", icon: Bot },
 ];
@@ -110,7 +113,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </div>
         </header>
         <main id="main" className="min-w-0 flex-1 p-4 md:p-6">
-          {children}
+          <MeProvider me={me}>{children}</MeProvider>
         </main>
       </div>
     </div>

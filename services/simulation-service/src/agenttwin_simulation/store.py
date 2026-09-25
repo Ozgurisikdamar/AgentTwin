@@ -210,6 +210,7 @@ class Store:
         severity: str | None = None,
         tag: str | None = None,
         query: str | None = None,
+        name: str | None = None,
         include_archived: bool = False,
         after: tuple[str, str] | None = None,
         limit: int = 50,
@@ -218,6 +219,9 @@ class Store:
         where = [clause]
         if not include_archived:
             where.append("NOT s.archived")
+        if name:
+            where.append("s.name = %s")
+            params.append(name)
         if agent:
             where.append("(s.agent = %s OR s.agent IS NULL)")
             params.append(agent)

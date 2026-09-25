@@ -295,3 +295,329 @@ export interface AgentVersion {
 export interface ApiErrorBody {
   error?: { code?: string; message?: string; request_id?: string; details?: Record<string, unknown> };
 }
+
+// ---------------------------------------------------------------- simulations
+
+export type RunStatus =
+  "QUEUED" | "PREPARING" | "RUNNING" | "EVALUATING" | "COMPLETED" | "FAILED" | "CANCELLED";
+export type CaseStatus = "PENDING" | "RUNNING" | "PASSED" | "FAILED" | "ERRORED" | "CANCELLED";
+export type Severity = "critical" | "high" | "medium" | "low";
+export type ResultStatus = "PASS" | "FAIL" | "SKIPPED" | "ERROR";
+
+export interface SimulationRun {
+  id: string;
+  organization_id: string;
+  project_id: string;
+  agent_name: string;
+  agent_version: string;
+  agent_version_id: string | null;
+  side: string;
+  eval_run_id: string | null;
+  release_id: string | null;
+  status: RunStatus;
+  requested_by: string;
+  cancel_requested: boolean;
+  attempts: number;
+  case_count: number;
+  passed: number;
+  failed: number;
+  errored: number;
+  cancelled: number;
+  critical_failures: number;
+  finished_cases: number;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  updated_at: string;
+}
+
+export interface PinnedScenario {
+  scenario: string;
+  scenario_version_id: string;
+  spec_hash: string;
+  twin: string;
+  twin_definition_id: string;
+  twin_version: number;
+  twin_spec_hash: string;
+  seed: number;
+}
+
+export interface RunPinning {
+  seed?: number;
+  engine?: string;
+  correlation_id?: string;
+  evaluators?: Record<string, string>;
+  agent?: {
+    name: string;
+    version: string;
+    version_id?: string | null;
+    manifest_sha256?: string | null;
+    prompt_sha256?: string | null;
+    model_provider?: string | null;
+    model_name?: string | null;
+    commit_sha?: string | null;
+  };
+  scenarios?: PinnedScenario[];
+  selection?: { scenarios?: string[] | null; tags?: string[] | null };
+}
+
+export interface SimulationCase {
+  id: string;
+  run_id: string;
+  position: number;
+  scenario_id: string;
+  scenario_version_id: string;
+  scenario_name: string;
+  severity: Severity;
+  twin_definition_id: string;
+  status: CaseStatus;
+  seed: number;
+  tenant: string | null;
+  call_count: number;
+  trace_id: string | null;
+  reason: string | null;
+  error: string | null;
+  latency_ms: number | null;
+  outcome_status: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  labels: string[];
+  score: number | null;
+}
+
+export interface RunTransition {
+  seq: number;
+  from_status: RunStatus | null;
+  to_status: RunStatus;
+  reason: string | null;
+  at: string;
+}
+
+export interface SimulationRunDetail {
+  run: SimulationRun & { pinning?: RunPinning };
+  cases: SimulationCase[];
+  transitions: RunTransition[];
+}
+
+export interface SimulationPage {
+  items: SimulationRun[];
+  next_cursor: string | null;
+}
+
+export interface EvidenceRef {
+  ref: string;
+  kind: string;
+  detail: string;
+}
+
+export interface ExpectationResult {
+  status: ResultStatus;
+  label: string | null;
+  score: number | null;
+  reason: string;
+  critical: boolean;
+  evidence: EvidenceRef[] | null;
+  evaluator: string;
+  evaluator_version: string;
+  /** The expectation as the scenario declared it, parameters included (tool, path, ...). */
+  expectation: { id: string; type: string; critical?: boolean; index?: number } & Record<string, unknown>;
+}
+
+export interface StateChange {
+  op: "added" | "removed" | "changed";
+  path: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+export interface ToolCallRecord {
+  seq: number;
+  tool: string;
+  risk: string | null;
+  status: string;
+  fault: string | null;
+  http_status: number | null;
+  error_code: string | null;
+  arguments: Record<string, unknown> | null;
+  response: unknown;
+  changes: StateChange[] | null;
+  mutated: boolean;
+  replayed: boolean;
+  redelivered: boolean;
+  delay_ms: number;
+  call_number: number;
+  effect_key: string | null;
+  expects_mutation: boolean;
+  cross_tenant: string | null;
+  policy_violation: string | null;
+}
+
+export interface RetrievalRecord {
+  seq: number;
+  kind: "retrieval";
+  query: string;
+  limit: number;
+  documents: { id: string; trusted: boolean }[];
+}
+
+export interface CaseStep {
+  seq: number;
+  kind: "tool_call" | "retrieval" | string;
+  tool: string | null;
+  latency_ms: number | null;
+  created_at: string;
+  record: Partial<ToolCallRecord> & Partial<RetrievalRecord> & Record<string, unknown>;
+}
+
+export interface AgentResult {
+  kind?: string;
+  status?: string;
+  output?: string;
+  claimed_outcome?: string | null;
+  business_outcome?: string | null;
+  steps?: number;
+  model?: string;
+  http_status?: number;
+  elapsed_ms?: number;
+  error?: string | null;
+  trace_id?: string | null;
+}
+
+export interface Verdict {
+  status: CaseStatus;
+  reason: string;
+  score: number;
+  labels: string[];
+  passed: number;
+  failed: number;
+  errored: number;
+  skipped: number;
+  critical_failures: number;
+}
+
+export interface ScenarioFault {
+  target: string;
+  when?: Record<string, unknown>;
+  behavior: { type: string } & Record<string, unknown>;
+}
+
+export interface CaseDetail {
+  case: SimulationCase & {
+    verdict: Verdict | null;
+    results: ExpectationResult[];
+    state_diff: StateChange[];
+    agent_result: AgentResult | null;
+  };
+  scenario: { document: ScenarioDocument; faults: ScenarioFault[] };
+  twin: { id: string; name: string; version: number; spec_hash: string } | null;
+  steps: CaseStep[];
+  state: { initial: Record<string, unknown> | null; final: Record<string, unknown> | null };
+}
+
+export interface SimulationCapabilities {
+  agents: string[];
+  fault_types: string[];
+  expectation_types: string[];
+  evaluators: Record<string, string>;
+  engine: string;
+  limits: Record<string, number>;
+}
+
+// ------------------------------------------------------------------ scenarios
+
+export interface ScenarioDocument {
+  apiVersion: string;
+  kind: string;
+  metadata: {
+    name: string;
+    description?: string;
+    severity: Severity;
+    tags?: string[];
+    owner?: string;
+  } & Record<string, unknown>;
+  spec: {
+    agent?: string;
+    twin?: string;
+    seed?: number;
+    covers?: string[];
+    input?: {
+      message?: string;
+      context?: Record<string, unknown>;
+      documents?: Record<string, unknown>[];
+    };
+    state?: Record<string, unknown>;
+    faults?: ScenarioFault[];
+    expectations?: ({ id?: string; type: string; critical?: boolean } & Record<string, unknown>)[];
+  } & Record<string, unknown>;
+}
+
+export interface Scenario {
+  id: string;
+  organization_id: string;
+  project_id: string;
+  name: string;
+  agent: string | null;
+  twin: string | null;
+  severity: Severity;
+  tags: string[];
+  source: string;
+  latest_version: number;
+  archived: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  version_id?: string;
+  spec_hash?: string;
+  description?: string | null;
+  expectation_count?: number;
+  fault_count?: number;
+}
+
+export interface ScenarioPage {
+  items: Scenario[];
+  next_cursor: string | null;
+}
+
+export interface ScenarioVersion {
+  id: string;
+  version: number;
+  spec_hash: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ScenarioDetail {
+  scenario: Scenario;
+  version: number;
+  version_created_by: string;
+  version_created_at: string;
+  document: ScenarioDocument;
+  yaml: string;
+  versions: ScenarioVersion[];
+}
+
+export interface ScenarioValidation {
+  valid: boolean;
+  problems: string[];
+  warnings: string[];
+  spec_hash: string | null;
+  twin: { id: string; name: string; version: number; tool_count?: number } | null;
+}
+
+export interface ScenarioSaved {
+  scenario: Scenario;
+  version: number;
+  created: boolean;
+  warnings: string[];
+}
+
+export interface TwinSummary {
+  id: string;
+  project_id: string;
+  name: string;
+  version: number;
+  spec_hash: string;
+  tool_count: number;
+  created_at: string;
+}

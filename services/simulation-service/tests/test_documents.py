@@ -39,6 +39,40 @@ def test_parse_json_and_yaml_documents() -> None:
     assert parse_document({"yaml": export_yaml(HAPPY)}) == HAPPY
 
 
+def jsonb_order(value: Any) -> Any:
+    """Keys the way PostgreSQL's jsonb returns them: shorter keys first."""
+    if isinstance(value, dict):
+        return {k: jsonb_order(value[k]) for k in sorted(value, key=lambda k: (len(k), k))}
+    if isinstance(value, list):
+        return [jsonb_order(v) for v in value]
+    return value
+
+
+@pytest.mark.parametrize("name", ["refund-timeout-after-mutation", "twin"])
+def test_export_follows_the_reading_order_not_the_storage_order(name: str) -> None:
+    path = ASSURANCE / ("twin.yaml" if name == "twin" else f"scenarios/{name}.yaml")
+    authored = load_yaml(path.read_text())
+    stored = jsonb_order(authored)
+    assert list(stored) == ["kind", "spec", "metadata", "apiVersion"]
+    exported = export_yaml(stored)
+    assert load_yaml(exported) == authored
+    top = [line.split(":")[0] for line in exported.splitlines() if line and not line.startswith(" ")]
+    assert top == ["apiVersion", "kind", "metadata", "spec"]
+    doc = load_yaml(exported)
+    assert next(iter(doc["metadata"])) == "name"
+    if name == "twin":
+        assert list(doc["spec"]) == ["tenantKey", "secrets", "retrieval", "initialState", "tools"]
+        return
+    assert list(doc["spec"]) == ["agent", "twin", "covers", "input", "faults", "expectations"]
+    assert list(doc["spec"]["input"]) == ["message", "context"]
+    assert list(doc["spec"]["faults"][0]) == ["target", "when", "behavior"]
+    assert next(iter(doc["spec"]["faults"][0]["behavior"])) == "type"
+    for exp in doc["spec"]["expectations"]:
+        keys = list(exp)
+        assert keys[:2] == ["id", "type"]
+        assert "critical" not in keys[:-1]
+
+
 @pytest.mark.parametrize(
     ("body", "problem"),
     [

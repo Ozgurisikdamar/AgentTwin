@@ -528,6 +528,8 @@ class SimulationAPI:
                 severity=severity,
                 tag=q.get("tag") or None,
                 query=(q.get("q") or "")[:200] or None,
+                # Exact: "is this name taken?" before saving (saving is by name).
+                name=(q.get("name") or "")[:200] or None,
                 include_archived=q.get("include_archived") in ("1", "true"),
                 after=_decode_name_cursor(q.get("cursor") or ""),
                 limit=limit + 1,

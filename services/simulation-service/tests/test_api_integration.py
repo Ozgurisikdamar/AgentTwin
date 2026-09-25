@@ -185,6 +185,10 @@ async def test_scenario_listing_filters_pagination_and_archive() -> None:
         assert [it["name"] for it in smoke["items"]] == names[:2]
         search = await s.ok("GET", "/api/v1/scenarios", project_id=PROJECT, q="status-3")
         assert [it["name"] for it in search["items"]] == [names[3]]
+        # name= is exact, unlike the q= substring search.
+        exact = await s.ok("GET", "/api/v1/scenarios", project_id=PROJECT, name=names[3])
+        assert [it["name"] for it in exact["items"]] == [names[3]]
+        assert (await s.ok("GET", "/api/v1/scenarios", project_id=PROJECT, name="status-3"))["items"] == []
         assert (await error(s, "GET", "/api/v1/scenarios", severity="urgent"))[:2] == (
             400,
             "INVALID_PARAMETER",

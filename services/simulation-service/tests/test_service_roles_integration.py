@@ -255,12 +255,20 @@ async def exercise(
 
     # Metrics of the run, the twin and the outcomes (process-wide registry).
     samples: dict[tuple[str, frozenset[tuple[str, str]]], float] = {}
-    for family in text_string_to_metric_families((await worker_http.get("/metrics")).text):
-        for sample in family.samples:
-            samples[(sample.name, frozenset(sample.labels.items()))] = sample.value
 
     def value(name: str, **labels: str) -> float:
         return sum(v for (n, ls), v in samples.items() if n == name and set(labels.items()) <= ls)
+
+    async def scraped() -> bool:
+        samples.clear()
+        for family in text_string_to_metric_families((await worker_http.get("/metrics")).text):
+            for sample in family.samples:
+                samples[(sample.name, frozenset(sample.labels.items()))] = sample.value
+        return value("agenttwin_simulation_outcomes_total", result="posted") >= 2
+
+    # The fake trace service records a post when it arrives; the worker counts it
+    # only after marking the case reported, so the counter can trail by a moment.
+    await wait_for(scraped, 10, "both posted outcomes in the metrics")
 
     assert value("agenttwin_simulation_runs_total", status="COMPLETED") >= 1
     assert value("agenttwin_simulation_cases_total", status="FAILED") >= 2

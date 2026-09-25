@@ -2,7 +2,6 @@
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Pause, Play, RefreshCw } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/common/page-header";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { api, withQuery } from "@/lib/api";
 import { type TraceFilters, activeFilterCount, filtersToParams, parseFilters } from "@/lib/trace-filters";
 import type { FacetsResponse, Project, TracePage } from "@/lib/types";
+import { useUrlQuery } from "@/lib/use-url-query";
 import { TraceFiltersBar } from "./trace-filters-bar";
 import { TraceTable } from "./trace-table";
 
@@ -28,18 +28,13 @@ function useNow(intervalMs: number): Date {
 }
 
 export function TraceExplorer() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const filters = useMemo(() => parseFilters(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const { params, replace } = useUrlQuery();
+  const filters = useMemo(() => parseFilters(params), [params]);
   const filterKey = filtersToParams(filters).toString();
   const [live, setLive] = useState(true);
   const now = useNow(15_000);
 
-  const setFilters = (next: TraceFilters) => {
-    const qs = filtersToParams(next).toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  };
+  const setFilters = (next: TraceFilters) => replace(filtersToParams(next));
 
   const projects = useQuery({
     queryKey: ["projects"],

@@ -95,3 +95,13 @@ export function withQuery(path: string, params: URLSearchParams): string {
   const qs = params.toString();
   return qs ? `${path}?${qs}` : path;
 }
+
+/**
+ * A fresh Idempotency-Key for one user action (retries of the same action
+ * reuse it). getRandomValues also works outside secure contexts.
+ */
+export function newIdempotencyKey(prefix: string): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return `${prefix}-${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+}

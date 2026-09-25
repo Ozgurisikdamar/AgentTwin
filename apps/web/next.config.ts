@@ -20,6 +20,8 @@ const config: NextConfig = {
   outputFileTracingRoot: path.join(here, "../.."),
   poweredByHeader: false,
   reactStrictMode: true,
+  // Do not write AGENTS.md/CLAUDE.md into the app when `next dev` runs.
+  agentRules: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

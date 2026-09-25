@@ -72,8 +72,51 @@ def spec_hash(doc: Mapping[str, Any]) -> str:
     return content_hash(doc)
 
 
+# Stored documents lose their author's key order (PostgreSQL's jsonb sorts
+# object keys by length), so exports follow the reading order of a scenario
+# or twin: these keys first, the rest alphabetically, ``critical`` last.
+_FIRST_KEYS: dict[str, tuple[str, ...]] = {
+    "": ("apiVersion", "kind", "metadata", "spec"),
+    "metadata": ("name", "severity", "tags", "owner", "source", "description"),
+    "spec": (
+        # scenarios
+        "agent",
+        "twin",
+        "seed",
+        "covers",
+        "input",
+        "state",
+        "faults",
+        "expectations",
+        # twins
+        "tenantKey",
+        "secrets",
+        "retrieval",
+        "initialState",
+        "tools",
+    ),
+    "spec.input": ("message", "context", "documents"),
+    "spec.faults[]": ("id", "target", "when", "behavior"),
+    "spec.faults[].behavior": ("type",),
+    "spec.expectations[]": ("id", "type"),
+}
+_LAST_KEYS: dict[str, tuple[str, ...]] = {"spec.expectations[]": ("critical",)}
+
+
+def _reading_order(value: Any, path: str = "") -> Any:
+    if isinstance(value, Mapping):
+        first = [k for k in _FIRST_KEYS.get(path, ()) if k in value]
+        last = [k for k in _LAST_KEYS.get(path, ()) if k in value and k not in first]
+        keys = [*first, *sorted(k for k in value if k not in first and k not in last), *last]
+        return {k: _reading_order(value[k], f"{path}.{k}" if path else str(k)) for k in keys}
+    if isinstance(value, list):
+        return [_reading_order(v, f"{path}[]") for v in value]
+    return value
+
+
 def export_yaml(doc: Mapping[str, Any]) -> str:
-    return dump_yaml(dict(doc))
+    """The document as YAML in reading order (see ``_FIRST_KEYS``)."""
+    return dump_yaml(_reading_order(doc))
 
 
 def _schema_problems(doc: Any, schema: str) -> list[str]:

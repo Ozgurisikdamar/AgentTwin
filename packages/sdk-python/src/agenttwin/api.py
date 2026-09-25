@@ -198,9 +198,13 @@ class Client:
         tags: Sequence[str] | None = None,
         seed: int | None = None,
         release_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Queues a simulation run of an agent version against its scenarios
-        (all of them unless ``scenarios`` or ``tags`` narrow the selection)."""
+        (all of them unless ``scenarios`` or ``tags`` narrow the selection).
+        With ``idempotency_key`` (8-128 of ``[A-Za-z0-9._:-]``) a retried
+        request returns the run the first attempt created instead of starting
+        another one."""
         body: dict[str, Any] = {"project_id": project_id, "agent": agent, "agent_version": agent_version}
         if scenarios is not None:
             body["scenarios"] = list(scenarios)
@@ -210,7 +214,8 @@ class Client:
             body["seed"] = seed
         if release_id is not None:
             body["release_id"] = release_id
-        result: dict[str, Any] = self.request("POST", "/api/v1/simulations", json_body=body)
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        result: dict[str, Any] = self.request("POST", "/api/v1/simulations", json_body=body, headers=headers)
         return result
 
     def simulation(self, run_id: str) -> dict[str, Any]:

@@ -68,3 +68,8 @@ export function humanize(value: string | null | undefined): string {
     .toLowerCase();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/** "1 scenario", "9 scenarios": a count with its noun (regular plurals only). */
+export function countOf(n: number, noun: string): string {
+  return `${formatNumber(n)} ${n === 1 ? noun : `${noun}s`}`;
+}

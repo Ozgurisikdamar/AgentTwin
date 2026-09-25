@@ -120,6 +120,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eval-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List evaluation runs
+         * @description The runs of the caller's projects, newest first.
+         */
+        get: operations["listEvalRuns"];
+        put?: never;
+        /**
+         * Evaluate a candidate version against its baseline
+         * @description Queues an evaluation run (`202`). The suite is a dataset version (its
+         *     scenarios are pinned now; `404` for a dataset of another project, `409
+         *     DATASET_ARCHIVED`, `400 DATASET_EMPTY`), scenario names and/or tags,
+         *     or — with none of them — every scenario of the agent. A worker then
+         *     starts both simulations on one pinned suite, waits for them, grades the
+         *     semantic expectations with the judge and compares every case; the run
+         *     ends `COMPLETED`, or `FAILED` with an `error` that says why (e.g. the
+         *     simulation service refused the versions). Announced to the audit log.
+         */
+        post: operations["startEvalRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eval-runs/{eval_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an evaluation run
+         * @description The run with its summary (counts per classification, totals per side,
+         *     the new critical failures by name, slices by severity, tag, tool, risk
+         *     and failure class), its cases and its status transitions.
+         */
+        get: operations["getEvalRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eval-runs/{eval_run_id}/cases/{scenario}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one compared case
+         * @description Baseline next to candidate for one scenario: every expectation on both
+         *     sides, the metric deltas, the first divergence of the trajectories and
+         *     both trajectories aligned, where the final twin states differ, the
+         *     full expectation results of each side and the judge's verdicts.
+         */
+        get: operations["getEvalCase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eval-runs/{eval_run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request cancellation of an evaluation run
+         * @description Cancellation is a request: `202` while a worker stops the run (its
+         *     simulations are cancelled too); `200` when the run is already final —
+         *     or became final at once because it was still queued. A run whose
+         *     simulations have ended is being evaluated and completes. Announced to
+         *     the audit log.
+         */
+        post: operations["cancelEvalRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -236,6 +336,398 @@ export interface components {
         };
         DatasetResponse: {
             dataset: components["schemas"]["Dataset"];
+        };
+        /** @enum {string} */
+        EvalRunStatus: "QUEUED" | "PREPARING" | "RUNNING" | "EVALUATING" | "COMPLETED" | "FAILED" | "CANCELLED";
+        /**
+         * @description `NEW_CRITICAL_FAILURE` a critical expectation newly fails; `REGRESSED`
+         *     another expectation newly fails; `IMPROVED` failures now pass and none
+         *     newly fails; `UNCHANGED` every expectation ends the same;
+         *     `INCOMPLETE` a side did not finish — never read as a pass.
+         * @enum {string}
+         */
+        Classification: "NEW_CRITICAL_FAILURE" | "REGRESSED" | "IMPROVED" | "UNCHANGED" | "INCOMPLETE";
+        ClassCounts: {
+            NEW_CRITICAL_FAILURE: number;
+            REGRESSED: number;
+            IMPROVED: number;
+            UNCHANGED: number;
+            INCOMPLETE: number;
+        };
+        StartEvalRunRequest: {
+            project_id: components["schemas"]["Uuid"];
+            agent: string;
+            baseline_version: string;
+            /** @description May equal `baseline_version` (the same version twice shows how repeatable it is). */
+            candidate_version: string;
+            /** @description Evaluate this dataset's scenarios (not with `scenarios` or `tags`). */
+            dataset_id?: components["schemas"]["Uuid"] | null;
+            /** @description The dataset version (default the latest); needs `dataset_id`. */
+            dataset_version?: number | null;
+            scenarios?: components["schemas"]["Name"][] | null;
+            /** @description Scenarios with any of these tags. */
+            tags?: components["schemas"]["Tag"][] | null;
+            /** @description The seed of both simulations (default random); pinned either way. */
+            seed?: number | null;
+            release_id?: string | null;
+        };
+        PairCase: {
+            position: number;
+            scenario_id: components["schemas"]["Uuid"];
+            scenario_name: string;
+            severity: string;
+            seed: number;
+            tenant: string | null;
+            baseline_case_id: components["schemas"]["Uuid"];
+            candidate_case_id: components["schemas"]["Uuid"];
+        };
+        JudgeIdentity: {
+            /** @description `deterministic-fake`, `anthropic` or `openai`. */
+            provider: string;
+            model: string;
+            /** @description `llm`, or `deterministic-fake` (not a language model). */
+            kind: string;
+            prompt_version: string;
+            prompt_sha256: string;
+            /**
+             * @description Whether the judge passed its latest calibration (spec §16.4).
+             * @enum {string}
+             */
+            calibrated: "true" | "false";
+        };
+        JudgeBudget: {
+            max_cost_usd: number | null;
+            max_calls: number;
+            spent_usd: number;
+            calls: number;
+            /** @description Calls whose cost the provider did not report (counted against `max_calls` only). */
+            unknown_cost_calls: number;
+            /** @description Some semantic expectations were not judged (SKIPPED) because the budget was spent. */
+            exhausted: boolean;
+        };
+        EvalRun: {
+            id: components["schemas"]["Uuid"];
+            organization_id: components["schemas"]["Uuid"];
+            project_id: components["schemas"]["Uuid"];
+            agent_name: string;
+            baseline_version: string;
+            candidate_version: string;
+            seed: number | null;
+            release_id: string | null;
+            status: components["schemas"]["EvalRunStatus"];
+            requested_by: string;
+            cancel_requested: boolean;
+            attempts: number;
+            /** @description The baseline's simulation run, once started. */
+            baseline_run_id: components["schemas"]["Uuid"] | null;
+            candidate_run_id: components["schemas"]["Uuid"] | null;
+            case_count: number;
+            /** @description Why the run failed. */
+            error: string | null;
+            created_at: components["schemas"]["Timestamp"];
+            started_at: components["schemas"]["Timestamp"] | null;
+            finished_at: components["schemas"]["Timestamp"] | null;
+            updated_at: components["schemas"]["Timestamp"];
+            /** @description What was asked for; a dataset's scenario names are resolved when the run is requested. */
+            selection: {
+                scenarios: string[] | null;
+                tags: string[] | null;
+                dataset: {
+                    id: components["schemas"]["Uuid"];
+                    name: components["schemas"]["Name"];
+                    version: number;
+                } | null;
+            };
+            counts: components["schemas"]["ClassCounts"];
+            /** @description The suite both simulations ran (ADR-0023), once started. */
+            pinning: {
+                seed: number;
+                /** @description The baseline simulation's pinning (simulation API `Pinning`). */
+                baseline: Record<string, unknown>;
+                /** @description The candidate simulation's pinning. */
+                candidate: Record<string, unknown>;
+                cases: components["schemas"]["PairCase"][];
+            } | null;
+            judge: components["schemas"]["JudgeIdentity"] | null;
+            budget: components["schemas"]["JudgeBudget"] | null;
+        };
+        EvalRunResponse: {
+            run: components["schemas"]["EvalRun"];
+        };
+        EvalRunPage: {
+            items: components["schemas"]["EvalRun"][];
+            next_cursor: string | null;
+        };
+        /** @description One side's metrics (`null` = not known for this case). */
+        Metrics: {
+            critical_failures: number;
+            failed_expectations: number;
+            policy_violations: number;
+            retries: number;
+            duplicate_side_effects: number;
+            argument_failures: number;
+            tool_calls: number;
+            escalations: number;
+            steps: number | null;
+            latency_ms: number | null;
+            tokens: number | null;
+            cost_usd: number | null;
+            semantic_score: number | null;
+        };
+        SideSummary: {
+            case_id: components["schemas"]["Uuid"] | null;
+            /** @description The case status after judging (`PASSED`, `FAILED`, `ERRORED`, `CANCELLED`, …). */
+            status: string;
+            reason: string | null;
+            trace_id: string | null;
+            /** @description Failure classes of the failing expectations. */
+            labels: string[];
+            tools: string[];
+            metrics: components["schemas"]["Metrics"];
+        };
+        EvalCaseSummary: {
+            position: number;
+            scenario_name: string;
+            severity: string;
+            tags: string[];
+            classification: components["schemas"]["Classification"];
+            reason: string;
+            baseline: components["schemas"]["SideSummary"];
+            candidate: components["schemas"]["SideSummary"];
+            /** @description A person reviewed an expectation of this case. */
+            reviewed: boolean;
+        };
+        SideTotals: {
+            cases: number;
+            passed: number;
+            failed: number;
+            incomplete: number;
+            critical_failures: number;
+            policy_violations: number;
+            retries: number;
+            duplicate_side_effects: number;
+            escalations: number;
+            tool_calls: number;
+            latency_ms_p50: number | null;
+            latency_ms_p95: number | null;
+            /** @description Summed over the cases whose trace reported usage (`tokens_known`); unknowns are not zeros. */
+            tokens: number | null;
+            tokens_known: number;
+            cost_usd: number | null;
+            cost_known: number;
+            semantic_score: number | null;
+        };
+        EvalRunSummary: {
+            counts: components["schemas"]["ClassCounts"];
+            baseline: components["schemas"]["SideTotals"];
+            candidate: components["schemas"]["SideTotals"];
+            new_critical_failures: {
+                scenario_name: string;
+                /** @description The critical expectations that newly fail. */
+                expectations: string[];
+            }[];
+            regressed: string[];
+            improved: string[];
+            incomplete: string[];
+            /** @description The counts sliced by severity, tag, tool and risk tier; failures per class and side. */
+            slices: {
+                severity?: {
+                    [key: string]: components["schemas"]["ClassCounts"];
+                };
+                tag?: {
+                    [key: string]: components["schemas"]["ClassCounts"];
+                };
+                tool?: {
+                    [key: string]: components["schemas"]["ClassCounts"];
+                };
+                risk?: {
+                    [key: string]: components["schemas"]["ClassCounts"];
+                };
+                failure_class: {
+                    [key: string]: {
+                        baseline: number;
+                        candidate: number;
+                    };
+                };
+            };
+        };
+        Transition: {
+            from_status: components["schemas"]["EvalRunStatus"] | null;
+            to_status: components["schemas"]["EvalRunStatus"];
+            reason: string | null;
+            at: components["schemas"]["Timestamp"];
+        };
+        EvalRunDetail: {
+            run: components["schemas"]["EvalRun"];
+            summary: components["schemas"]["EvalRunSummary"] | null;
+            cases: components["schemas"]["EvalCaseSummary"][];
+            transitions: components["schemas"]["Transition"][];
+        };
+        /** @description One normalized trajectory step. */
+        Step: {
+            index: number;
+            /** @enum {string} */
+            kind: "TOOL" | "RETRIEVAL" | "POLICY" | "OUTCOME";
+            name: string;
+            label: string;
+            arguments: {
+                [key: string]: unknown;
+            };
+            status?: string;
+            risk?: string;
+            fault?: string;
+            /** @enum {string} */
+            effect?: "applied" | "replayed";
+            ref?: string;
+        };
+        /** @description Where a value differs, baseline → candidate. */
+        ValueChange: {
+            path: string;
+            /** @description `add`, `remove` or `replace`. */
+            change: string;
+            /** @description The baseline's value (absent when added). */
+            baseline?: unknown;
+            /** @description The candidate's value (absent when removed). */
+            candidate?: unknown;
+        };
+        ExpectationChange: {
+            id: string;
+            type: string;
+            critical: boolean;
+            /** @description The baseline's result status (`PASS`, `FAIL`, `ERROR`, `SKIPPED`), `null` when absent. */
+            baseline: string | null;
+            candidate: string | null;
+            /** @enum {string} */
+            change: "fixed" | "broken" | "still_failing" | "same" | "not_comparable";
+            /** @description Counted as newly failing although the baseline could not evaluate it. */
+            baseline_unverified?: boolean;
+            candidate_reason?: string;
+            baseline_reason?: string;
+            label?: string;
+            baseline_score?: number;
+            candidate_score?: number;
+        };
+        MetricDelta: {
+            baseline: number | null;
+            candidate: number | null;
+            delta: number | null;
+            /** @enum {string} */
+            change: "better" | "worse" | "same" | "changed" | "unknown";
+        };
+        /** @description The first step at which the candidate's trajectory differs, in plain language. */
+        Divergence: {
+            index: number;
+            /** @description `tool`, `arguments`, `result`, `policy`, `outcome`, `stopped_early` or `extra_steps`. */
+            kind: string;
+            summary: string;
+            impact: string | null;
+            baseline: components["schemas"]["Step"] | null;
+            candidate: components["schemas"]["Step"] | null;
+            argument_changes: components["schemas"]["ValueChange"][];
+        };
+        CaseComparison: {
+            scenario_name: string;
+            severity: string;
+            tags: string[];
+            classification: components["schemas"]["Classification"];
+            reason: string;
+            baseline: components["schemas"]["SideSummary"];
+            candidate: components["schemas"]["SideSummary"];
+            expectations: components["schemas"]["ExpectationChange"][];
+            /** @description Per metric (the names of `Metrics`), baseline next to candidate. */
+            metrics: {
+                [key: string]: components["schemas"]["MetricDelta"];
+            };
+            divergence: components["schemas"]["Divergence"] | null;
+            trajectories: {
+                baseline: components["schemas"]["Step"][];
+                candidate: components["schemas"]["Step"][];
+                alignment: {
+                    baseline: number | null;
+                    candidate: number | null;
+                    /** @enum {string} */
+                    match: "same" | "changed" | "baseline_only" | "candidate_only";
+                }[];
+            };
+            /** @description Where the candidate's final twin state differs from the baseline's. */
+            state_changes: components["schemas"]["ValueChange"][];
+            tool_selection: {
+                added: string[];
+                removed: string[];
+            };
+            /** @description The riskiest tool either side touched (`none` without tool calls). */
+            risk: string;
+        };
+        Evidence: {
+            /** @enum {string} */
+            kind: "tool_call" | "state" | "output" | "agent" | "config";
+            detail: string;
+            ref?: string;
+            /** @description The expected value, when there is one. */
+            expected?: unknown;
+            /** @description The observed value, when there is one. */
+            actual?: unknown;
+        };
+        ExpectationResult: {
+            /** @enum {string} */
+            status: "PASS" | "FAIL" | "ERROR" | "SKIPPED";
+            reason: string;
+            evaluator: string;
+            evaluator_version: string;
+            score: number | null;
+            label: string | null;
+            critical: boolean;
+            expectation: {
+                id: string;
+                type: string;
+                critical: boolean;
+                description?: string;
+                category?: string;
+                tool?: string;
+                path?: string;
+            };
+            evidence: components["schemas"]["Evidence"][];
+        };
+        JudgeVerdict: {
+            score: number;
+            /** @enum {string} */
+            label: "pass" | "fail";
+            confidence: number;
+            reason: string;
+            /** @description Quotes from the material the judge was shown (checked to occur there). */
+            evidence: {
+                ref: string;
+                quote: string;
+            }[];
+            /** @description Quotes the judge gave that were not in the material (dropped). */
+            unsupported_quotes: number;
+            input_tokens: number | null;
+            output_tokens: number | null;
+            cost_usd: number | null;
+        };
+        JudgedExpectation: {
+            expectation_id: string;
+            /** @description The verdict was reused from an identical earlier request. */
+            cached: boolean;
+            judge: components["schemas"]["JudgeIdentity"];
+            /** @description `null` when the judge was not called or failed (the result says why). */
+            verdict: components["schemas"]["JudgeVerdict"] | null;
+        };
+        EvalCaseDetail: {
+            eval_run_id: components["schemas"]["Uuid"];
+            position: number;
+            reviewed: boolean;
+            comparison: components["schemas"]["CaseComparison"];
+            /** @description Every expectation result of each side, semantic ones as judged. */
+            results: {
+                baseline: components["schemas"]["ExpectationResult"][];
+                candidate: components["schemas"]["ExpectationResult"][];
+            };
+            verdicts: {
+                baseline: components["schemas"]["JudgedExpectation"][];
+                candidate: components["schemas"]["JudgedExpectation"][];
+            };
+            updated_at: components["schemas"]["Timestamp"];
         };
     };
     responses: {
@@ -386,6 +878,9 @@ export interface components {
         Cursor: string;
         Limit: number;
         DatasetId: components["schemas"]["Uuid"];
+        EvalRunId: components["schemas"]["Uuid"];
+        /** @description The scenario name of the case. */
+        ScenarioName: components["schemas"]["Name"];
     };
     requestBodies: never;
     headers: {
@@ -595,7 +1090,7 @@ export interface operations {
             path: {
                 dataset_id: components["parameters"]["DatasetId"];
                 /** @description The scenario name of the case. */
-                scenario: components["schemas"]["Name"];
+                scenario: components["parameters"]["ScenarioName"];
             };
             cookie?: never;
         };
@@ -652,6 +1147,214 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasetResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["IdempotencyInProgress"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listEvalRuns: {
+        parameters: {
+            query?: {
+                /** @description Restricts the list to one project (default every project the caller can access). */
+                project_id?: components["parameters"]["ProjectFilter"];
+                status?: components["schemas"]["EvalRunStatus"];
+                agent?: string;
+                dataset_id?: components["schemas"]["Uuid"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of runs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    startEvalRun: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartEvalRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The run, queued. */
+            202: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["DatasetConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getEvalRun: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                eval_run_id: components["parameters"]["EvalRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getEvalCase: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                eval_run_id: components["parameters"]["EvalRunId"];
+                /** @description The scenario name of the case. */
+                scenario: components["parameters"]["ScenarioName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The case. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalCaseDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    cancelEvalRun: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                eval_run_id: components["parameters"]["EvalRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run is final. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunResponse"];
+                };
+            };
+            /** @description Cancellation requested; the run is still stopping. */
+            202: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalRunResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

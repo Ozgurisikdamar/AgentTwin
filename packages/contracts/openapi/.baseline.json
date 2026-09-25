@@ -6297,6 +6297,2465 @@
         }
       }
     },
+    "GET /api/v1/eval-runs": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:agent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:dataset_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:status": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"CANCELLED\"",
+                "\"COMPLETED\"",
+                "\"EVALUATING\"",
+                "\"FAILED\"",
+                "\"PREPARING\"",
+                "\"QUEUED\"",
+                "\"RUNNING\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/items/[]/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "agent_name",
+              "attempts",
+              "baseline_run_id",
+              "baseline_version",
+              "budget",
+              "cancel_requested",
+              "candidate_run_id",
+              "candidate_version",
+              "case_count",
+              "counts",
+              "created_at",
+              "error",
+              "finished_at",
+              "id",
+              "judge",
+              "organization_id",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "seed",
+              "selection",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/items/[]/budget": [
+              "calls",
+              "exhausted",
+              "max_calls",
+              "max_cost_usd",
+              "spent_usd",
+              "unknown_cost_calls"
+            ],
+            "/items/[]/counts": [
+              "IMPROVED",
+              "INCOMPLETE",
+              "NEW_CRITICAL_FAILURE",
+              "REGRESSED",
+              "UNCHANGED"
+            ],
+            "/items/[]/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/items/[]/pinning": [
+              "baseline",
+              "candidate",
+              "cases",
+              "seed"
+            ],
+            "/items/[]/pinning/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ],
+            "/items/[]/selection": [
+              "dataset",
+              "scenarios",
+              "tags"
+            ],
+            "/items/[]/selection/dataset": [
+              "id",
+              "name",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent_name": [
+              "string"
+            ],
+            "/items/[]/attempts": [
+              "integer"
+            ],
+            "/items/[]/baseline_run_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/baseline_version": [
+              "string"
+            ],
+            "/items/[]/budget": [
+              "null",
+              "object"
+            ],
+            "/items/[]/budget/calls": [
+              "integer"
+            ],
+            "/items/[]/budget/exhausted": [
+              "boolean"
+            ],
+            "/items/[]/budget/max_calls": [
+              "integer"
+            ],
+            "/items/[]/budget/max_cost_usd": [
+              "null",
+              "number"
+            ],
+            "/items/[]/budget/spent_usd": [
+              "number"
+            ],
+            "/items/[]/budget/unknown_cost_calls": [
+              "integer"
+            ],
+            "/items/[]/cancel_requested": [
+              "boolean"
+            ],
+            "/items/[]/candidate_run_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/candidate_version": [
+              "string"
+            ],
+            "/items/[]/case_count": [
+              "integer"
+            ],
+            "/items/[]/counts": [
+              "object"
+            ],
+            "/items/[]/counts/IMPROVED": [
+              "integer"
+            ],
+            "/items/[]/counts/INCOMPLETE": [
+              "integer"
+            ],
+            "/items/[]/counts/NEW_CRITICAL_FAILURE": [
+              "integer"
+            ],
+            "/items/[]/counts/REGRESSED": [
+              "integer"
+            ],
+            "/items/[]/counts/UNCHANGED": [
+              "integer"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/error": [
+              "null",
+              "string"
+            ],
+            "/items/[]/finished_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/judge": [
+              "null",
+              "object"
+            ],
+            "/items/[]/judge/calibrated": [
+              "string"
+            ],
+            "/items/[]/judge/kind": [
+              "string"
+            ],
+            "/items/[]/judge/model": [
+              "string"
+            ],
+            "/items/[]/judge/prompt_sha256": [
+              "string"
+            ],
+            "/items/[]/judge/prompt_version": [
+              "string"
+            ],
+            "/items/[]/judge/provider": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/pinning": [
+              "null",
+              "object"
+            ],
+            "/items/[]/pinning/baseline": [
+              "object"
+            ],
+            "/items/[]/pinning/candidate": [
+              "object"
+            ],
+            "/items/[]/pinning/cases": [
+              "array"
+            ],
+            "/items/[]/pinning/cases/[]": [
+              "object"
+            ],
+            "/items/[]/pinning/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/items/[]/pinning/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/items/[]/pinning/cases/[]/position": [
+              "integer"
+            ],
+            "/items/[]/pinning/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/items/[]/pinning/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/items/[]/pinning/cases/[]/seed": [
+              "integer"
+            ],
+            "/items/[]/pinning/cases/[]/severity": [
+              "string"
+            ],
+            "/items/[]/pinning/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/items/[]/pinning/seed": [
+              "integer"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/release_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/requested_by": [
+              "string"
+            ],
+            "/items/[]/seed": [
+              "integer",
+              "null"
+            ],
+            "/items/[]/selection": [
+              "object"
+            ],
+            "/items/[]/selection/dataset": [
+              "null",
+              "object"
+            ],
+            "/items/[]/selection/dataset/id": [
+              "string"
+            ],
+            "/items/[]/selection/dataset/name": [
+              "string"
+            ],
+            "/items/[]/selection/dataset/version": [
+              "integer"
+            ],
+            "/items/[]/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/items/[]/selection/scenarios/[]": [
+              "string"
+            ],
+            "/items/[]/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/items/[]/selection/tags/[]": [
+              "string"
+            ],
+            "/items/[]/started_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/status": [
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/eval-runs/{eval_run_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:eval_run_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/cases/[]/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/run/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/transitions/[]/from_status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/transitions/[]/to_status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "cases",
+              "run",
+              "summary",
+              "transitions"
+            ],
+            "/cases/[]": [
+              "baseline",
+              "candidate",
+              "classification",
+              "position",
+              "reason",
+              "reviewed",
+              "scenario_name",
+              "severity",
+              "tags"
+            ],
+            "/cases/[]/baseline": [
+              "case_id",
+              "labels",
+              "metrics",
+              "reason",
+              "status",
+              "tools",
+              "trace_id"
+            ],
+            "/cases/[]/baseline/metrics": [
+              "argument_failures",
+              "cost_usd",
+              "critical_failures",
+              "duplicate_side_effects",
+              "escalations",
+              "failed_expectations",
+              "latency_ms",
+              "policy_violations",
+              "retries",
+              "semantic_score",
+              "steps",
+              "tokens",
+              "tool_calls"
+            ],
+            "/cases/[]/candidate": [
+              "case_id",
+              "labels",
+              "metrics",
+              "reason",
+              "status",
+              "tools",
+              "trace_id"
+            ],
+            "/cases/[]/candidate/metrics": [
+              "argument_failures",
+              "cost_usd",
+              "critical_failures",
+              "duplicate_side_effects",
+              "escalations",
+              "failed_expectations",
+              "latency_ms",
+              "policy_violations",
+              "retries",
+              "semantic_score",
+              "steps",
+              "tokens",
+              "tool_calls"
+            ],
+            "/run": [
+              "agent_name",
+              "attempts",
+              "baseline_run_id",
+              "baseline_version",
+              "budget",
+              "cancel_requested",
+              "candidate_run_id",
+              "candidate_version",
+              "case_count",
+              "counts",
+              "created_at",
+              "error",
+              "finished_at",
+              "id",
+              "judge",
+              "organization_id",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "seed",
+              "selection",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/run/budget": [
+              "calls",
+              "exhausted",
+              "max_calls",
+              "max_cost_usd",
+              "spent_usd",
+              "unknown_cost_calls"
+            ],
+            "/run/counts": [
+              "IMPROVED",
+              "INCOMPLETE",
+              "NEW_CRITICAL_FAILURE",
+              "REGRESSED",
+              "UNCHANGED"
+            ],
+            "/run/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/run/pinning": [
+              "baseline",
+              "candidate",
+              "cases",
+              "seed"
+            ],
+            "/run/pinning/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ],
+            "/run/selection": [
+              "dataset",
+              "scenarios",
+              "tags"
+            ],
+            "/run/selection/dataset": [
+              "id",
+              "name",
+              "version"
+            ],
+            "/summary": [
+              "baseline",
+              "candidate",
+              "counts",
+              "improved",
+              "incomplete",
+              "new_critical_failures",
+              "regressed",
+              "slices"
+            ],
+            "/summary/baseline": [
+              "cases",
+              "cost_known",
+              "cost_usd",
+              "critical_failures",
+              "duplicate_side_effects",
+              "escalations",
+              "failed",
+              "incomplete",
+              "latency_ms_p50",
+              "latency_ms_p95",
+              "passed",
+              "policy_violations",
+              "retries",
+              "semantic_score",
+              "tokens",
+              "tokens_known",
+              "tool_calls"
+            ],
+            "/summary/candidate": [
+              "cases",
+              "cost_known",
+              "cost_usd",
+              "critical_failures",
+              "duplicate_side_effects",
+              "escalations",
+              "failed",
+              "incomplete",
+              "latency_ms_p50",
+              "latency_ms_p95",
+              "passed",
+              "policy_violations",
+              "retries",
+              "semantic_score",
+              "tokens",
+              "tokens_known",
+              "tool_calls"
+            ],
+            "/summary/counts": [
+              "IMPROVED",
+              "INCOMPLETE",
+              "NEW_CRITICAL_FAILURE",
+              "REGRESSED",
+              "UNCHANGED"
+            ],
+            "/summary/new_critical_failures/[]": [
+              "expectations",
+              "scenario_name"
+            ],
+            "/summary/slices": [
+              "failure_class"
+            ],
+            "/transitions/[]": [
+              "at",
+              "from_status",
+              "reason",
+              "to_status"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/baseline": [
+              "object"
+            ],
+            "/cases/[]/baseline/case_id": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/baseline/labels": [
+              "array"
+            ],
+            "/cases/[]/baseline/labels/[]": [
+              "string"
+            ],
+            "/cases/[]/baseline/metrics": [
+              "object"
+            ],
+            "/cases/[]/baseline/metrics/argument_failures": [
+              "integer"
+            ],
+            "/cases/[]/baseline/metrics/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/baseline/metrics/critical_failures": [
+              "integer"
+            ],
+            "/cases/[]/baseline/metrics/duplicate_side_effects": [
+              "integer"
+            ],
+            "/cases/[]/baseline/metrics/escalations": [
+              "integer"
+            ],
+            "/cases/[]/baseline/metrics/failed_expectations": [
+              "integer"
+            ],
+            "/cases/[]/baseline/metrics/latency_ms": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/baseline/metrics/policy_violations": [
+              "integer"
+            ],
+            "/cases/[]/baseline/metrics/retries": [
+              "integer"
+            ],
+            "/cases/[]/baseline/metrics/semantic_score": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/baseline/metrics/steps": [
+              "integer",
+              "null"
+            ],
+            "/cases/[]/baseline/metrics/tokens": [
+              "integer",
+              "null"
+            ],
+            "/cases/[]/baseline/metrics/tool_calls": [
+              "integer"
+            ],
+            "/cases/[]/baseline/reason": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/baseline/status": [
+              "string"
+            ],
+            "/cases/[]/baseline/tools": [
+              "array"
+            ],
+            "/cases/[]/baseline/tools/[]": [
+              "string"
+            ],
+            "/cases/[]/baseline/trace_id": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/candidate": [
+              "object"
+            ],
+            "/cases/[]/candidate/case_id": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/candidate/labels": [
+              "array"
+            ],
+            "/cases/[]/candidate/labels/[]": [
+              "string"
+            ],
+            "/cases/[]/candidate/metrics": [
+              "object"
+            ],
+            "/cases/[]/candidate/metrics/argument_failures": [
+              "integer"
+            ],
+            "/cases/[]/candidate/metrics/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/candidate/metrics/critical_failures": [
+              "integer"
+            ],
+            "/cases/[]/candidate/metrics/duplicate_side_effects": [
+              "integer"
+            ],
+            "/cases/[]/candidate/metrics/escalations": [
+              "integer"
+            ],
+            "/cases/[]/candidate/metrics/failed_expectations": [
+              "integer"
+            ],
+            "/cases/[]/candidate/metrics/latency_ms": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/candidate/metrics/policy_violations": [
+              "integer"
+            ],
+            "/cases/[]/candidate/metrics/retries": [
+              "integer"
+            ],
+            "/cases/[]/candidate/metrics/semantic_score": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/candidate/metrics/steps": [
+              "integer",
+              "null"
+            ],
+            "/cases/[]/candidate/metrics/tokens": [
+              "integer",
+              "null"
+            ],
+            "/cases/[]/candidate/metrics/tool_calls": [
+              "integer"
+            ],
+            "/cases/[]/candidate/reason": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/candidate/status": [
+              "string"
+            ],
+            "/cases/[]/candidate/tools": [
+              "array"
+            ],
+            "/cases/[]/candidate/tools/[]": [
+              "string"
+            ],
+            "/cases/[]/candidate/trace_id": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/classification": [
+              "string"
+            ],
+            "/cases/[]/position": [
+              "integer"
+            ],
+            "/cases/[]/reason": [
+              "string"
+            ],
+            "/cases/[]/reviewed": [
+              "boolean"
+            ],
+            "/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/cases/[]/severity": [
+              "string"
+            ],
+            "/cases/[]/tags": [
+              "array"
+            ],
+            "/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/baseline_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/baseline_version": [
+              "string"
+            ],
+            "/run/budget": [
+              "null",
+              "object"
+            ],
+            "/run/budget/calls": [
+              "integer"
+            ],
+            "/run/budget/exhausted": [
+              "boolean"
+            ],
+            "/run/budget/max_calls": [
+              "integer"
+            ],
+            "/run/budget/max_cost_usd": [
+              "null",
+              "number"
+            ],
+            "/run/budget/spent_usd": [
+              "number"
+            ],
+            "/run/budget/unknown_cost_calls": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/candidate_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/candidate_version": [
+              "string"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/counts": [
+              "object"
+            ],
+            "/run/counts/IMPROVED": [
+              "integer"
+            ],
+            "/run/counts/INCOMPLETE": [
+              "integer"
+            ],
+            "/run/counts/NEW_CRITICAL_FAILURE": [
+              "integer"
+            ],
+            "/run/counts/REGRESSED": [
+              "integer"
+            ],
+            "/run/counts/UNCHANGED": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/judge": [
+              "null",
+              "object"
+            ],
+            "/run/judge/calibrated": [
+              "string"
+            ],
+            "/run/judge/kind": [
+              "string"
+            ],
+            "/run/judge/model": [
+              "string"
+            ],
+            "/run/judge/prompt_sha256": [
+              "string"
+            ],
+            "/run/judge/prompt_version": [
+              "string"
+            ],
+            "/run/judge/provider": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/pinning": [
+              "null",
+              "object"
+            ],
+            "/run/pinning/baseline": [
+              "object"
+            ],
+            "/run/pinning/candidate": [
+              "object"
+            ],
+            "/run/pinning/cases": [
+              "array"
+            ],
+            "/run/pinning/cases/[]": [
+              "object"
+            ],
+            "/run/pinning/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/position": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/seed": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/severity": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/seed": [
+              "integer"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/seed": [
+              "integer",
+              "null"
+            ],
+            "/run/selection": [
+              "object"
+            ],
+            "/run/selection/dataset": [
+              "null",
+              "object"
+            ],
+            "/run/selection/dataset/id": [
+              "string"
+            ],
+            "/run/selection/dataset/name": [
+              "string"
+            ],
+            "/run/selection/dataset/version": [
+              "integer"
+            ],
+            "/run/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenarios/[]": [
+              "string"
+            ],
+            "/run/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/run/selection/tags/[]": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ],
+            "/summary": [
+              "null",
+              "object"
+            ],
+            "/summary/baseline": [
+              "object"
+            ],
+            "/summary/baseline/cases": [
+              "integer"
+            ],
+            "/summary/baseline/cost_known": [
+              "integer"
+            ],
+            "/summary/baseline/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/summary/baseline/critical_failures": [
+              "integer"
+            ],
+            "/summary/baseline/duplicate_side_effects": [
+              "integer"
+            ],
+            "/summary/baseline/escalations": [
+              "integer"
+            ],
+            "/summary/baseline/failed": [
+              "integer"
+            ],
+            "/summary/baseline/incomplete": [
+              "integer"
+            ],
+            "/summary/baseline/latency_ms_p50": [
+              "null",
+              "number"
+            ],
+            "/summary/baseline/latency_ms_p95": [
+              "null",
+              "number"
+            ],
+            "/summary/baseline/passed": [
+              "integer"
+            ],
+            "/summary/baseline/policy_violations": [
+              "integer"
+            ],
+            "/summary/baseline/retries": [
+              "integer"
+            ],
+            "/summary/baseline/semantic_score": [
+              "null",
+              "number"
+            ],
+            "/summary/baseline/tokens": [
+              "integer",
+              "null"
+            ],
+            "/summary/baseline/tokens_known": [
+              "integer"
+            ],
+            "/summary/baseline/tool_calls": [
+              "integer"
+            ],
+            "/summary/candidate": [
+              "object"
+            ],
+            "/summary/candidate/cases": [
+              "integer"
+            ],
+            "/summary/candidate/cost_known": [
+              "integer"
+            ],
+            "/summary/candidate/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/summary/candidate/critical_failures": [
+              "integer"
+            ],
+            "/summary/candidate/duplicate_side_effects": [
+              "integer"
+            ],
+            "/summary/candidate/escalations": [
+              "integer"
+            ],
+            "/summary/candidate/failed": [
+              "integer"
+            ],
+            "/summary/candidate/incomplete": [
+              "integer"
+            ],
+            "/summary/candidate/latency_ms_p50": [
+              "null",
+              "number"
+            ],
+            "/summary/candidate/latency_ms_p95": [
+              "null",
+              "number"
+            ],
+            "/summary/candidate/passed": [
+              "integer"
+            ],
+            "/summary/candidate/policy_violations": [
+              "integer"
+            ],
+            "/summary/candidate/retries": [
+              "integer"
+            ],
+            "/summary/candidate/semantic_score": [
+              "null",
+              "number"
+            ],
+            "/summary/candidate/tokens": [
+              "integer",
+              "null"
+            ],
+            "/summary/candidate/tokens_known": [
+              "integer"
+            ],
+            "/summary/candidate/tool_calls": [
+              "integer"
+            ],
+            "/summary/counts": [
+              "object"
+            ],
+            "/summary/counts/IMPROVED": [
+              "integer"
+            ],
+            "/summary/counts/INCOMPLETE": [
+              "integer"
+            ],
+            "/summary/counts/NEW_CRITICAL_FAILURE": [
+              "integer"
+            ],
+            "/summary/counts/REGRESSED": [
+              "integer"
+            ],
+            "/summary/counts/UNCHANGED": [
+              "integer"
+            ],
+            "/summary/improved": [
+              "array"
+            ],
+            "/summary/improved/[]": [
+              "string"
+            ],
+            "/summary/incomplete": [
+              "array"
+            ],
+            "/summary/incomplete/[]": [
+              "string"
+            ],
+            "/summary/new_critical_failures": [
+              "array"
+            ],
+            "/summary/new_critical_failures/[]": [
+              "object"
+            ],
+            "/summary/new_critical_failures/[]/expectations": [
+              "array"
+            ],
+            "/summary/new_critical_failures/[]/expectations/[]": [
+              "string"
+            ],
+            "/summary/new_critical_failures/[]/scenario_name": [
+              "string"
+            ],
+            "/summary/regressed": [
+              "array"
+            ],
+            "/summary/regressed/[]": [
+              "string"
+            ],
+            "/summary/slices": [
+              "object"
+            ],
+            "/summary/slices/failure_class": [
+              "object"
+            ],
+            "/summary/slices/risk": [
+              "object"
+            ],
+            "/summary/slices/severity": [
+              "object"
+            ],
+            "/summary/slices/tag": [
+              "object"
+            ],
+            "/summary/slices/tool": [
+              "object"
+            ],
+            "/transitions": [
+              "array"
+            ],
+            "/transitions/[]": [
+              "object"
+            ],
+            "/transitions/[]/at": [
+              "string"
+            ],
+            "/transitions/[]/from_status": [
+              "null",
+              "string"
+            ],
+            "/transitions/[]/reason": [
+              "null",
+              "string"
+            ],
+            "/transitions/[]/to_status": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/eval-runs/{eval_run_id}/cases/{scenario}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:eval_run_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:scenario": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/comparison/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/comparison/divergence/baseline/effect": [
+              "\"applied\"",
+              "\"replayed\""
+            ],
+            "/comparison/divergence/baseline/kind": [
+              "\"OUTCOME\"",
+              "\"POLICY\"",
+              "\"RETRIEVAL\"",
+              "\"TOOL\""
+            ],
+            "/comparison/divergence/candidate/effect": [
+              "\"applied\"",
+              "\"replayed\""
+            ],
+            "/comparison/divergence/candidate/kind": [
+              "\"OUTCOME\"",
+              "\"POLICY\"",
+              "\"RETRIEVAL\"",
+              "\"TOOL\""
+            ],
+            "/comparison/expectations/[]/change": [
+              "\"broken\"",
+              "\"fixed\"",
+              "\"not_comparable\"",
+              "\"same\"",
+              "\"still_failing\""
+            ],
+            "/comparison/trajectories/alignment/[]/match": [
+              "\"baseline_only\"",
+              "\"candidate_only\"",
+              "\"changed\"",
+              "\"same\""
+            ],
+            "/comparison/trajectories/baseline/[]/effect": [
+              "\"applied\"",
+              "\"replayed\""
+            ],
+            "/comparison/trajectories/baseline/[]/kind": [
+              "\"OUTCOME\"",
+              "\"POLICY\"",
+              "\"RETRIEVAL\"",
+              "\"TOOL\""
+            ],
+            "/comparison/trajectories/candidate/[]/effect": [
+              "\"applied\"",
+              "\"replayed\""
+            ],
+            "/comparison/trajectories/candidate/[]/kind": [
+              "\"OUTCOME\"",
+              "\"POLICY\"",
+              "\"RETRIEVAL\"",
+              "\"TOOL\""
+            ],
+            "/results/baseline/[]/evidence/[]/kind": [
+              "\"agent\"",
+              "\"config\"",
+              "\"output\"",
+              "\"state\"",
+              "\"tool_call\""
+            ],
+            "/results/baseline/[]/status": [
+              "\"ERROR\"",
+              "\"FAIL\"",
+              "\"PASS\"",
+              "\"SKIPPED\""
+            ],
+            "/results/candidate/[]/evidence/[]/kind": [
+              "\"agent\"",
+              "\"config\"",
+              "\"output\"",
+              "\"state\"",
+              "\"tool_call\""
+            ],
+            "/results/candidate/[]/status": [
+              "\"ERROR\"",
+              "\"FAIL\"",
+              "\"PASS\"",
+              "\"SKIPPED\""
+            ],
+            "/verdicts/baseline/[]/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/verdicts/baseline/[]/verdict/label": [
+              "\"fail\"",
+              "\"pass\""
+            ],
+            "/verdicts/candidate/[]/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/verdicts/candidate/[]/verdict/label": [
+              "\"fail\"",
+              "\"pass\""
+            ]
+          },
+          "required": {
+            "/": [
+              "comparison",
+              "eval_run_id",
+              "position",
+              "results",
+              "reviewed",
+              "updated_at",
+              "verdicts"
+            ],
+            "/comparison": [
+              "baseline",
+              "candidate",
+              "classification",
+              "divergence",
+              "expectations",
+              "metrics",
+              "reason",
+              "risk",
+              "scenario_name",
+              "severity",
+              "state_changes",
+              "tags",
+              "tool_selection",
+              "trajectories"
+            ],
+            "/comparison/baseline": [
+              "case_id",
+              "labels",
+              "metrics",
+              "reason",
+              "status",
+              "tools",
+              "trace_id"
+            ],
+            "/comparison/baseline/metrics": [
+              "argument_failures",
+              "cost_usd",
+              "critical_failures",
+              "duplicate_side_effects",
+              "escalations",
+              "failed_expectations",
+              "latency_ms",
+              "policy_violations",
+              "retries",
+              "semantic_score",
+              "steps",
+              "tokens",
+              "tool_calls"
+            ],
+            "/comparison/candidate": [
+              "case_id",
+              "labels",
+              "metrics",
+              "reason",
+              "status",
+              "tools",
+              "trace_id"
+            ],
+            "/comparison/candidate/metrics": [
+              "argument_failures",
+              "cost_usd",
+              "critical_failures",
+              "duplicate_side_effects",
+              "escalations",
+              "failed_expectations",
+              "latency_ms",
+              "policy_violations",
+              "retries",
+              "semantic_score",
+              "steps",
+              "tokens",
+              "tool_calls"
+            ],
+            "/comparison/divergence": [
+              "argument_changes",
+              "baseline",
+              "candidate",
+              "impact",
+              "index",
+              "kind",
+              "summary"
+            ],
+            "/comparison/divergence/argument_changes/[]": [
+              "change",
+              "path"
+            ],
+            "/comparison/divergence/baseline": [
+              "arguments",
+              "index",
+              "kind",
+              "label",
+              "name"
+            ],
+            "/comparison/divergence/candidate": [
+              "arguments",
+              "index",
+              "kind",
+              "label",
+              "name"
+            ],
+            "/comparison/expectations/[]": [
+              "baseline",
+              "candidate",
+              "change",
+              "critical",
+              "id",
+              "type"
+            ],
+            "/comparison/state_changes/[]": [
+              "change",
+              "path"
+            ],
+            "/comparison/tool_selection": [
+              "added",
+              "removed"
+            ],
+            "/comparison/trajectories": [
+              "alignment",
+              "baseline",
+              "candidate"
+            ],
+            "/comparison/trajectories/alignment/[]": [
+              "baseline",
+              "candidate",
+              "match"
+            ],
+            "/comparison/trajectories/baseline/[]": [
+              "arguments",
+              "index",
+              "kind",
+              "label",
+              "name"
+            ],
+            "/comparison/trajectories/candidate/[]": [
+              "arguments",
+              "index",
+              "kind",
+              "label",
+              "name"
+            ],
+            "/results": [
+              "baseline",
+              "candidate"
+            ],
+            "/results/baseline/[]": [
+              "critical",
+              "evaluator",
+              "evaluator_version",
+              "evidence",
+              "expectation",
+              "label",
+              "reason",
+              "score",
+              "status"
+            ],
+            "/results/baseline/[]/evidence/[]": [
+              "detail",
+              "kind"
+            ],
+            "/results/baseline/[]/expectation": [
+              "critical",
+              "id",
+              "type"
+            ],
+            "/results/candidate/[]": [
+              "critical",
+              "evaluator",
+              "evaluator_version",
+              "evidence",
+              "expectation",
+              "label",
+              "reason",
+              "score",
+              "status"
+            ],
+            "/results/candidate/[]/evidence/[]": [
+              "detail",
+              "kind"
+            ],
+            "/results/candidate/[]/expectation": [
+              "critical",
+              "id",
+              "type"
+            ],
+            "/verdicts": [
+              "baseline",
+              "candidate"
+            ],
+            "/verdicts/baseline/[]": [
+              "cached",
+              "expectation_id",
+              "judge",
+              "verdict"
+            ],
+            "/verdicts/baseline/[]/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/verdicts/baseline/[]/verdict": [
+              "confidence",
+              "cost_usd",
+              "evidence",
+              "input_tokens",
+              "label",
+              "output_tokens",
+              "reason",
+              "score",
+              "unsupported_quotes"
+            ],
+            "/verdicts/baseline/[]/verdict/evidence/[]": [
+              "quote",
+              "ref"
+            ],
+            "/verdicts/candidate/[]": [
+              "cached",
+              "expectation_id",
+              "judge",
+              "verdict"
+            ],
+            "/verdicts/candidate/[]/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/verdicts/candidate/[]/verdict": [
+              "confidence",
+              "cost_usd",
+              "evidence",
+              "input_tokens",
+              "label",
+              "output_tokens",
+              "reason",
+              "score",
+              "unsupported_quotes"
+            ],
+            "/verdicts/candidate/[]/verdict/evidence/[]": [
+              "quote",
+              "ref"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/comparison": [
+              "object"
+            ],
+            "/comparison/baseline": [
+              "object"
+            ],
+            "/comparison/baseline/case_id": [
+              "null",
+              "string"
+            ],
+            "/comparison/baseline/labels": [
+              "array"
+            ],
+            "/comparison/baseline/labels/[]": [
+              "string"
+            ],
+            "/comparison/baseline/metrics": [
+              "object"
+            ],
+            "/comparison/baseline/metrics/argument_failures": [
+              "integer"
+            ],
+            "/comparison/baseline/metrics/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/comparison/baseline/metrics/critical_failures": [
+              "integer"
+            ],
+            "/comparison/baseline/metrics/duplicate_side_effects": [
+              "integer"
+            ],
+            "/comparison/baseline/metrics/escalations": [
+              "integer"
+            ],
+            "/comparison/baseline/metrics/failed_expectations": [
+              "integer"
+            ],
+            "/comparison/baseline/metrics/latency_ms": [
+              "null",
+              "number"
+            ],
+            "/comparison/baseline/metrics/policy_violations": [
+              "integer"
+            ],
+            "/comparison/baseline/metrics/retries": [
+              "integer"
+            ],
+            "/comparison/baseline/metrics/semantic_score": [
+              "null",
+              "number"
+            ],
+            "/comparison/baseline/metrics/steps": [
+              "integer",
+              "null"
+            ],
+            "/comparison/baseline/metrics/tokens": [
+              "integer",
+              "null"
+            ],
+            "/comparison/baseline/metrics/tool_calls": [
+              "integer"
+            ],
+            "/comparison/baseline/reason": [
+              "null",
+              "string"
+            ],
+            "/comparison/baseline/status": [
+              "string"
+            ],
+            "/comparison/baseline/tools": [
+              "array"
+            ],
+            "/comparison/baseline/tools/[]": [
+              "string"
+            ],
+            "/comparison/baseline/trace_id": [
+              "null",
+              "string"
+            ],
+            "/comparison/candidate": [
+              "object"
+            ],
+            "/comparison/candidate/case_id": [
+              "null",
+              "string"
+            ],
+            "/comparison/candidate/labels": [
+              "array"
+            ],
+            "/comparison/candidate/labels/[]": [
+              "string"
+            ],
+            "/comparison/candidate/metrics": [
+              "object"
+            ],
+            "/comparison/candidate/metrics/argument_failures": [
+              "integer"
+            ],
+            "/comparison/candidate/metrics/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/comparison/candidate/metrics/critical_failures": [
+              "integer"
+            ],
+            "/comparison/candidate/metrics/duplicate_side_effects": [
+              "integer"
+            ],
+            "/comparison/candidate/metrics/escalations": [
+              "integer"
+            ],
+            "/comparison/candidate/metrics/failed_expectations": [
+              "integer"
+            ],
+            "/comparison/candidate/metrics/latency_ms": [
+              "null",
+              "number"
+            ],
+            "/comparison/candidate/metrics/policy_violations": [
+              "integer"
+            ],
+            "/comparison/candidate/metrics/retries": [
+              "integer"
+            ],
+            "/comparison/candidate/metrics/semantic_score": [
+              "null",
+              "number"
+            ],
+            "/comparison/candidate/metrics/steps": [
+              "integer",
+              "null"
+            ],
+            "/comparison/candidate/metrics/tokens": [
+              "integer",
+              "null"
+            ],
+            "/comparison/candidate/metrics/tool_calls": [
+              "integer"
+            ],
+            "/comparison/candidate/reason": [
+              "null",
+              "string"
+            ],
+            "/comparison/candidate/status": [
+              "string"
+            ],
+            "/comparison/candidate/tools": [
+              "array"
+            ],
+            "/comparison/candidate/tools/[]": [
+              "string"
+            ],
+            "/comparison/candidate/trace_id": [
+              "null",
+              "string"
+            ],
+            "/comparison/classification": [
+              "string"
+            ],
+            "/comparison/divergence": [
+              "null",
+              "object"
+            ],
+            "/comparison/divergence/argument_changes": [
+              "array"
+            ],
+            "/comparison/divergence/argument_changes/[]": [
+              "object"
+            ],
+            "/comparison/divergence/argument_changes/[]/change": [
+              "string"
+            ],
+            "/comparison/divergence/argument_changes/[]/path": [
+              "string"
+            ],
+            "/comparison/divergence/baseline": [
+              "null",
+              "object"
+            ],
+            "/comparison/divergence/baseline/arguments": [
+              "object"
+            ],
+            "/comparison/divergence/baseline/effect": [
+              "string"
+            ],
+            "/comparison/divergence/baseline/fault": [
+              "string"
+            ],
+            "/comparison/divergence/baseline/index": [
+              "integer"
+            ],
+            "/comparison/divergence/baseline/kind": [
+              "string"
+            ],
+            "/comparison/divergence/baseline/label": [
+              "string"
+            ],
+            "/comparison/divergence/baseline/name": [
+              "string"
+            ],
+            "/comparison/divergence/baseline/ref": [
+              "string"
+            ],
+            "/comparison/divergence/baseline/risk": [
+              "string"
+            ],
+            "/comparison/divergence/baseline/status": [
+              "string"
+            ],
+            "/comparison/divergence/candidate": [
+              "null",
+              "object"
+            ],
+            "/comparison/divergence/candidate/arguments": [
+              "object"
+            ],
+            "/comparison/divergence/candidate/effect": [
+              "string"
+            ],
+            "/comparison/divergence/candidate/fault": [
+              "string"
+            ],
+            "/comparison/divergence/candidate/index": [
+              "integer"
+            ],
+            "/comparison/divergence/candidate/kind": [
+              "string"
+            ],
+            "/comparison/divergence/candidate/label": [
+              "string"
+            ],
+            "/comparison/divergence/candidate/name": [
+              "string"
+            ],
+            "/comparison/divergence/candidate/ref": [
+              "string"
+            ],
+            "/comparison/divergence/candidate/risk": [
+              "string"
+            ],
+            "/comparison/divergence/candidate/status": [
+              "string"
+            ],
+            "/comparison/divergence/impact": [
+              "null",
+              "string"
+            ],
+            "/comparison/divergence/index": [
+              "integer"
+            ],
+            "/comparison/divergence/kind": [
+              "string"
+            ],
+            "/comparison/divergence/summary": [
+              "string"
+            ],
+            "/comparison/expectations": [
+              "array"
+            ],
+            "/comparison/expectations/[]": [
+              "object"
+            ],
+            "/comparison/expectations/[]/baseline": [
+              "null",
+              "string"
+            ],
+            "/comparison/expectations/[]/baseline_reason": [
+              "string"
+            ],
+            "/comparison/expectations/[]/baseline_score": [
+              "number"
+            ],
+            "/comparison/expectations/[]/baseline_unverified": [
+              "boolean"
+            ],
+            "/comparison/expectations/[]/candidate": [
+              "null",
+              "string"
+            ],
+            "/comparison/expectations/[]/candidate_reason": [
+              "string"
+            ],
+            "/comparison/expectations/[]/candidate_score": [
+              "number"
+            ],
+            "/comparison/expectations/[]/change": [
+              "string"
+            ],
+            "/comparison/expectations/[]/critical": [
+              "boolean"
+            ],
+            "/comparison/expectations/[]/id": [
+              "string"
+            ],
+            "/comparison/expectations/[]/label": [
+              "string"
+            ],
+            "/comparison/expectations/[]/type": [
+              "string"
+            ],
+            "/comparison/metrics": [
+              "object"
+            ],
+            "/comparison/reason": [
+              "string"
+            ],
+            "/comparison/risk": [
+              "string"
+            ],
+            "/comparison/scenario_name": [
+              "string"
+            ],
+            "/comparison/severity": [
+              "string"
+            ],
+            "/comparison/state_changes": [
+              "array"
+            ],
+            "/comparison/state_changes/[]": [
+              "object"
+            ],
+            "/comparison/state_changes/[]/change": [
+              "string"
+            ],
+            "/comparison/state_changes/[]/path": [
+              "string"
+            ],
+            "/comparison/tags": [
+              "array"
+            ],
+            "/comparison/tags/[]": [
+              "string"
+            ],
+            "/comparison/tool_selection": [
+              "object"
+            ],
+            "/comparison/tool_selection/added": [
+              "array"
+            ],
+            "/comparison/tool_selection/added/[]": [
+              "string"
+            ],
+            "/comparison/tool_selection/removed": [
+              "array"
+            ],
+            "/comparison/tool_selection/removed/[]": [
+              "string"
+            ],
+            "/comparison/trajectories": [
+              "object"
+            ],
+            "/comparison/trajectories/alignment": [
+              "array"
+            ],
+            "/comparison/trajectories/alignment/[]": [
+              "object"
+            ],
+            "/comparison/trajectories/alignment/[]/baseline": [
+              "integer",
+              "null"
+            ],
+            "/comparison/trajectories/alignment/[]/candidate": [
+              "integer",
+              "null"
+            ],
+            "/comparison/trajectories/alignment/[]/match": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline": [
+              "array"
+            ],
+            "/comparison/trajectories/baseline/[]": [
+              "object"
+            ],
+            "/comparison/trajectories/baseline/[]/arguments": [
+              "object"
+            ],
+            "/comparison/trajectories/baseline/[]/effect": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline/[]/fault": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline/[]/index": [
+              "integer"
+            ],
+            "/comparison/trajectories/baseline/[]/kind": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline/[]/label": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline/[]/name": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline/[]/ref": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline/[]/risk": [
+              "string"
+            ],
+            "/comparison/trajectories/baseline/[]/status": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate": [
+              "array"
+            ],
+            "/comparison/trajectories/candidate/[]": [
+              "object"
+            ],
+            "/comparison/trajectories/candidate/[]/arguments": [
+              "object"
+            ],
+            "/comparison/trajectories/candidate/[]/effect": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate/[]/fault": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate/[]/index": [
+              "integer"
+            ],
+            "/comparison/trajectories/candidate/[]/kind": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate/[]/label": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate/[]/name": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate/[]/ref": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate/[]/risk": [
+              "string"
+            ],
+            "/comparison/trajectories/candidate/[]/status": [
+              "string"
+            ],
+            "/eval_run_id": [
+              "string"
+            ],
+            "/position": [
+              "integer"
+            ],
+            "/results": [
+              "object"
+            ],
+            "/results/baseline": [
+              "array"
+            ],
+            "/results/baseline/[]": [
+              "object"
+            ],
+            "/results/baseline/[]/critical": [
+              "boolean"
+            ],
+            "/results/baseline/[]/evaluator": [
+              "string"
+            ],
+            "/results/baseline/[]/evaluator_version": [
+              "string"
+            ],
+            "/results/baseline/[]/evidence": [
+              "array"
+            ],
+            "/results/baseline/[]/evidence/[]": [
+              "object"
+            ],
+            "/results/baseline/[]/evidence/[]/detail": [
+              "string"
+            ],
+            "/results/baseline/[]/evidence/[]/kind": [
+              "string"
+            ],
+            "/results/baseline/[]/evidence/[]/ref": [
+              "string"
+            ],
+            "/results/baseline/[]/expectation": [
+              "object"
+            ],
+            "/results/baseline/[]/expectation/category": [
+              "string"
+            ],
+            "/results/baseline/[]/expectation/critical": [
+              "boolean"
+            ],
+            "/results/baseline/[]/expectation/description": [
+              "string"
+            ],
+            "/results/baseline/[]/expectation/id": [
+              "string"
+            ],
+            "/results/baseline/[]/expectation/path": [
+              "string"
+            ],
+            "/results/baseline/[]/expectation/tool": [
+              "string"
+            ],
+            "/results/baseline/[]/expectation/type": [
+              "string"
+            ],
+            "/results/baseline/[]/label": [
+              "null",
+              "string"
+            ],
+            "/results/baseline/[]/reason": [
+              "string"
+            ],
+            "/results/baseline/[]/score": [
+              "null",
+              "number"
+            ],
+            "/results/baseline/[]/status": [
+              "string"
+            ],
+            "/results/candidate": [
+              "array"
+            ],
+            "/results/candidate/[]": [
+              "object"
+            ],
+            "/results/candidate/[]/critical": [
+              "boolean"
+            ],
+            "/results/candidate/[]/evaluator": [
+              "string"
+            ],
+            "/results/candidate/[]/evaluator_version": [
+              "string"
+            ],
+            "/results/candidate/[]/evidence": [
+              "array"
+            ],
+            "/results/candidate/[]/evidence/[]": [
+              "object"
+            ],
+            "/results/candidate/[]/evidence/[]/detail": [
+              "string"
+            ],
+            "/results/candidate/[]/evidence/[]/kind": [
+              "string"
+            ],
+            "/results/candidate/[]/evidence/[]/ref": [
+              "string"
+            ],
+            "/results/candidate/[]/expectation": [
+              "object"
+            ],
+            "/results/candidate/[]/expectation/category": [
+              "string"
+            ],
+            "/results/candidate/[]/expectation/critical": [
+              "boolean"
+            ],
+            "/results/candidate/[]/expectation/description": [
+              "string"
+            ],
+            "/results/candidate/[]/expectation/id": [
+              "string"
+            ],
+            "/results/candidate/[]/expectation/path": [
+              "string"
+            ],
+            "/results/candidate/[]/expectation/tool": [
+              "string"
+            ],
+            "/results/candidate/[]/expectation/type": [
+              "string"
+            ],
+            "/results/candidate/[]/label": [
+              "null",
+              "string"
+            ],
+            "/results/candidate/[]/reason": [
+              "string"
+            ],
+            "/results/candidate/[]/score": [
+              "null",
+              "number"
+            ],
+            "/results/candidate/[]/status": [
+              "string"
+            ],
+            "/reviewed": [
+              "boolean"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/verdicts": [
+              "object"
+            ],
+            "/verdicts/baseline": [
+              "array"
+            ],
+            "/verdicts/baseline/[]": [
+              "object"
+            ],
+            "/verdicts/baseline/[]/cached": [
+              "boolean"
+            ],
+            "/verdicts/baseline/[]/expectation_id": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/judge": [
+              "object"
+            ],
+            "/verdicts/baseline/[]/judge/calibrated": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/judge/kind": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/judge/model": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/judge/prompt_sha256": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/judge/prompt_version": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/judge/provider": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/verdict": [
+              "null",
+              "object"
+            ],
+            "/verdicts/baseline/[]/verdict/confidence": [
+              "number"
+            ],
+            "/verdicts/baseline/[]/verdict/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/verdicts/baseline/[]/verdict/evidence": [
+              "array"
+            ],
+            "/verdicts/baseline/[]/verdict/evidence/[]": [
+              "object"
+            ],
+            "/verdicts/baseline/[]/verdict/evidence/[]/quote": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/verdict/evidence/[]/ref": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/verdict/input_tokens": [
+              "integer",
+              "null"
+            ],
+            "/verdicts/baseline/[]/verdict/label": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/verdict/output_tokens": [
+              "integer",
+              "null"
+            ],
+            "/verdicts/baseline/[]/verdict/reason": [
+              "string"
+            ],
+            "/verdicts/baseline/[]/verdict/score": [
+              "number"
+            ],
+            "/verdicts/baseline/[]/verdict/unsupported_quotes": [
+              "integer"
+            ],
+            "/verdicts/candidate": [
+              "array"
+            ],
+            "/verdicts/candidate/[]": [
+              "object"
+            ],
+            "/verdicts/candidate/[]/cached": [
+              "boolean"
+            ],
+            "/verdicts/candidate/[]/expectation_id": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/judge": [
+              "object"
+            ],
+            "/verdicts/candidate/[]/judge/calibrated": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/judge/kind": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/judge/model": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/judge/prompt_sha256": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/judge/prompt_version": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/judge/provider": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/verdict": [
+              "null",
+              "object"
+            ],
+            "/verdicts/candidate/[]/verdict/confidence": [
+              "number"
+            ],
+            "/verdicts/candidate/[]/verdict/cost_usd": [
+              "null",
+              "number"
+            ],
+            "/verdicts/candidate/[]/verdict/evidence": [
+              "array"
+            ],
+            "/verdicts/candidate/[]/verdict/evidence/[]": [
+              "object"
+            ],
+            "/verdicts/candidate/[]/verdict/evidence/[]/quote": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/verdict/evidence/[]/ref": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/verdict/input_tokens": [
+              "integer",
+              "null"
+            ],
+            "/verdicts/candidate/[]/verdict/label": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/verdict/output_tokens": [
+              "integer",
+              "null"
+            ],
+            "/verdicts/candidate/[]/verdict/reason": [
+              "string"
+            ],
+            "/verdicts/candidate/[]/verdict/score": [
+              "number"
+            ],
+            "/verdicts/candidate/[]/verdict/unsupported_quotes": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
     "POST /api/v1/datasets": {
       "parameters": {
         "header:idempotency-key": {
@@ -7316,6 +9775,1070 @@
             ],
             "/versions/[]/version": [
               "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/eval-runs": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "agent",
+              "baseline_version",
+              "candidate_version",
+              "project_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/baseline_version": [
+              "string"
+            ],
+            "/candidate_version": [
+              "string"
+            ],
+            "/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/release_id": [
+              "null",
+              "string"
+            ],
+            "/scenarios": [
+              "array",
+              "null"
+            ],
+            "/scenarios/[]": [
+              "string"
+            ],
+            "/seed": [
+              "integer",
+              "null"
+            ],
+            "/tags": [
+              "array",
+              "null"
+            ],
+            "/tags/[]": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "202": {
+          "enums": {
+            "/run/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "run"
+            ],
+            "/run": [
+              "agent_name",
+              "attempts",
+              "baseline_run_id",
+              "baseline_version",
+              "budget",
+              "cancel_requested",
+              "candidate_run_id",
+              "candidate_version",
+              "case_count",
+              "counts",
+              "created_at",
+              "error",
+              "finished_at",
+              "id",
+              "judge",
+              "organization_id",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "seed",
+              "selection",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/run/budget": [
+              "calls",
+              "exhausted",
+              "max_calls",
+              "max_cost_usd",
+              "spent_usd",
+              "unknown_cost_calls"
+            ],
+            "/run/counts": [
+              "IMPROVED",
+              "INCOMPLETE",
+              "NEW_CRITICAL_FAILURE",
+              "REGRESSED",
+              "UNCHANGED"
+            ],
+            "/run/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/run/pinning": [
+              "baseline",
+              "candidate",
+              "cases",
+              "seed"
+            ],
+            "/run/pinning/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ],
+            "/run/selection": [
+              "dataset",
+              "scenarios",
+              "tags"
+            ],
+            "/run/selection/dataset": [
+              "id",
+              "name",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/baseline_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/baseline_version": [
+              "string"
+            ],
+            "/run/budget": [
+              "null",
+              "object"
+            ],
+            "/run/budget/calls": [
+              "integer"
+            ],
+            "/run/budget/exhausted": [
+              "boolean"
+            ],
+            "/run/budget/max_calls": [
+              "integer"
+            ],
+            "/run/budget/max_cost_usd": [
+              "null",
+              "number"
+            ],
+            "/run/budget/spent_usd": [
+              "number"
+            ],
+            "/run/budget/unknown_cost_calls": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/candidate_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/candidate_version": [
+              "string"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/counts": [
+              "object"
+            ],
+            "/run/counts/IMPROVED": [
+              "integer"
+            ],
+            "/run/counts/INCOMPLETE": [
+              "integer"
+            ],
+            "/run/counts/NEW_CRITICAL_FAILURE": [
+              "integer"
+            ],
+            "/run/counts/REGRESSED": [
+              "integer"
+            ],
+            "/run/counts/UNCHANGED": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/judge": [
+              "null",
+              "object"
+            ],
+            "/run/judge/calibrated": [
+              "string"
+            ],
+            "/run/judge/kind": [
+              "string"
+            ],
+            "/run/judge/model": [
+              "string"
+            ],
+            "/run/judge/prompt_sha256": [
+              "string"
+            ],
+            "/run/judge/prompt_version": [
+              "string"
+            ],
+            "/run/judge/provider": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/pinning": [
+              "null",
+              "object"
+            ],
+            "/run/pinning/baseline": [
+              "object"
+            ],
+            "/run/pinning/candidate": [
+              "object"
+            ],
+            "/run/pinning/cases": [
+              "array"
+            ],
+            "/run/pinning/cases/[]": [
+              "object"
+            ],
+            "/run/pinning/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/position": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/seed": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/severity": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/seed": [
+              "integer"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/seed": [
+              "integer",
+              "null"
+            ],
+            "/run/selection": [
+              "object"
+            ],
+            "/run/selection/dataset": [
+              "null",
+              "object"
+            ],
+            "/run/selection/dataset/id": [
+              "string"
+            ],
+            "/run/selection/dataset/name": [
+              "string"
+            ],
+            "/run/selection/dataset/version": [
+              "integer"
+            ],
+            "/run/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenarios/[]": [
+              "string"
+            ],
+            "/run/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/run/selection/tags/[]": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/eval-runs/{eval_run_id}/cancel": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:eval_run_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/run/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "run"
+            ],
+            "/run": [
+              "agent_name",
+              "attempts",
+              "baseline_run_id",
+              "baseline_version",
+              "budget",
+              "cancel_requested",
+              "candidate_run_id",
+              "candidate_version",
+              "case_count",
+              "counts",
+              "created_at",
+              "error",
+              "finished_at",
+              "id",
+              "judge",
+              "organization_id",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "seed",
+              "selection",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/run/budget": [
+              "calls",
+              "exhausted",
+              "max_calls",
+              "max_cost_usd",
+              "spent_usd",
+              "unknown_cost_calls"
+            ],
+            "/run/counts": [
+              "IMPROVED",
+              "INCOMPLETE",
+              "NEW_CRITICAL_FAILURE",
+              "REGRESSED",
+              "UNCHANGED"
+            ],
+            "/run/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/run/pinning": [
+              "baseline",
+              "candidate",
+              "cases",
+              "seed"
+            ],
+            "/run/pinning/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ],
+            "/run/selection": [
+              "dataset",
+              "scenarios",
+              "tags"
+            ],
+            "/run/selection/dataset": [
+              "id",
+              "name",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/baseline_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/baseline_version": [
+              "string"
+            ],
+            "/run/budget": [
+              "null",
+              "object"
+            ],
+            "/run/budget/calls": [
+              "integer"
+            ],
+            "/run/budget/exhausted": [
+              "boolean"
+            ],
+            "/run/budget/max_calls": [
+              "integer"
+            ],
+            "/run/budget/max_cost_usd": [
+              "null",
+              "number"
+            ],
+            "/run/budget/spent_usd": [
+              "number"
+            ],
+            "/run/budget/unknown_cost_calls": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/candidate_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/candidate_version": [
+              "string"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/counts": [
+              "object"
+            ],
+            "/run/counts/IMPROVED": [
+              "integer"
+            ],
+            "/run/counts/INCOMPLETE": [
+              "integer"
+            ],
+            "/run/counts/NEW_CRITICAL_FAILURE": [
+              "integer"
+            ],
+            "/run/counts/REGRESSED": [
+              "integer"
+            ],
+            "/run/counts/UNCHANGED": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/judge": [
+              "null",
+              "object"
+            ],
+            "/run/judge/calibrated": [
+              "string"
+            ],
+            "/run/judge/kind": [
+              "string"
+            ],
+            "/run/judge/model": [
+              "string"
+            ],
+            "/run/judge/prompt_sha256": [
+              "string"
+            ],
+            "/run/judge/prompt_version": [
+              "string"
+            ],
+            "/run/judge/provider": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/pinning": [
+              "null",
+              "object"
+            ],
+            "/run/pinning/baseline": [
+              "object"
+            ],
+            "/run/pinning/candidate": [
+              "object"
+            ],
+            "/run/pinning/cases": [
+              "array"
+            ],
+            "/run/pinning/cases/[]": [
+              "object"
+            ],
+            "/run/pinning/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/position": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/seed": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/severity": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/seed": [
+              "integer"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/seed": [
+              "integer",
+              "null"
+            ],
+            "/run/selection": [
+              "object"
+            ],
+            "/run/selection/dataset": [
+              "null",
+              "object"
+            ],
+            "/run/selection/dataset/id": [
+              "string"
+            ],
+            "/run/selection/dataset/name": [
+              "string"
+            ],
+            "/run/selection/dataset/version": [
+              "integer"
+            ],
+            "/run/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenarios/[]": [
+              "string"
+            ],
+            "/run/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/run/selection/tags/[]": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ]
+          }
+        },
+        "202": {
+          "enums": {
+            "/run/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "run"
+            ],
+            "/run": [
+              "agent_name",
+              "attempts",
+              "baseline_run_id",
+              "baseline_version",
+              "budget",
+              "cancel_requested",
+              "candidate_run_id",
+              "candidate_version",
+              "case_count",
+              "counts",
+              "created_at",
+              "error",
+              "finished_at",
+              "id",
+              "judge",
+              "organization_id",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "seed",
+              "selection",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/run/budget": [
+              "calls",
+              "exhausted",
+              "max_calls",
+              "max_cost_usd",
+              "spent_usd",
+              "unknown_cost_calls"
+            ],
+            "/run/counts": [
+              "IMPROVED",
+              "INCOMPLETE",
+              "NEW_CRITICAL_FAILURE",
+              "REGRESSED",
+              "UNCHANGED"
+            ],
+            "/run/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/run/pinning": [
+              "baseline",
+              "candidate",
+              "cases",
+              "seed"
+            ],
+            "/run/pinning/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ],
+            "/run/selection": [
+              "dataset",
+              "scenarios",
+              "tags"
+            ],
+            "/run/selection/dataset": [
+              "id",
+              "name",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/baseline_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/baseline_version": [
+              "string"
+            ],
+            "/run/budget": [
+              "null",
+              "object"
+            ],
+            "/run/budget/calls": [
+              "integer"
+            ],
+            "/run/budget/exhausted": [
+              "boolean"
+            ],
+            "/run/budget/max_calls": [
+              "integer"
+            ],
+            "/run/budget/max_cost_usd": [
+              "null",
+              "number"
+            ],
+            "/run/budget/spent_usd": [
+              "number"
+            ],
+            "/run/budget/unknown_cost_calls": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/candidate_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/candidate_version": [
+              "string"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/counts": [
+              "object"
+            ],
+            "/run/counts/IMPROVED": [
+              "integer"
+            ],
+            "/run/counts/INCOMPLETE": [
+              "integer"
+            ],
+            "/run/counts/NEW_CRITICAL_FAILURE": [
+              "integer"
+            ],
+            "/run/counts/REGRESSED": [
+              "integer"
+            ],
+            "/run/counts/UNCHANGED": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/judge": [
+              "null",
+              "object"
+            ],
+            "/run/judge/calibrated": [
+              "string"
+            ],
+            "/run/judge/kind": [
+              "string"
+            ],
+            "/run/judge/model": [
+              "string"
+            ],
+            "/run/judge/prompt_sha256": [
+              "string"
+            ],
+            "/run/judge/prompt_version": [
+              "string"
+            ],
+            "/run/judge/provider": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/pinning": [
+              "null",
+              "object"
+            ],
+            "/run/pinning/baseline": [
+              "object"
+            ],
+            "/run/pinning/candidate": [
+              "object"
+            ],
+            "/run/pinning/cases": [
+              "array"
+            ],
+            "/run/pinning/cases/[]": [
+              "object"
+            ],
+            "/run/pinning/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/position": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/seed": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/severity": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/seed": [
+              "integer"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/seed": [
+              "integer",
+              "null"
+            ],
+            "/run/selection": [
+              "object"
+            ],
+            "/run/selection/dataset": [
+              "null",
+              "object"
+            ],
+            "/run/selection/dataset/id": [
+              "string"
+            ],
+            "/run/selection/dataset/name": [
+              "string"
+            ],
+            "/run/selection/dataset/version": [
+              "integer"
+            ],
+            "/run/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenarios/[]": [
+              "string"
+            ],
+            "/run/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/run/selection/tags/[]": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
             ]
           }
         }

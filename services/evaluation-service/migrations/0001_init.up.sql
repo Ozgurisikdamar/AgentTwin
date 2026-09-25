@@ -54,6 +54,11 @@ CREATE TABLE eval_run (
     lease_owner           text,
     lease_expires_at      timestamptz,
     attempts              int NOT NULL DEFAULT 0,
+    -- While RUNNING no worker holds the run: it waits for its simulations,
+    -- checked when due (a completion event makes it due at once) until the
+    -- deadline.
+    next_check_at         timestamptz,
+    wait_deadline         timestamptz,
     -- The two simulation runs (one pinned suite, ADR-0023) once requested.
     baseline_run_id       uuid,
     candidate_run_id      uuid,
@@ -78,6 +83,8 @@ CREATE INDEX eval_run_project_idx ON eval_run (project_id, created_at DESC, id D
 CREATE INDEX eval_run_queue_idx ON eval_run (created_at) WHERE status = 'QUEUED';
 CREATE INDEX eval_run_lease_idx ON eval_run (lease_expires_at)
     WHERE status IN ('PREPARING', 'RUNNING', 'EVALUATING');
+CREATE INDEX eval_run_waiting_idx ON eval_run (next_check_at) WHERE status = 'RUNNING';
+CREATE INDEX eval_run_simulation_idx ON eval_run (baseline_run_id);
 CREATE INDEX eval_run_dataset_idx ON eval_run (dataset_id, created_at DESC) WHERE dataset_id IS NOT NULL;
 
 -- Every status change of an evaluation run (spec §86).

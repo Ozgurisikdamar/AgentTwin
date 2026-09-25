@@ -10,7 +10,7 @@ owns the resource; the contracts are OpenAPI 3.1 documents in
 | [`control-plane.openapi.yaml`](../../packages/contracts/openapi/control-plane.openapi.yaml) | sign-in, `/me`, members, projects and environments, API keys, agents and their versions, tools, the audit log |
 | [`trace-service.openapi.yaml`](../../packages/contracts/openapi/trace-service.openapi.yaml) | trace ingestion over OTLP/HTTP; the trace explorer, facets, trace detail, stats, outcomes, flags and deletion |
 | [`simulation-service.openapi.yaml`](../../packages/contracts/openapi/simulation-service.openapi.yaml) | tool twins, scenarios, simulation runs and their cases; the twin endpoint agents call; the baseline/candidate pair of an evaluation (internal); the agent adapter contract |
-| [`evaluation-service.openapi.yaml`](../../packages/contracts/openapi/evaluation-service.openapi.yaml) | datasets: versioned collections of scenarios, each case with its latest evaluation result |
+| [`evaluation-service.openapi.yaml`](../../packages/contracts/openapi/evaluation-service.openapi.yaml) | datasets: versioned collections of scenarios, each case with its latest evaluation result; evaluation runs comparing a candidate version with its baseline case by case |
 
 Each document is checked against its service on every test run (ADR-0021), so
 it describes what the service does, not what it once did. Open it in any

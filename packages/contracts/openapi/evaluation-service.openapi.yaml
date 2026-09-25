@@ -34,6 +34,8 @@ servers:
 tags:
   - name: Datasets
     description: Versioned collections of the project's scenarios (spec §17).
+  - name: Evaluation runs
+    description: A candidate version against its baseline, case by case (spec §27).
 security:
   - bearerAuth: []
   - apiKey: []
@@ -256,12 +258,7 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/Organization'
         - $ref: '#/components/parameters/DatasetId'
-        - name: scenario
-          in: path
-          required: true
-          description: The scenario name of the case.
-          schema:
-            $ref: '#/components/schemas/Name'
+        - $ref: '#/components/parameters/ScenarioName'
       responses:
         '200':
           description: The new version.
@@ -316,6 +313,239 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DatasetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/eval-runs:
+    post:
+      operationId: startEvalRun
+      tags: [Evaluation runs]
+      summary: Evaluate a candidate version against its baseline
+      description: |
+        Queues an evaluation run (`202`). The suite is a dataset version (its
+        scenarios are pinned now; `404` for a dataset of another project, `409
+        DATASET_ARCHIVED`, `400 DATASET_EMPTY`), scenario names and/or tags,
+        or — with none of them — every scenario of the agent. A worker then
+        starts both simulations on one pinned suite, waits for them, grades the
+        semantic expectations with the judge and compares every case; the run
+        ends `COMPLETED`, or `FAILED` with an `error` that says why (e.g. the
+        simulation service refused the versions). Announced to the audit log.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartEvalRunRequest'
+      responses:
+        '202':
+          description: The run, queued.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRunResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DatasetConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listEvalRuns
+      tags: [Evaluation runs]
+      summary: List evaluation runs
+      description: The runs of the caller's projects, newest first.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/EvalRunStatus'
+        - name: agent
+          in: query
+          schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        - name: dataset_id
+          in: query
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of runs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRunPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/eval-runs/{eval_run_id}:
+    get:
+      operationId: getEvalRun
+      tags: [Evaluation runs]
+      summary: Get an evaluation run
+      description: |
+        The run with its summary (counts per classification, totals per side,
+        the new critical failures by name, slices by severity, tag, tool, risk
+        and failure class), its cases and its status transitions.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/EvalRunId'
+      responses:
+        '200':
+          description: The run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRunDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/eval-runs/{eval_run_id}/cases/{scenario}:
+    get:
+      operationId: getEvalCase
+      tags: [Evaluation runs]
+      summary: Get one compared case
+      description: |
+        Baseline next to candidate for one scenario: every expectation on both
+        sides, the metric deltas, the first divergence of the trajectories and
+        both trajectories aligned, where the final twin states differ, the
+        full expectation results of each side and the judge's verdicts.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/EvalRunId'
+        - $ref: '#/components/parameters/ScenarioName'
+      responses:
+        '200':
+          description: The case.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalCaseDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/eval-runs/{eval_run_id}/cancel:
+    post:
+      operationId: cancelEvalRun
+      tags: [Evaluation runs]
+      summary: Request cancellation of an evaluation run
+      description: |
+        Cancellation is a request: `202` while a worker stops the run (its
+        simulations are cancelled too); `200` when the run is already final —
+        or became final at once because it was still queued. A run whose
+        simulations have ended is being evaluated and completes. Announced to
+        the audit log.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/EvalRunId'
+      responses:
+        '202':
+          description: Cancellation requested; the run is still stopping.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRunResponse'
+        '200':
+          description: The run is final.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRunResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -396,6 +626,19 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    EvalRunId:
+      name: eval_run_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ScenarioName:
+      name: scenario
+      in: path
+      required: true
+      description: The scenario name of the case.
+      schema:
+        $ref: '#/components/schemas/Name'
 
   headers:
     IdempotentReplayed:
@@ -754,3 +997,840 @@ components:
       properties:
         dataset:
           $ref: '#/components/schemas/Dataset'
+
+    EvalRunStatus:
+      type: string
+      enum: [QUEUED, PREPARING, RUNNING, EVALUATING, COMPLETED, FAILED, CANCELLED]
+    Classification:
+      type: string
+      enum: [NEW_CRITICAL_FAILURE, REGRESSED, IMPROVED, UNCHANGED, INCOMPLETE]
+      description: |
+        `NEW_CRITICAL_FAILURE` a critical expectation newly fails; `REGRESSED`
+        another expectation newly fails; `IMPROVED` failures now pass and none
+        newly fails; `UNCHANGED` every expectation ends the same;
+        `INCOMPLETE` a side did not finish — never read as a pass.
+    ClassCounts:
+      type: object
+      required: [NEW_CRITICAL_FAILURE, REGRESSED, IMPROVED, UNCHANGED, INCOMPLETE]
+      properties:
+        NEW_CRITICAL_FAILURE:
+          type: integer
+          minimum: 0
+        REGRESSED:
+          type: integer
+          minimum: 0
+        IMPROVED:
+          type: integer
+          minimum: 0
+        UNCHANGED:
+          type: integer
+          minimum: 0
+        INCOMPLETE:
+          type: integer
+          minimum: 0
+    StartEvalRunRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, agent, baseline_version, candidate_version]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        baseline_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+        candidate_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: May equal `baseline_version` (the same version twice shows how repeatable it is).
+        dataset_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+          description: Evaluate this dataset's scenarios (not with `scenarios` or `tags`).
+        dataset_version:
+          type: [integer, 'null']
+          minimum: 1
+          description: The dataset version (default the latest); needs `dataset_id`.
+        scenarios:
+          type: [array, 'null']
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/Name'
+        tags:
+          type: [array, 'null']
+          maxItems: 50
+          description: Scenarios with any of these tags.
+          items:
+            $ref: '#/components/schemas/Tag'
+        seed:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 4294967295
+          description: The seed of both simulations (default random); pinned either way.
+        release_id:
+          type: [string, 'null']
+          maxLength: 200
+    PairCase:
+      type: object
+      required: [position, scenario_id, scenario_name, severity, seed, tenant, baseline_case_id, candidate_case_id]
+      properties:
+        position:
+          type: integer
+          minimum: 0
+        scenario_id:
+          $ref: '#/components/schemas/Uuid'
+        scenario_name:
+          type: string
+        severity:
+          type: string
+        seed:
+          type: integer
+          minimum: 0
+        tenant:
+          type: [string, 'null']
+        baseline_case_id:
+          $ref: '#/components/schemas/Uuid'
+        candidate_case_id:
+          $ref: '#/components/schemas/Uuid'
+    JudgeIdentity:
+      type: object
+      required: [provider, model, kind, prompt_version, prompt_sha256, calibrated]
+      properties:
+        provider:
+          type: string
+          description: '`deterministic-fake`, `anthropic` or `openai`.'
+        model:
+          type: string
+        kind:
+          type: string
+          description: '`llm`, or `deterministic-fake` (not a language model).'
+        prompt_version:
+          type: string
+        prompt_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        calibrated:
+          type: string
+          enum: ['true', 'false']
+          description: Whether the judge passed its latest calibration (spec §16.4).
+    JudgeBudget:
+      type: object
+      required: [max_cost_usd, max_calls, spent_usd, calls, unknown_cost_calls, exhausted]
+      properties:
+        max_cost_usd:
+          type: [number, 'null']
+        max_calls:
+          type: integer
+        spent_usd:
+          type: number
+        calls:
+          type: integer
+        unknown_cost_calls:
+          type: integer
+          description: Calls whose cost the provider did not report (counted against `max_calls` only).
+        exhausted:
+          type: boolean
+          description: Some semantic expectations were not judged (SKIPPED) because the budget was spent.
+    EvalRun:
+      type: object
+      required: [id, organization_id, project_id, agent_name, baseline_version, candidate_version, seed,
+                 release_id, status, requested_by, cancel_requested, attempts, baseline_run_id,
+                 candidate_run_id, case_count, error, created_at, started_at, finished_at, updated_at,
+                 selection, counts, pinning, judge, budget]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent_name:
+          type: string
+        baseline_version:
+          type: string
+        candidate_version:
+          type: string
+        seed:
+          type: [integer, 'null']
+        release_id:
+          type: [string, 'null']
+        status:
+          $ref: '#/components/schemas/EvalRunStatus'
+        requested_by:
+          type: string
+        cancel_requested:
+          type: boolean
+        attempts:
+          type: integer
+          minimum: 0
+        baseline_run_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+          description: The baseline's simulation run, once started.
+        candidate_run_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        case_count:
+          type: integer
+          minimum: 0
+        error:
+          type: [string, 'null']
+          description: Why the run failed.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        started_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        finished_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+        selection:
+          type: object
+          description: What was asked for; a dataset's scenario names are resolved when the run is requested.
+          required: [scenarios, tags, dataset]
+          properties:
+            scenarios:
+              type: [array, 'null']
+              items:
+                type: string
+            tags:
+              type: [array, 'null']
+              items:
+                type: string
+            dataset:
+              anyOf:
+                - type: object
+                  required: [id, name, version]
+                  properties:
+                    id:
+                      $ref: '#/components/schemas/Uuid'
+                    name:
+                      $ref: '#/components/schemas/Name'
+                    version:
+                      type: integer
+                      minimum: 1
+                - type: 'null'
+        counts:
+          $ref: '#/components/schemas/ClassCounts'
+        pinning:
+          description: The suite both simulations ran (ADR-0023), once started.
+          anyOf:
+            - type: object
+              required: [seed, baseline, candidate, cases]
+              properties:
+                seed:
+                  type: integer
+                  minimum: 0
+                baseline:
+                  type: object
+                  description: The baseline simulation's pinning (simulation API `Pinning`).
+                candidate:
+                  type: object
+                  description: The candidate simulation's pinning.
+                cases:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PairCase'
+            - type: 'null'
+        judge:
+          anyOf:
+            - $ref: '#/components/schemas/JudgeIdentity'
+            - type: 'null'
+        budget:
+          anyOf:
+            - $ref: '#/components/schemas/JudgeBudget'
+            - type: 'null'
+    EvalRunResponse:
+      type: object
+      required: [run]
+      properties:
+        run:
+          $ref: '#/components/schemas/EvalRun'
+    EvalRunPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvalRun'
+        next_cursor:
+          type: [string, 'null']
+    Metrics:
+      type: object
+      description: One side's metrics (`null` = not known for this case).
+      required: [critical_failures, failed_expectations, policy_violations, retries, duplicate_side_effects,
+                 argument_failures, tool_calls, escalations, steps, latency_ms, tokens, cost_usd, semantic_score]
+      properties:
+        critical_failures:
+          type: integer
+        failed_expectations:
+          type: integer
+        policy_violations:
+          type: integer
+        retries:
+          type: integer
+        duplicate_side_effects:
+          type: integer
+        argument_failures:
+          type: integer
+        tool_calls:
+          type: integer
+        escalations:
+          type: integer
+        steps:
+          type: [integer, 'null']
+        latency_ms:
+          type: [number, 'null']
+        tokens:
+          type: [integer, 'null']
+        cost_usd:
+          type: [number, 'null']
+        semantic_score:
+          type: [number, 'null']
+    SideSummary:
+      type: object
+      required: [case_id, status, reason, trace_id, labels, tools, metrics]
+      properties:
+        case_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        status:
+          type: string
+          description: The case status after judging (`PASSED`, `FAILED`, `ERRORED`, `CANCELLED`, …).
+        reason:
+          type: [string, 'null']
+        trace_id:
+          type: [string, 'null']
+        labels:
+          type: array
+          description: Failure classes of the failing expectations.
+          items:
+            type: string
+        tools:
+          type: array
+          items:
+            type: string
+        metrics:
+          $ref: '#/components/schemas/Metrics'
+    EvalCaseSummary:
+      type: object
+      required: [position, scenario_name, severity, tags, classification, reason, baseline, candidate, reviewed]
+      properties:
+        position:
+          type: integer
+          minimum: 0
+        scenario_name:
+          type: string
+        severity:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        classification:
+          $ref: '#/components/schemas/Classification'
+        reason:
+          type: string
+        baseline:
+          $ref: '#/components/schemas/SideSummary'
+        candidate:
+          $ref: '#/components/schemas/SideSummary'
+        reviewed:
+          type: boolean
+          description: A person reviewed an expectation of this case.
+    SideTotals:
+      type: object
+      required: [cases, passed, failed, incomplete, critical_failures, policy_violations, retries,
+                 duplicate_side_effects, escalations, tool_calls, latency_ms_p50, latency_ms_p95, tokens,
+                 tokens_known, cost_usd, cost_known, semantic_score]
+      properties:
+        cases:
+          type: integer
+        passed:
+          type: integer
+        failed:
+          type: integer
+        incomplete:
+          type: integer
+        critical_failures:
+          type: integer
+        policy_violations:
+          type: integer
+        retries:
+          type: integer
+        duplicate_side_effects:
+          type: integer
+        escalations:
+          type: integer
+        tool_calls:
+          type: integer
+        latency_ms_p50:
+          type: [number, 'null']
+        latency_ms_p95:
+          type: [number, 'null']
+        tokens:
+          type: [integer, 'null']
+          description: Summed over the cases whose trace reported usage (`tokens_known`); unknowns are not zeros.
+        tokens_known:
+          type: integer
+        cost_usd:
+          type: [number, 'null']
+        cost_known:
+          type: integer
+        semantic_score:
+          type: [number, 'null']
+    EvalRunSummary:
+      type: object
+      required: [counts, baseline, candidate, new_critical_failures, regressed, improved, incomplete, slices]
+      properties:
+        counts:
+          $ref: '#/components/schemas/ClassCounts'
+        baseline:
+          $ref: '#/components/schemas/SideTotals'
+        candidate:
+          $ref: '#/components/schemas/SideTotals'
+        new_critical_failures:
+          type: array
+          items:
+            type: object
+            required: [scenario_name, expectations]
+            properties:
+              scenario_name:
+                type: string
+              expectations:
+                type: array
+                description: The critical expectations that newly fail.
+                items:
+                  type: string
+        regressed:
+          type: array
+          items:
+            type: string
+        improved:
+          type: array
+          items:
+            type: string
+        incomplete:
+          type: array
+          items:
+            type: string
+        slices:
+          type: object
+          description: The counts sliced by severity, tag, tool and risk tier; failures per class and side.
+          required: [failure_class]
+          properties:
+            severity:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/ClassCounts'
+            tag:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/ClassCounts'
+            tool:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/ClassCounts'
+            risk:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/ClassCounts'
+            failure_class:
+              type: object
+              additionalProperties:
+                type: object
+                required: [baseline, candidate]
+                properties:
+                  baseline:
+                    type: integer
+                  candidate:
+                    type: integer
+    Transition:
+      type: object
+      required: [from_status, to_status, reason, at]
+      properties:
+        from_status:
+          anyOf:
+            - $ref: '#/components/schemas/EvalRunStatus'
+            - type: 'null'
+        to_status:
+          $ref: '#/components/schemas/EvalRunStatus'
+        reason:
+          type: [string, 'null']
+        at:
+          $ref: '#/components/schemas/Timestamp'
+    EvalRunDetail:
+      type: object
+      required: [run, summary, cases, transitions]
+      properties:
+        run:
+          $ref: '#/components/schemas/EvalRun'
+        summary:
+          anyOf:
+            - $ref: '#/components/schemas/EvalRunSummary'
+            - type: 'null'
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvalCaseSummary'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transition'
+    Step:
+      type: object
+      description: One normalized trajectory step.
+      required: [index, kind, name, label, arguments]
+      properties:
+        index:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          enum: [TOOL, RETRIEVAL, POLICY, OUTCOME]
+        name:
+          type: string
+        label:
+          type: string
+        arguments:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+        risk:
+          type: string
+        fault:
+          type: string
+        effect:
+          type: string
+          enum: [applied, replayed]
+        ref:
+          type: string
+    ValueChange:
+      type: object
+      description: Where a value differs, baseline → candidate.
+      required: [path, change]
+      properties:
+        path:
+          type: string
+        change:
+          type: string
+          description: '`add`, `remove` or `replace`.'
+        baseline:
+          description: The baseline's value (absent when added).
+        candidate:
+          description: The candidate's value (absent when removed).
+    ExpectationChange:
+      type: object
+      required: [id, type, critical, baseline, candidate, change]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        critical:
+          type: boolean
+        baseline:
+          type: [string, 'null']
+          description: The baseline's result status (`PASS`, `FAIL`, `ERROR`, `SKIPPED`), `null` when absent.
+        candidate:
+          type: [string, 'null']
+        change:
+          type: string
+          enum: [fixed, broken, still_failing, same, not_comparable]
+        baseline_unverified:
+          type: boolean
+          description: Counted as newly failing although the baseline could not evaluate it.
+        candidate_reason:
+          type: string
+        baseline_reason:
+          type: string
+        label:
+          type: string
+        baseline_score:
+          type: number
+        candidate_score:
+          type: number
+    MetricDelta:
+      type: object
+      required: [baseline, candidate, delta, change]
+      properties:
+        baseline:
+          type: [number, 'null']
+        candidate:
+          type: [number, 'null']
+        delta:
+          type: [number, 'null']
+        change:
+          type: string
+          enum: [better, worse, same, changed, unknown]
+    Divergence:
+      type: object
+      description: The first step at which the candidate's trajectory differs, in plain language.
+      required: [index, kind, summary, impact, baseline, candidate, argument_changes]
+      properties:
+        index:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+          description: '`tool`, `arguments`, `result`, `policy`, `outcome`, `stopped_early` or `extra_steps`.'
+        summary:
+          type: string
+        impact:
+          type: [string, 'null']
+        baseline:
+          anyOf:
+            - $ref: '#/components/schemas/Step'
+            - type: 'null'
+        candidate:
+          anyOf:
+            - $ref: '#/components/schemas/Step'
+            - type: 'null'
+        argument_changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValueChange'
+    CaseComparison:
+      type: object
+      required: [scenario_name, severity, tags, classification, reason, baseline, candidate, expectations,
+                 metrics, divergence, trajectories, state_changes, tool_selection, risk]
+      properties:
+        scenario_name:
+          type: string
+        severity:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        classification:
+          $ref: '#/components/schemas/Classification'
+        reason:
+          type: string
+        baseline:
+          $ref: '#/components/schemas/SideSummary'
+        candidate:
+          $ref: '#/components/schemas/SideSummary'
+        expectations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpectationChange'
+        metrics:
+          type: object
+          description: Per metric (the names of `Metrics`), baseline next to candidate.
+          additionalProperties:
+            $ref: '#/components/schemas/MetricDelta'
+        divergence:
+          anyOf:
+            - $ref: '#/components/schemas/Divergence'
+            - type: 'null'
+        trajectories:
+          type: object
+          required: [baseline, candidate, alignment]
+          properties:
+            baseline:
+              type: array
+              items:
+                $ref: '#/components/schemas/Step'
+            candidate:
+              type: array
+              items:
+                $ref: '#/components/schemas/Step'
+            alignment:
+              type: array
+              items:
+                type: object
+                required: [baseline, candidate, match]
+                properties:
+                  baseline:
+                    type: [integer, 'null']
+                  candidate:
+                    type: [integer, 'null']
+                  match:
+                    type: string
+                    enum: [same, changed, baseline_only, candidate_only]
+        state_changes:
+          type: array
+          description: Where the candidate's final twin state differs from the baseline's.
+          items:
+            $ref: '#/components/schemas/ValueChange'
+        tool_selection:
+          type: object
+          required: [added, removed]
+          properties:
+            added:
+              type: array
+              items:
+                type: string
+            removed:
+              type: array
+              items:
+                type: string
+        risk:
+          type: string
+          description: The riskiest tool either side touched (`none` without tool calls).
+    Evidence:
+      type: object
+      required: [kind, detail]
+      properties:
+        kind:
+          type: string
+          enum: [tool_call, state, output, agent, config]
+        detail:
+          type: string
+        ref:
+          type: string
+        expected:
+          description: The expected value, when there is one.
+        actual:
+          description: The observed value, when there is one.
+    ExpectationResult:
+      type: object
+      required: [status, reason, evaluator, evaluator_version, score, label, critical, expectation, evidence]
+      properties:
+        status:
+          type: string
+          enum: [PASS, FAIL, ERROR, SKIPPED]
+        reason:
+          type: string
+        evaluator:
+          type: string
+        evaluator_version:
+          type: string
+        score:
+          type: [number, 'null']
+        label:
+          type: [string, 'null']
+        critical:
+          type: boolean
+        expectation:
+          type: object
+          required: [id, type, critical]
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+            critical:
+              type: boolean
+            description:
+              type: string
+            category:
+              type: string
+            tool:
+              type: string
+            path:
+              type: string
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+    JudgeVerdict:
+      type: object
+      required: [score, label, confidence, reason, evidence, unsupported_quotes, input_tokens, output_tokens,
+                 cost_usd]
+      properties:
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+        label:
+          type: string
+          enum: [pass, fail]
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        reason:
+          type: string
+        evidence:
+          type: array
+          description: Quotes from the material the judge was shown (checked to occur there).
+          items:
+            type: object
+            required: [ref, quote]
+            properties:
+              ref:
+                type: string
+              quote:
+                type: string
+        unsupported_quotes:
+          type: integer
+          minimum: 0
+          description: Quotes the judge gave that were not in the material (dropped).
+        input_tokens:
+          type: [integer, 'null']
+        output_tokens:
+          type: [integer, 'null']
+        cost_usd:
+          type: [number, 'null']
+    JudgedExpectation:
+      type: object
+      required: [expectation_id, cached, judge, verdict]
+      properties:
+        expectation_id:
+          type: string
+        cached:
+          type: boolean
+          description: The verdict was reused from an identical earlier request.
+        judge:
+          $ref: '#/components/schemas/JudgeIdentity'
+        verdict:
+          anyOf:
+            - $ref: '#/components/schemas/JudgeVerdict'
+            - type: 'null'
+          description: '`null` when the judge was not called or failed (the result says why).'
+    EvalCaseDetail:
+      type: object
+      required: [eval_run_id, position, reviewed, comparison, results, verdicts, updated_at]
+      properties:
+        eval_run_id:
+          $ref: '#/components/schemas/Uuid'
+        position:
+          type: integer
+          minimum: 0
+        reviewed:
+          type: boolean
+        comparison:
+          $ref: '#/components/schemas/CaseComparison'
+        results:
+          type: object
+          description: Every expectation result of each side, semantic ones as judged.
+          required: [baseline, candidate]
+          properties:
+            baseline:
+              type: array
+              items:
+                $ref: '#/components/schemas/ExpectationResult'
+            candidate:
+              type: array
+              items:
+                $ref: '#/components/schemas/ExpectationResult'
+        verdicts:
+          type: object
+          required: [baseline, candidate]
+          properties:
+            baseline:
+              type: array
+              items:
+                $ref: '#/components/schemas/JudgedExpectation'
+            candidate:
+              type: array
+              items:
+                $ref: '#/components/schemas/JudgedExpectation'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'

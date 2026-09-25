@@ -165,6 +165,7 @@ restored; "caught" means the tests failed):
 | Calibration (`.calibration`) — agreement, Cohen's kappa, confusion matrix, judge errors as disagreements, thresholds (20 examples, 80%, 0.6) | 14, property test included | 5 of 5 |
 | Simulation pairs (simulation service `POST /internal/v1/simulation-pairs`, ADR-0023) — the baseline and candidate runs in one transaction over one pinned suite; one pair per evaluation run (a repeat answers `200`, a different request `409 PAIR_CONFLICT`, five concurrent requests make one pair); service callers only; public runs are single runs | 7 integration tests on PostgreSQL, and the contract walk checks the operation's `201`, `200`, `403` and `409` against the document | 9 of 9 — one survived at first (the candidate's cases could get their own seeds while both runs still *pinned* one suite); closed by comparing the stored cases of both sides |
 | Datasets (evaluation service `evaluation` schema, `/api/v1/datasets`) — versioned, immutable case lists naming the project's scenarios (checked with the simulation service), production cases only when redacted, changes serialized on the dataset row (nine concurrent adds make nine versions, none lost), archiving, each case's latest completed result; every change announced as `audit.recorded.v1` with before/after hashes | 10 integration tests on PostgreSQL, every exchange checked against the new `evaluation-service.openapi.yaml` (and the service's calls against the simulation contract); route parity | 22 of 22 (e.g. unredacted production cases accepted, scenarios unchecked, unchanged cases re-attributed, archived datasets changed, changes unserialized, LIKE wildcards unescaped, failed runs counted as results, other organizations served, the audit naming the service) |
+| Evaluation runs (`/api/v1/eval-runs`, `agenttwin_evaluation.worker`, ADR-0024) — queued, prepared (the pair), waiting without a lease (checked when due, woken by `simulation.run_completed.v1`, bounded by a deadline), evaluated (every case of both sides read, semantic expectations judged with budget and cache, compared, summarized, `evaluation.run_completed.v1` in the completing transaction); cancellation, lease recovery, a dataset pinning the suite | 12 integration tests over the **real** simulation service and demo agent on PostgreSQL — the golden path reproduces the Phase 2 live check (1.2.4 → 1.3.0, seed 42: two new critical failures, one regression, six unchanged; first divergence at step 2 on `refund_payment`); every exchange checked against the evaluation, simulation and trace contracts | 21 of 21 — one survived at first (a baseline's completion event found its run only through the event's eval run id); closed by a test with a producer that does not name the run |
 
 Found on the way and fixed: the `maxRetries` expectation disagreed with
 ADR-0018 (it counted a verify-after-write re-read as a retry) — evaluator
@@ -177,10 +178,10 @@ cases unchanged; the timeout case first diverges at step 2, where the
 candidate calls the irreversible `refund_payment` without the policy lookup
 the baseline made there.
 
-Gates on this state: `make lint-py` clean (ruff, ruff format, mypy strict 77
-files); `make lint-web` clean; Python 547 passed on the test infrastructure
-(real PostgreSQL and RabbitMQ) — evaluation service 109, simulation service
-145; `make contracts-check`: 14 event schemas and 4 API documents (61
+Gates on this state: `make lint-py` clean (ruff, ruff format, mypy strict 79
+files); `make lint-web` clean; Python 559 passed on the test infrastructure
+(real PostgreSQL and RabbitMQ) — evaluation service 121, simulation service
+145; `make contracts-check`: 14 event schemas and 4 API documents (66
 operations) compatible with the baselines, generated web types up to date.
 
 ## Definition of Done tracking

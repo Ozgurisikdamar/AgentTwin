@@ -41,6 +41,7 @@ __all__ = [
     "run_detail",
     "scenario",
     "tool_step",
+    "trace",
     "twin",
     "twin_summary",
     "uuid",
@@ -60,6 +61,93 @@ def uuid(n: int) -> str:
 def sha256(c: str) -> str:
     """A fixed, valid SHA-256 digest (64 hex characters) for test data."""
     return (c * 64)[:64]
+
+
+# ------------------------------------------------------------ trace service
+
+
+def trace(*, finalized: bool = True, **over: Any) -> dict[str, Any]:
+    """A trace (``listTraces``). A finalized trace carries its complete
+    summary; one that is not has ``{}`` and its usage is not settled."""
+    tokens_in, tokens_out = over.get("input_tokens", 1200), over.get("output_tokens", 300)
+    cost = over.get("cost_usd", 0.0042)
+    summary: dict[str, Any] = (
+        {
+            "agent": "support-refund-agent",
+            "agent_version": "1.2.4",
+            "outcome": "SUCCESS",
+            "outcome_verified": True,
+            "tools": ["lookup_order"],
+            "errors": [],
+            "violations": [],
+            "policy_decisions": [],
+            "step_count": 4,
+            "retry_count": 0,
+            "cost_usd": cost if cost is not None else 0,
+            "cost_known": cost is not None,
+            "duration_ms": 850.0,
+            "model": "scripted-planner-v1",
+            "prompt_hash": None,
+            "tool_sequence_sketch": "lookup_order",
+        }
+        if finalized
+        else {}
+    )
+    return (
+        {
+            "project_id": PROJECT,
+            "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "organization_id": ORGANIZATION,
+            "environment": "simulation",
+            "agent_name": "support-refund-agent",
+            "agent_version": "1.2.4",
+            "session_id": None,
+            "release_id": None,
+            "commit_sha": None,
+            "source": "simulation",
+            "simulation_run_id": None,
+            "scenario_id": None,
+            "root_span_id": None,
+            "root_name": "agent.run",
+            "status": "OK",
+            "started_at": NOW,
+            "ended_at": NOW,
+            "duration_ms": 850.0,
+            "span_count": 6,
+            "model_call_count": 2,
+            "tool_call_count": 1,
+            "error_count": 0,
+            "retry_count": 0,
+            "input_tokens": tokens_in,
+            "output_tokens": tokens_out,
+            "cost_usd": cost,
+            "models": ["scripted-planner-v1"],
+            "tools": ["lookup_order"],
+            "policy_decisions": [],
+            "signals": [],
+            "prompt_hash": None,
+            "semconv_version": "1.0.0",
+            "sdk_name": "agenttwin-python",
+            "sdk_version": "0.1.0",
+            "content_mode": "redacted",
+            "content_dropped": False,
+            "truncated": False,
+            "outcome_status": None,
+            "outcome_verified": None,
+            "human_reviewed": False,
+            "flagged": False,
+            "summary": summary,
+            "finalized": finalized,
+            "content_purged": False,
+            "expires_at": NOW,
+        }
+        | {k: v for k, v in over.items() if k not in ("input_tokens", "output_tokens", "cost_usd")}
+        | {
+            "input_tokens": tokens_in,
+            "output_tokens": tokens_out,
+            "cost_usd": cost,
+        }
+    )
 
 
 # ------------------------------------------------------------ control plane

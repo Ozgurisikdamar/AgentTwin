@@ -9,9 +9,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from agenttwin_core.db import Conn, Pool, jsonb
+from agenttwin_core.db import Conn, Pool, jsonb, transaction
+from agenttwin_core.jobs import JobStatus, allowed_from
+from agenttwin_evaluation.judges import JudgeVerdict
 
-__all__ = ["SCHEMA", "Cursor", "Row", "Scope", "Store", "decode_cursor", "encode_cursor"]
+__all__ = ["SCHEMA", "Cursor", "JudgmentCache", "Row", "Scope", "Store", "decode_cursor", "encode_cursor"]
 
 Row = dict[str, Any]
 SCHEMA = "evaluation"
@@ -207,3 +209,269 @@ class Store:
             (dataset_id,),
         )
         return {str(r["scenario_name"]): r for r in rows}
+
+    # ------------------------------------------------------------ evaluation runs
+
+    _RUN_COLUMNS = frozenset(
+        {
+            "error",
+            "pinning",
+            "baseline_run_id",
+            "candidate_run_id",
+            "case_count",
+            "next_check_at",
+            "wait_deadline",
+            "judge",
+            "budget",
+            "summary",
+            "new_critical_failures",
+            "regressed",
+            "improved",
+            "unchanged",
+            "incomplete",
+        }
+    )
+    _JSON_COLUMNS = frozenset({"pinning", "judge", "budget", "summary"})
+
+    async def insert_eval_run(self, conn: Conn, run: Mapping[str, Any]) -> Row:
+        row = await self._one(
+            conn,
+            """INSERT INTO eval_run (id, organization_id, project_id, agent_name, baseline_version,
+                   candidate_version, dataset_id, dataset_version, selection, seed, release_id, status,
+                   requested_by)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'QUEUED', %s) RETURNING *""",
+            (
+                run["id"],
+                run["organization_id"],
+                run["project_id"],
+                run["agent_name"],
+                run["baseline_version"],
+                run["candidate_version"],
+                run.get("dataset_id"),
+                run.get("dataset_version"),
+                jsonb(run["selection"]),
+                run.get("seed"),
+                run.get("release_id"),
+                run["requested_by"],
+            ),
+        )
+        assert row is not None  # noqa: S101 - INSERT … RETURNING
+        await self.add_transition(conn, str(run["id"]), None, "QUEUED", "requested")
+        return row
+
+    async def add_transition(
+        self, conn: Conn, run_id: str, from_status: str | None, to_status: str, reason: str | None
+    ) -> None:
+        await conn.execute(
+            """INSERT INTO eval_run_transition (eval_run_id, seq, from_status, to_status, reason)
+               VALUES (%s, (SELECT COALESCE(max(seq), 0) + 1 FROM eval_run_transition WHERE eval_run_id = %s),
+                       %s, %s, %s)""",
+            (run_id, run_id, from_status, to_status, reason),
+        )
+
+    async def get_eval_run(self, run_id: str) -> Row | None:
+        return await self.one("SELECT * FROM eval_run WHERE id = %s", (run_id,))
+
+    async def eval_run_transitions(self, run_id: str) -> list[Row]:
+        return await self.all(
+            """SELECT from_status, to_status, reason, at FROM eval_run_transition
+               WHERE eval_run_id = %s ORDER BY seq""",
+            (run_id,),
+        )
+
+    async def list_eval_runs(
+        self,
+        scope: Scope,
+        *,
+        status: str | None = None,
+        agent: str | None = None,
+        dataset_id: str | None = None,
+        after: Cursor | None = None,
+        limit: int = 50,
+    ) -> list[Row]:
+        clause, params = scope.clause()
+        where = [clause]
+        for column, value in (("status", status), ("agent_name", agent), ("dataset_id", dataset_id)):
+            if value is not None:
+                where.append(f"{column} = %s")
+                params.append(value)
+        if after is not None:
+            where.append("(created_at, id) < (%s::timestamptz, %s::uuid)")
+            params += [after.key, after.id]
+        params.append(limit)
+        return await self.all(
+            f"""SELECT * FROM eval_run WHERE {" AND ".join(where)}
+                ORDER BY created_at DESC, id DESC LIMIT %s""",  # noqa: S608 - fixed clauses, bound values
+            params,
+        )
+
+    async def transition(
+        self,
+        conn: Conn,
+        run_id: str,
+        to: JobStatus,
+        reason: str | None = None,
+        *,
+        owner: str | None = None,
+        lease: tuple[str, float] | None = None,
+        extra: Mapping[str, Any] | None = None,
+    ) -> Row | None:
+        """Moves a run to ``to`` if the state machine allows it from its
+        current status (and, with ``owner``, only while that worker holds the
+        lease). ``lease`` (owner, seconds) gives the run to a worker;
+        otherwise the lease is released — a RUNNING run waits without one."""
+        sets = ["status = %s", "updated_at = now()"]
+        params: list[Any] = [str(to)]
+        if to.terminal:
+            sets += ["finished_at = now()", "next_check_at = NULL"]
+        if lease is not None:
+            sets += ["lease_owner = %s", "lease_expires_at = now() + make_interval(secs => %s)"]
+            params += [lease[0], lease[1]]
+        else:
+            sets += ["lease_owner = NULL", "lease_expires_at = NULL"]
+        for key, value in (extra or {}).items():
+            if key not in self._RUN_COLUMNS:
+                raise ValueError(f"unsupported column {key}")
+            sets.append(f"{key} = %s")
+            params.append(jsonb(value) if key in self._JSON_COLUMNS else value)
+        where = "id = %s AND status = ANY(%s)"
+        params += [run_id, allowed_from(to)]
+        if owner is not None:
+            where += " AND lease_owner = %s"
+            params.append(owner)
+        prev = await self._one(conn, "SELECT status FROM eval_run WHERE id = %s FOR UPDATE", (run_id,))
+        if prev is None:
+            return None
+        row = await self._one(
+            conn,
+            f"UPDATE eval_run SET {', '.join(sets)} WHERE {where} RETURNING *",  # noqa: S608 - fixed columns
+            params,
+        )
+        if row is not None:
+            await self.add_transition(conn, run_id, str(prev["status"]), str(to), reason)
+        return row
+
+    async def claim_next_eval_run(self, owner: str, lease_s: float) -> Row | None:
+        async with transaction(self.pool) as conn:
+            row = await self._one(
+                conn,
+                """UPDATE eval_run SET status = 'PREPARING', lease_owner = %s,
+                       lease_expires_at = now() + make_interval(secs => %s), attempts = attempts + 1,
+                       started_at = COALESCE(started_at, now()), updated_at = now()
+                   WHERE id = (SELECT id FROM eval_run WHERE status = 'QUEUED'
+                               ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
+                   RETURNING *""",
+                (owner, lease_s),
+            )
+            if row is not None:
+                await self.add_transition(conn, str(row["id"]), "QUEUED", "PREPARING", f"claimed by {owner}")
+            return row
+
+    async def renew_lease(self, run_id: str, owner: str, lease_s: float) -> bool:
+        row = await self.one(
+            """UPDATE eval_run SET lease_expires_at = now() + make_interval(secs => %s), updated_at = now()
+               WHERE id = %s AND lease_owner = %s AND status IN ('PREPARING', 'EVALUATING') RETURNING id""",
+            (lease_s, run_id, owner),
+        )
+        return row is not None
+
+    async def due_waiting(self, poll_s: float, limit: int = 10) -> list[Row]:
+        """RUNNING runs whose check is due, each moved to its next check (so
+        concurrent workers take different runs)."""
+        return await self.all(
+            """UPDATE eval_run SET next_check_at = now() + make_interval(secs => %s)
+               WHERE id IN (SELECT id FROM eval_run
+                            WHERE status = 'RUNNING' AND next_check_at <= now()
+                            ORDER BY next_check_at LIMIT %s FOR UPDATE SKIP LOCKED)
+               RETURNING *""",
+            (poll_s, limit),
+        )
+
+    async def wake(self, conn: Conn, *, eval_run_id: str | None, simulation_run_id: str) -> Row | None:
+        """Makes the run waiting for this simulation due now."""
+        return await self._one(
+            conn,
+            """UPDATE eval_run SET next_check_at = now()
+               WHERE status = 'RUNNING' AND (id = %s OR baseline_run_id = %s OR candidate_run_id = %s)
+               RETURNING id""",
+            (eval_run_id, simulation_run_id, simulation_run_id),
+        )
+
+    async def request_cancel(self, conn: Conn, run_id: str) -> Row | None:
+        return await self._one(
+            conn,
+            """UPDATE eval_run SET cancel_requested = true, next_check_at = now(), updated_at = now()
+               WHERE id = %s RETURNING *""",
+            (run_id,),
+        )
+
+    async def expired_leases(self, conn: Conn, limit: int = 20) -> list[Row]:
+        return await self._all(
+            conn,
+            """SELECT * FROM eval_run
+               WHERE status IN ('PREPARING', 'EVALUATING') AND lease_expires_at < now()
+               ORDER BY lease_expires_at LIMIT %s FOR UPDATE SKIP LOCKED""",
+            (limit,),
+        )
+
+    async def save_case_results(self, conn: Conn, run_id: str, cases: Sequence[Mapping[str, Any]]) -> None:
+        """The run's case results, replacing any from an earlier attempt."""
+        await conn.execute("DELETE FROM eval_case_result WHERE eval_run_id = %s", (run_id,))
+        for c in cases:
+            await conn.execute(
+                """INSERT INTO eval_case_result (eval_run_id, position, scenario_name, severity, tags,
+                       classification, baseline_case_id, candidate_case_id, sides, comparison)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (
+                    run_id,
+                    c["position"],
+                    c["scenario_name"],
+                    c["severity"],
+                    list(c["tags"]),
+                    c["classification"],
+                    c.get("baseline_case_id"),
+                    c.get("candidate_case_id"),
+                    jsonb(c["sides"]),
+                    jsonb(c["comparison"]),
+                ),
+            )
+
+    async def case_results(self, run_id: str) -> list[Row]:
+        return await self.all(
+            """SELECT position, scenario_name, severity, tags, classification, reviewed,
+                      comparison->'reason' AS reason, comparison->'baseline' AS baseline,
+                      comparison->'candidate' AS candidate
+               FROM eval_case_result WHERE eval_run_id = %s ORDER BY position""",
+            (run_id,),
+        )
+
+    async def case_result(self, run_id: str, scenario: str) -> Row | None:
+        return await self.one(
+            "SELECT * FROM eval_case_result WHERE eval_run_id = %s AND scenario_name = %s", (run_id, scenario)
+        )
+
+    # ------------------------------------------------------------ judge verdicts
+
+    async def get_judgment(self, key: str) -> Row | None:
+        return await self.one("SELECT verdict FROM judgment WHERE cache_key = %s", (key,))
+
+    async def put_judgment(self, key: str, verdict: Mapping[str, Any], judge: Mapping[str, Any]) -> None:
+        await self.one(
+            """INSERT INTO judgment (cache_key, verdict, judge) VALUES (%s, %s, %s)
+               ON CONFLICT (cache_key) DO NOTHING RETURNING cache_key""",
+            (key, jsonb(dict(verdict)), jsonb(dict(judge))),
+        )
+
+
+class JudgmentCache:
+    """Judge verdicts in PostgreSQL, by everything that shaped them (ADR-0022)."""
+
+    def __init__(self, store: Store) -> None:
+        self.store = store
+
+    async def get(self, key: str) -> JudgeVerdict | None:
+        row = await self.store.get_judgment(key)
+        return JudgeVerdict.from_json(row["verdict"]) if row is not None else None
+
+    async def put(self, key: str, verdict: JudgeVerdict, judge: Mapping[str, str]) -> None:
+        await self.store.put_judgment(key, verdict.to_json(), judge)

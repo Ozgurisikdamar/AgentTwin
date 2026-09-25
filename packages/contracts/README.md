@@ -28,7 +28,7 @@ Versioned, language-neutral contracts shared by Go, Python and TypeScript code.
 | `openapi/control-plane.openapi.yaml` | 29 | sign-in, `/me`, members, projects and environments, API keys, agents and versions, tools, the audit log; the internal lookups the other services call |
 | `openapi/trace-service.openapi.yaml` | 8 | the OTLP/HTTP receiver (`POST /v1/traces`, protobuf and JSON); the trace explorer, facets, detail, stats, outcomes, flags and deletion (public, via the control plane) |
 | `openapi/simulation-service.openapi.yaml` | 18 | twins, scenarios, simulation runs (public, via the control plane); the twin endpoint agents call; the baseline/candidate pair the evaluation service starts (`/internal/v1/simulation-pairs`, ADR-0023); the agent adapter contract (`webhooks.agentRun`) |
-| `openapi/evaluation-service.openapi.yaml` | 6 | datasets: versioned collections of scenarios with each case's latest result (public, via the control plane) |
+| `openapi/evaluation-service.openapi.yaml` | 11 | datasets: versioned collections of scenarios with each case's latest result; evaluation runs of a candidate against its baseline — summary, compared cases, cancellation (public, via the control plane) |
 
 Each document describes the API as clients reach it: through the control plane
 with its credentials (`Authorization: Bearer`, `X-AgentTwin-Api-Key`),

@@ -68,6 +68,8 @@ CMD ["serve"]
 # `worker` (prepares, waits for and evaluates runs; runs calibrations).
 FROM runtime AS evaluation-service
 COPY packages/contracts /app/schemas/contracts
+# Promoted regressions are validated as scenarios before they are registered.
+COPY packages/scenario-schema /app/schemas/scenario-schema
 COPY services/evaluation-service/migrations /app/services/evaluation-service/migrations
 ENV AGENTTWIN_SCHEMA_DIR=/app/schemas
 HEALTHCHECK --interval=5s --timeout=5s --start-period=10s --retries=24 CMD ["evaluation-service", "healthcheck"]

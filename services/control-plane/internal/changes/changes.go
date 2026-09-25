@@ -156,10 +156,27 @@ func (c *computer) item(it Item, seeds ...Seed) {
 	}
 	c.set.Items = append(c.set.Items, it)
 	for _, s := range seeds {
+		s = boundSeed(s)
 		if !slices.ContainsFunc(c.set.Seeds, func(x Seed) bool { return x.Component == s.Component && x.Change == s.Change }) {
 			c.set.Seeds = append(c.set.Seeds, s)
 		}
 	}
+}
+
+// Bounds of a seed, as the graph service accepts it.
+const (
+	MaxSeedSummary  = 300
+	MaxSeedMentions = 100
+)
+
+func boundSeed(s Seed) Seed {
+	if r := []rune(s.Summary); len(r) > MaxSeedSummary {
+		s.Summary = string(r[:MaxSeedSummary-1]) + "…"
+	}
+	if len(s.Mentions) > MaxSeedMentions {
+		s.Mentions = s.Mentions[:MaxSeedMentions]
+	}
+	return s
 }
 
 func (c *computer) candidateVersion() Ref {

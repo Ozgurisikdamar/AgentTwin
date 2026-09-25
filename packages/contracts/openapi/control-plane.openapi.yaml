@@ -47,6 +47,8 @@ tags:
     description: Agents and their immutable versions, registered from manifests.
   - name: Tools
     description: The project's tool registry.
+  - name: Changes
+    description: What changed between two versions of an agent (change sets).
   - name: Audit
     description: The append-only, hash-chained audit log.
   - name: Internal
@@ -928,6 +930,144 @@ paths:
         '500':
           $ref: '#/components/responses/Internal'
 
+  /api/v1/projects/{project_id}/change-sets:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: createChangeSet
+      tags: [Changes]
+      summary: Compare two versions of an agent
+      description: |
+        Computes what changed between two registered versions of one agent
+        and stores it (spec §21): the prompt (a redacted line diff when the
+        project stores prompt text, its hash otherwise), the model, its
+        parameters and limits, tools (schema, risk, permissions, approval),
+        retrieval sources, dependencies and code (file names only), plus the
+        policy, evaluator and dataset changes the caller declares. Each change
+        is also a seed of a blast-radius traversal scoped to the candidate
+        version.
+
+        Change sets are immutable. The same request (versions, title, git and
+        declared changes) answers the stored change set with `200` and
+        `created: false`, so a re-run CI job does not store a copy. Requires
+        `release.write`; CI keys hold it. A prompt diff is shown only to
+        callers who may read prompt text (`settings.read`).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChangeSetRequest'
+      responses:
+        '201':
+          description: The change set was computed and stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedChangeSet'
+        '200':
+          description: The same change set was stored before; nothing was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedChangeSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The project, the agent or one of the versions does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    get:
+      operationId: listChangeSets
+      tags: [Changes]
+      summary: List change sets
+      description: The project's change sets, newest first, without their items.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - name: agent
+          in: query
+          description: Only the change sets of this agent (by name); an unknown name matches nothing.
+          schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of change sets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeSetPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/change-sets/{change_set_id}:
+    get:
+      operationId: getChangeSet
+      tags: [Changes]
+      summary: Get a change set
+      description: A change set with its items, seeds and scope.
+      parameters:
+        - $ref: '#/components/parameters/ChangeSetId'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The change set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
   /api/v1/audit:
     get:
       operationId: listAudit
@@ -1219,6 +1359,20 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Uuid'
+    ChangeSetId:
+      name: change_set_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Cursor:
+      name: cursor
+      in: query
+      description: The `next_cursor` of the previous page.
+      schema:
+        type: string
+        maxLength: 512
+        pattern: ^[A-Za-z0-9_-]+$
     Limit:
       name: limit
       in: query
@@ -2211,6 +2365,261 @@ components:
         created:
           type: boolean
           description: False when the definition equals the latest version (nothing was stored).
+
+    CreateChangeSetRequest:
+      type: object
+      additionalProperties: false
+      required: [agent, base_version, candidate_version]
+      properties:
+        agent:
+          type: string
+          description: The agent whose versions are compared.
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        base_version:
+          type: string
+          description: The version in use (the baseline).
+          minLength: 1
+          maxLength: 100
+        candidate_version:
+          type: string
+          description: The version to release; must differ from `base_version`.
+          minLength: 1
+          maxLength: 100
+        title:
+          type: string
+          maxLength: 200
+        git:
+          $ref: '#/components/schemas/ChangeSetGit'
+        declared:
+          type: array
+          maxItems: 50
+          description: |
+            Changes no agent version carries (a policy, an evaluator or a
+            dataset). Stated, not detected: their confidence is `declared`.
+          items:
+            $ref: '#/components/schemas/DeclaredChange'
+    ChangeSetGit:
+      type: object
+      additionalProperties: false
+      description: |
+        What a CI system says about the code between the two versions. Only
+        file names are known, so a code change affects the whole candidate
+        version (confidence `filenames_only`).
+      properties:
+        base_commit:
+          $ref: '#/components/schemas/CommitSha'
+        candidate_commit:
+          $ref: '#/components/schemas/CommitSha'
+        changed_files:
+          type: array
+          maxItems: 1000
+          description: Paths of changed files; at most 200 are kept in the item.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
+    DeclaredChange:
+      type: object
+      additionalProperties: false
+      required: [kind, name, change]
+      properties:
+        kind:
+          type: string
+          enum: [policy, evaluator, dataset]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        change:
+          $ref: '#/components/schemas/ChangeType'
+        summary:
+          type: string
+          maxLength: 300
+    ChangeType:
+      type: string
+      enum: [added, removed, modified]
+    ChangeConfidence:
+      type: string
+      description: |
+        How a change is known: `exact` (both versions compared field by
+        field), `hash_only` (the content changed but its text is not
+        stored), `filenames_only` (only changed file names are known),
+        `declared` (stated by the author).
+      enum: [exact, hash_only, filenames_only, declared]
+    ChangeItem:
+      type: object
+      required: [kind, subject, change, summary, confidence, breaking, detail]
+      properties:
+        kind:
+          type: string
+          enum: [prompt, model, model_params, limits, tool, retrieval_source, dependency, code, policy, evaluator, dataset]
+        subject:
+          type: string
+          description: What changed (a tool name, a model, a prompt's hash, a commit…).
+        change:
+          $ref: '#/components/schemas/ChangeType'
+        summary:
+          type: string
+        confidence:
+          $ref: '#/components/schemas/ChangeConfidence'
+        breaking:
+          type: boolean
+          description: A caller written for the base version can trip over it (a tool's schema narrowed).
+        detail:
+          type: object
+          description: |
+            Depends on `kind`:
+            * `prompt`: `base_sha256`, `candidate_sha256`, and either `diff`
+              (`[{op: " "|"-"|"+", text}]`, secrets and personal data
+              masked), `diff_truncated` and `mentions` (tools named in
+              changed lines), or `diff_unavailable` (why there is no diff).
+            * `model`: `from`, `to` (`provider/name`).
+            * `model_params`: `parameters` (the changed names), `from`, `to`.
+            * `limits`: `limits` (the changed names), `from`, `to`.
+            * `tool`: `risk` (added/removed: the level; modified:
+              `{from, to, escalated}`), `new_privilege`, and when modified
+              `aspects`, `permissions`, `approval`, `schema_changes`
+              (`[{path, change, breaking, from?, to?}]`) and `version`.
+            * `dependency`: `from` and/or `to` (the manifest dependency).
+            * `code`: `base_commit`, `candidate_commit`,
+              `changed_file_count`, `changed_files`,
+              `changed_files_truncated`.
+    ChangeSeed:
+      type: object
+      description: A changed graph component, as the graph service's blast-radius request takes it.
+      required: [component, change]
+      properties:
+        component:
+          type: object
+          required: [kind, key]
+          properties:
+            kind:
+              type: string
+              enum: [AGENT_VERSION, PROMPT, MODEL, TOOL, RETRIEVAL_SOURCE, POLICY, EVALUATOR, DATASET]
+            key:
+              type: string
+              minLength: 1
+              maxLength: 300
+        change:
+          $ref: '#/components/schemas/ChangeType'
+        summary:
+          type: string
+          maxLength: 300
+        mentions:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+    ChangeScope:
+      type: object
+      description: The traversal is restricted to the candidate version.
+      required: [agent, version]
+      properties:
+        agent:
+          type: string
+        version:
+          type: string
+    ChangeCounts:
+      type: object
+      required: [items, breaking, seeds, kinds, confidence]
+      properties:
+        items:
+          type: integer
+          minimum: 0
+        breaking:
+          type: integer
+          minimum: 0
+        seeds:
+          type: integer
+          minimum: 0
+        kinds:
+          type: object
+          description: Items per kind.
+          additionalProperties:
+            type: integer
+        confidence:
+          type: object
+          description: Items per confidence.
+          additionalProperties:
+            type: integer
+    ChangeSetVersionRef:
+      type: object
+      required: [id, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: string
+    ChangeSetSummary:
+      type: object
+      required: [id, project_id, agent_id, agent_name, base, candidate, title, summary, content_sha256, created_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent_id:
+          $ref: '#/components/schemas/Uuid'
+        agent_name:
+          type: string
+        base:
+          $ref: '#/components/schemas/ChangeSetVersionRef'
+        candidate:
+          $ref: '#/components/schemas/ChangeSetVersionRef'
+        title:
+          type: string
+        summary:
+          $ref: '#/components/schemas/ChangeCounts'
+        content_sha256:
+          $ref: '#/components/schemas/Sha256'
+        created_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    ChangeSet:
+      allOf:
+        - $ref: '#/components/schemas/ChangeSetSummary'
+        - type: object
+          required: [git, declared, items, seeds, scope]
+          properties:
+            git:
+              oneOf:
+                - $ref: '#/components/schemas/ChangeSetGit'
+                - type: 'null'
+            declared:
+              type: array
+              items:
+                $ref: '#/components/schemas/DeclaredChange'
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChangeItem'
+            seeds:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChangeSeed'
+            scope:
+              $ref: '#/components/schemas/ChangeScope'
+    CreatedChangeSet:
+      allOf:
+        - $ref: '#/components/schemas/ChangeSet'
+        - type: object
+          required: [created]
+          properties:
+            created:
+              type: boolean
+              description: False when the same change set was stored before (nothing was stored).
+    ChangeSetPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChangeSetSummary'
+        next_cursor:
+          type: [string, 'null']
+          description: The cursor of the next page; `null` on the last page.
 
     AuditEntry:
       type: object

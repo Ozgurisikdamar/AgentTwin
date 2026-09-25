@@ -985,6 +985,313 @@
         }
       }
     },
+    "GET /api/v1/change-sets/{change_set_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:change_set_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/declared/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/declared/[]/kind": [
+              "\"dataset\"",
+              "\"evaluator\"",
+              "\"policy\""
+            ],
+            "/items/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/items/[]/confidence": [
+              "\"declared\"",
+              "\"exact\"",
+              "\"filenames_only\"",
+              "\"hash_only\""
+            ],
+            "/items/[]/kind": [
+              "\"code\"",
+              "\"dataset\"",
+              "\"dependency\"",
+              "\"evaluator\"",
+              "\"limits\"",
+              "\"model\"",
+              "\"model_params\"",
+              "\"policy\"",
+              "\"prompt\"",
+              "\"retrieval_source\"",
+              "\"tool\""
+            ],
+            "/seeds/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/seeds/[]/component/kind": [
+              "\"AGENT_VERSION\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent_id",
+              "agent_name",
+              "base",
+              "candidate",
+              "content_sha256",
+              "created_at",
+              "created_by",
+              "declared",
+              "git",
+              "id",
+              "items",
+              "project_id",
+              "scope",
+              "seeds",
+              "summary",
+              "title"
+            ],
+            "/base": [
+              "id",
+              "version"
+            ],
+            "/candidate": [
+              "id",
+              "version"
+            ],
+            "/declared/[]": [
+              "change",
+              "kind",
+              "name"
+            ],
+            "/items/[]": [
+              "breaking",
+              "change",
+              "confidence",
+              "detail",
+              "kind",
+              "subject",
+              "summary"
+            ],
+            "/scope": [
+              "agent",
+              "version"
+            ],
+            "/seeds/[]": [
+              "change",
+              "component"
+            ],
+            "/seeds/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/summary": [
+              "breaking",
+              "confidence",
+              "items",
+              "kinds",
+              "seeds"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_id": [
+              "string"
+            ],
+            "/agent_name": [
+              "string"
+            ],
+            "/base": [
+              "object"
+            ],
+            "/base/id": [
+              "string"
+            ],
+            "/base/version": [
+              "string"
+            ],
+            "/candidate": [
+              "object"
+            ],
+            "/candidate/id": [
+              "string"
+            ],
+            "/candidate/version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/declared": [
+              "array"
+            ],
+            "/declared/[]": [
+              "object"
+            ],
+            "/declared/[]/change": [
+              "string"
+            ],
+            "/declared/[]/kind": [
+              "string"
+            ],
+            "/declared/[]/name": [
+              "string"
+            ],
+            "/declared/[]/summary": [
+              "string"
+            ],
+            "/git": [
+              "null",
+              "object"
+            ],
+            "/git/base_commit": [
+              "string"
+            ],
+            "/git/candidate_commit": [
+              "string"
+            ],
+            "/git/changed_files": [
+              "array"
+            ],
+            "/git/changed_files/[]": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/breaking": [
+              "boolean"
+            ],
+            "/items/[]/change": [
+              "string"
+            ],
+            "/items/[]/confidence": [
+              "string"
+            ],
+            "/items/[]/detail": [
+              "object"
+            ],
+            "/items/[]/kind": [
+              "string"
+            ],
+            "/items/[]/subject": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/scope": [
+              "object"
+            ],
+            "/scope/agent": [
+              "string"
+            ],
+            "/scope/version": [
+              "string"
+            ],
+            "/seeds": [
+              "array"
+            ],
+            "/seeds/[]": [
+              "object"
+            ],
+            "/seeds/[]/change": [
+              "string"
+            ],
+            "/seeds/[]/component": [
+              "object"
+            ],
+            "/seeds/[]/component/key": [
+              "string"
+            ],
+            "/seeds/[]/component/kind": [
+              "string"
+            ],
+            "/seeds/[]/mentions": [
+              "array"
+            ],
+            "/seeds/[]/mentions/[]": [
+              "string"
+            ],
+            "/seeds/[]/summary": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/breaking": [
+              "integer"
+            ],
+            "/summary/confidence": [
+              "object"
+            ],
+            "/summary/items": [
+              "integer"
+            ],
+            "/summary/kinds": [
+              "object"
+            ],
+            "/summary/seeds": [
+              "integer"
+            ],
+            "/title": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
     "GET /api/v1/me": {
       "parameters": {
         "header:x-agenttwin-org": {
@@ -1723,6 +2030,185 @@
               "array"
             ],
             "/items/[]/scopes/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/projects/{project_id}/change-sets": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:agent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "agent_id",
+              "agent_name",
+              "base",
+              "candidate",
+              "content_sha256",
+              "created_at",
+              "created_by",
+              "id",
+              "project_id",
+              "summary",
+              "title"
+            ],
+            "/items/[]/base": [
+              "id",
+              "version"
+            ],
+            "/items/[]/candidate": [
+              "id",
+              "version"
+            ],
+            "/items/[]/summary": [
+              "breaking",
+              "confidence",
+              "items",
+              "kinds",
+              "seeds"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent_id": [
+              "string"
+            ],
+            "/items/[]/agent_name": [
+              "string"
+            ],
+            "/items/[]/base": [
+              "object"
+            ],
+            "/items/[]/base/id": [
+              "string"
+            ],
+            "/items/[]/base/version": [
+              "string"
+            ],
+            "/items/[]/candidate": [
+              "object"
+            ],
+            "/items/[]/candidate/id": [
+              "string"
+            ],
+            "/items/[]/candidate/version": [
+              "string"
+            ],
+            "/items/[]/content_sha256": [
+              "string"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "object"
+            ],
+            "/items/[]/summary/breaking": [
+              "integer"
+            ],
+            "/items/[]/summary/confidence": [
+              "object"
+            ],
+            "/items/[]/summary/items": [
+              "integer"
+            ],
+            "/items/[]/summary/kinds": [
+              "object"
+            ],
+            "/items/[]/summary/seeds": [
+              "integer"
+            ],
+            "/items/[]/title": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
               "string"
             ]
           }
@@ -5354,6 +5840,687 @@
               "array"
             ],
             "/scopes/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects/{project_id}/change-sets": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/declared/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/declared/[]/kind": [
+              "\"dataset\"",
+              "\"evaluator\"",
+              "\"policy\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "base_version",
+              "candidate_version"
+            ],
+            "/declared/[]": [
+              "change",
+              "kind",
+              "name"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/base_version": [
+              "string"
+            ],
+            "/candidate_version": [
+              "string"
+            ],
+            "/declared": [
+              "array"
+            ],
+            "/declared/[]": [
+              "object"
+            ],
+            "/declared/[]/change": [
+              "string"
+            ],
+            "/declared/[]/kind": [
+              "string"
+            ],
+            "/declared/[]/name": [
+              "string"
+            ],
+            "/declared/[]/summary": [
+              "string"
+            ],
+            "/git": [
+              "object"
+            ],
+            "/git/base_commit": [
+              "string"
+            ],
+            "/git/candidate_commit": [
+              "string"
+            ],
+            "/git/changed_files": [
+              "array"
+            ],
+            "/git/changed_files/[]": [
+              "string"
+            ],
+            "/title": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/declared/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/declared/[]/kind": [
+              "\"dataset\"",
+              "\"evaluator\"",
+              "\"policy\""
+            ],
+            "/items/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/items/[]/confidence": [
+              "\"declared\"",
+              "\"exact\"",
+              "\"filenames_only\"",
+              "\"hash_only\""
+            ],
+            "/items/[]/kind": [
+              "\"code\"",
+              "\"dataset\"",
+              "\"dependency\"",
+              "\"evaluator\"",
+              "\"limits\"",
+              "\"model\"",
+              "\"model_params\"",
+              "\"policy\"",
+              "\"prompt\"",
+              "\"retrieval_source\"",
+              "\"tool\""
+            ],
+            "/seeds/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/seeds/[]/component/kind": [
+              "\"AGENT_VERSION\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent_id",
+              "agent_name",
+              "base",
+              "candidate",
+              "content_sha256",
+              "created",
+              "created_at",
+              "created_by",
+              "declared",
+              "git",
+              "id",
+              "items",
+              "project_id",
+              "scope",
+              "seeds",
+              "summary",
+              "title"
+            ],
+            "/base": [
+              "id",
+              "version"
+            ],
+            "/candidate": [
+              "id",
+              "version"
+            ],
+            "/declared/[]": [
+              "change",
+              "kind",
+              "name"
+            ],
+            "/items/[]": [
+              "breaking",
+              "change",
+              "confidence",
+              "detail",
+              "kind",
+              "subject",
+              "summary"
+            ],
+            "/scope": [
+              "agent",
+              "version"
+            ],
+            "/seeds/[]": [
+              "change",
+              "component"
+            ],
+            "/seeds/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/summary": [
+              "breaking",
+              "confidence",
+              "items",
+              "kinds",
+              "seeds"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_id": [
+              "string"
+            ],
+            "/agent_name": [
+              "string"
+            ],
+            "/base": [
+              "object"
+            ],
+            "/base/id": [
+              "string"
+            ],
+            "/base/version": [
+              "string"
+            ],
+            "/candidate": [
+              "object"
+            ],
+            "/candidate/id": [
+              "string"
+            ],
+            "/candidate/version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/declared": [
+              "array"
+            ],
+            "/declared/[]": [
+              "object"
+            ],
+            "/declared/[]/change": [
+              "string"
+            ],
+            "/declared/[]/kind": [
+              "string"
+            ],
+            "/declared/[]/name": [
+              "string"
+            ],
+            "/declared/[]/summary": [
+              "string"
+            ],
+            "/git": [
+              "null",
+              "object"
+            ],
+            "/git/base_commit": [
+              "string"
+            ],
+            "/git/candidate_commit": [
+              "string"
+            ],
+            "/git/changed_files": [
+              "array"
+            ],
+            "/git/changed_files/[]": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/breaking": [
+              "boolean"
+            ],
+            "/items/[]/change": [
+              "string"
+            ],
+            "/items/[]/confidence": [
+              "string"
+            ],
+            "/items/[]/detail": [
+              "object"
+            ],
+            "/items/[]/kind": [
+              "string"
+            ],
+            "/items/[]/subject": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/scope": [
+              "object"
+            ],
+            "/scope/agent": [
+              "string"
+            ],
+            "/scope/version": [
+              "string"
+            ],
+            "/seeds": [
+              "array"
+            ],
+            "/seeds/[]": [
+              "object"
+            ],
+            "/seeds/[]/change": [
+              "string"
+            ],
+            "/seeds/[]/component": [
+              "object"
+            ],
+            "/seeds/[]/component/key": [
+              "string"
+            ],
+            "/seeds/[]/component/kind": [
+              "string"
+            ],
+            "/seeds/[]/mentions": [
+              "array"
+            ],
+            "/seeds/[]/mentions/[]": [
+              "string"
+            ],
+            "/seeds/[]/summary": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/breaking": [
+              "integer"
+            ],
+            "/summary/confidence": [
+              "object"
+            ],
+            "/summary/items": [
+              "integer"
+            ],
+            "/summary/kinds": [
+              "object"
+            ],
+            "/summary/seeds": [
+              "integer"
+            ],
+            "/title": [
+              "string"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/declared/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/declared/[]/kind": [
+              "\"dataset\"",
+              "\"evaluator\"",
+              "\"policy\""
+            ],
+            "/items/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/items/[]/confidence": [
+              "\"declared\"",
+              "\"exact\"",
+              "\"filenames_only\"",
+              "\"hash_only\""
+            ],
+            "/items/[]/kind": [
+              "\"code\"",
+              "\"dataset\"",
+              "\"dependency\"",
+              "\"evaluator\"",
+              "\"limits\"",
+              "\"model\"",
+              "\"model_params\"",
+              "\"policy\"",
+              "\"prompt\"",
+              "\"retrieval_source\"",
+              "\"tool\""
+            ],
+            "/seeds/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/seeds/[]/component/kind": [
+              "\"AGENT_VERSION\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent_id",
+              "agent_name",
+              "base",
+              "candidate",
+              "content_sha256",
+              "created",
+              "created_at",
+              "created_by",
+              "declared",
+              "git",
+              "id",
+              "items",
+              "project_id",
+              "scope",
+              "seeds",
+              "summary",
+              "title"
+            ],
+            "/base": [
+              "id",
+              "version"
+            ],
+            "/candidate": [
+              "id",
+              "version"
+            ],
+            "/declared/[]": [
+              "change",
+              "kind",
+              "name"
+            ],
+            "/items/[]": [
+              "breaking",
+              "change",
+              "confidence",
+              "detail",
+              "kind",
+              "subject",
+              "summary"
+            ],
+            "/scope": [
+              "agent",
+              "version"
+            ],
+            "/seeds/[]": [
+              "change",
+              "component"
+            ],
+            "/seeds/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/summary": [
+              "breaking",
+              "confidence",
+              "items",
+              "kinds",
+              "seeds"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_id": [
+              "string"
+            ],
+            "/agent_name": [
+              "string"
+            ],
+            "/base": [
+              "object"
+            ],
+            "/base/id": [
+              "string"
+            ],
+            "/base/version": [
+              "string"
+            ],
+            "/candidate": [
+              "object"
+            ],
+            "/candidate/id": [
+              "string"
+            ],
+            "/candidate/version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/declared": [
+              "array"
+            ],
+            "/declared/[]": [
+              "object"
+            ],
+            "/declared/[]/change": [
+              "string"
+            ],
+            "/declared/[]/kind": [
+              "string"
+            ],
+            "/declared/[]/name": [
+              "string"
+            ],
+            "/declared/[]/summary": [
+              "string"
+            ],
+            "/git": [
+              "null",
+              "object"
+            ],
+            "/git/base_commit": [
+              "string"
+            ],
+            "/git/candidate_commit": [
+              "string"
+            ],
+            "/git/changed_files": [
+              "array"
+            ],
+            "/git/changed_files/[]": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/breaking": [
+              "boolean"
+            ],
+            "/items/[]/change": [
+              "string"
+            ],
+            "/items/[]/confidence": [
+              "string"
+            ],
+            "/items/[]/detail": [
+              "object"
+            ],
+            "/items/[]/kind": [
+              "string"
+            ],
+            "/items/[]/subject": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/scope": [
+              "object"
+            ],
+            "/scope/agent": [
+              "string"
+            ],
+            "/scope/version": [
+              "string"
+            ],
+            "/seeds": [
+              "array"
+            ],
+            "/seeds/[]": [
+              "object"
+            ],
+            "/seeds/[]/change": [
+              "string"
+            ],
+            "/seeds/[]/component": [
+              "object"
+            ],
+            "/seeds/[]/component/key": [
+              "string"
+            ],
+            "/seeds/[]/component/kind": [
+              "string"
+            ],
+            "/seeds/[]/mentions": [
+              "array"
+            ],
+            "/seeds/[]/mentions/[]": [
+              "string"
+            ],
+            "/seeds/[]/summary": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/breaking": [
+              "integer"
+            ],
+            "/summary/confidence": [
+              "object"
+            ],
+            "/summary/items": [
+              "integer"
+            ],
+            "/summary/kinds": [
+              "object"
+            ],
+            "/summary/seeds": [
+              "integer"
+            ],
+            "/title": [
               "string"
             ]
           }

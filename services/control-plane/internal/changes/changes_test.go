@@ -358,3 +358,35 @@ spec:
 		t.Errorf("mentions = %v (lookup_order is only in an unchanged line; refund is not refund_payment)", got)
 	}
 }
+
+// A seed is the graph service's input: its summary and mentions fit what
+// that service accepts, however many tools a prompt names.
+func TestSeedsFitTheGraphServiceBounds(t *testing.T) {
+	var tools, names []string
+	for i := range 150 {
+		name := fmt.Sprintf("tool_%03d", i)
+		tools = append(tools, "    - {name: "+name+", risk: READ}")
+		names = append(names, name)
+	}
+	doc := func(version, instructions string) string {
+		return `apiVersion: agenttwin.dev/v1
+kind: Agent
+metadata: {name: many-tools, version: ` + version + `}
+spec:
+  instructions: "` + instructions + `"
+  model: {provider: scripted, name: planner-v1}
+  tools:
+` + strings.Join(tools, "\n") + "\n"
+	}
+	s := Compute(parse(t, doc("1.0.0", "Be brief.")), parse(t, doc("1.1.0", "Use "+strings.Join(names, " and ")+".")), nil, nil)
+	if len(s.Items[0].Detail["mentions"].([]string)) != 150 {
+		t.Errorf("the item lists %d mentions, want all 150", len(s.Items[0].Detail["mentions"].([]string)))
+	}
+	seed := s.Seeds[0]
+	if len(seed.Mentions) != MaxSeedMentions {
+		t.Errorf("seed mentions = %d, bound %d", len(seed.Mentions), MaxSeedMentions)
+	}
+	if n := len([]rune(seed.Summary)); n != MaxSeedSummary || !strings.HasSuffix(seed.Summary, "…") {
+		t.Errorf("seed summary is %d runes, bound %d: %q", n, MaxSeedSummary, seed.Summary)
+	}
+}

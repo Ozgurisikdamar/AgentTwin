@@ -101,6 +101,10 @@ func (s *Server) PublicRoutes(mux Router) {
 	mux.HandleFunc("GET /api/v1/projects/{id}/tools", h(s.listTools))
 	mux.HandleFunc("POST /api/v1/projects/{id}/tools", h(s.createTool))
 
+	mux.HandleFunc("POST /api/v1/projects/{id}/change-sets", h(s.createChangeSet))
+	mux.HandleFunc("GET /api/v1/projects/{id}/change-sets", h(s.listChangeSets))
+	mux.HandleFunc("GET /api/v1/change-sets/{id}", h(s.getChangeSet))
+
 	mux.HandleFunc("GET /api/v1/audit", h(s.listAudit))
 	mux.HandleFunc("GET /api/v1/audit/verify", h(s.verifyAudit))
 
@@ -509,6 +513,82 @@ func (s *Server) createTool(w http.ResponseWriter, r *http.Request) error {
 		status = http.StatusOK
 	}
 	httpx.WriteJSON(w, status, res)
+	return nil
+}
+
+// maxChangeSetBody bounds a change set request: up to 1000 changed file
+// names of at most 512 bytes and 50 declared changes.
+const maxChangeSetBody = 1 << 20
+
+func (s *Server) createChangeSet(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	var in app.CreateChangeSetInput
+	if err := httpx.DecodeJSON(w, r, &in, maxChangeSetBody); err != nil {
+		return err
+	}
+	cs, err := s.App.CreateChangeSet(r.Context(), principal(r), id, in)
+	if err != nil {
+		return err
+	}
+	// As for manifests: 201 when stored, 200 when the same change set was
+	// stored before.
+	status := http.StatusCreated
+	if !cs.Created {
+		status = http.StatusOK
+	}
+	httpx.WriteJSON(w, status, cs)
+	return nil
+}
+
+func (s *Server) listChangeSets(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	limit, err := httpx.QueryInt(r, "limit", 50, 1, 200)
+	if err != nil {
+		return err
+	}
+	cur, err := httpx.DecodeCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		return err
+	}
+	if cur != nil && !ids.Valid(cur.ID) {
+		return httpx.Invalid("INVALID_CURSOR", "Cursor is malformed.", nil)
+	}
+	items, err := s.App.ListChangeSets(r.Context(), principal(r), id, app.ChangeSetPage{
+		Agent: r.URL.Query().Get("agent"), Before: cur, Limit: limit + 1,
+	})
+	if err != nil {
+		return err
+	}
+	var next *string // null on the last page
+	if len(items) > limit {
+		items = items[:limit]
+		last := items[len(items)-1]
+		c := httpx.EncodeCursor(httpx.Cursor{TS: last.CreatedAt, ID: last.ID})
+		next = &c
+	}
+	if items == nil {
+		items = []store.ChangeSetSummary{}
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next})
+	return nil
+}
+
+func (s *Server) getChangeSet(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "change_set_id")
+	if err != nil {
+		return err
+	}
+	cs, err := s.App.GetChangeSet(r.Context(), principal(r), id)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusOK, cs)
 	return nil
 }
 

@@ -397,6 +397,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/change-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List change sets
+         * @description The project's change sets, newest first, without their items.
+         */
+        get: operations["listChangeSets"];
+        put?: never;
+        /**
+         * Compare two versions of an agent
+         * @description Computes what changed between two registered versions of one agent
+         *     and stores it (spec §21): the prompt (a redacted line diff when the
+         *     project stores prompt text, its hash otherwise), the model, its
+         *     parameters and limits, tools (schema, risk, permissions, approval),
+         *     retrieval sources, dependencies and code (file names only), plus the
+         *     policy, evaluator and dataset changes the caller declares. Each change
+         *     is also a seed of a blast-radius traversal scoped to the candidate
+         *     version.
+         *
+         *     Change sets are immutable. The same request (versions, title, git and
+         *     declared changes) answers the stored change set with `200` and
+         *     `created: false`, so a re-run CI job does not store a copy. Requires
+         *     `release.write`; CI keys hold it. A prompt diff is shown only to
+         *     callers who may read prompt text (`settings.read`).
+         */
+        post: operations["createChangeSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/change-sets/{change_set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a change set
+         * @description A change set with its items, seeds and scope.
+         */
+        get: operations["getChangeSet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -943,6 +1002,141 @@ export interface components {
             /** @description False when the definition equals the latest version (nothing was stored). */
             created: boolean;
         };
+        CreateChangeSetRequest: {
+            /** @description The agent whose versions are compared. */
+            agent: string;
+            /** @description The version in use (the baseline). */
+            base_version: string;
+            /** @description The version to release; must differ from `base_version`. */
+            candidate_version: string;
+            title?: string;
+            git?: components["schemas"]["ChangeSetGit"];
+            /**
+             * @description Changes no agent version carries (a policy, an evaluator or a
+             *     dataset). Stated, not detected: their confidence is `declared`.
+             */
+            declared?: components["schemas"]["DeclaredChange"][];
+        };
+        /**
+         * @description What a CI system says about the code between the two versions. Only
+         *     file names are known, so a code change affects the whole candidate
+         *     version (confidence `filenames_only`).
+         */
+        ChangeSetGit: {
+            base_commit?: components["schemas"]["CommitSha"];
+            candidate_commit?: components["schemas"]["CommitSha"];
+            /** @description Paths of changed files; at most 200 are kept in the item. */
+            changed_files?: string[];
+        };
+        DeclaredChange: {
+            /** @enum {string} */
+            kind: "policy" | "evaluator" | "dataset";
+            name: string;
+            change: components["schemas"]["ChangeType"];
+            summary?: string;
+        };
+        /** @enum {string} */
+        ChangeType: "added" | "removed" | "modified";
+        /**
+         * @description How a change is known: `exact` (both versions compared field by
+         *     field), `hash_only` (the content changed but its text is not
+         *     stored), `filenames_only` (only changed file names are known),
+         *     `declared` (stated by the author).
+         * @enum {string}
+         */
+        ChangeConfidence: "exact" | "hash_only" | "filenames_only" | "declared";
+        ChangeItem: {
+            /** @enum {string} */
+            kind: "prompt" | "model" | "model_params" | "limits" | "tool" | "retrieval_source" | "dependency" | "code" | "policy" | "evaluator" | "dataset";
+            /** @description What changed (a tool name, a model, a prompt's hash, a commit…). */
+            subject: string;
+            change: components["schemas"]["ChangeType"];
+            summary: string;
+            confidence: components["schemas"]["ChangeConfidence"];
+            /** @description A caller written for the base version can trip over it (a tool's schema narrowed). */
+            breaking: boolean;
+            /**
+             * @description Depends on `kind`:
+             *     * `prompt`: `base_sha256`, `candidate_sha256`, and either `diff`
+             *       (`[{op: " "|"-"|"+", text}]`, secrets and personal data
+             *       masked), `diff_truncated` and `mentions` (tools named in
+             *       changed lines), or `diff_unavailable` (why there is no diff).
+             *     * `model`: `from`, `to` (`provider/name`).
+             *     * `model_params`: `parameters` (the changed names), `from`, `to`.
+             *     * `limits`: `limits` (the changed names), `from`, `to`.
+             *     * `tool`: `risk` (added/removed: the level; modified:
+             *       `{from, to, escalated}`), `new_privilege`, and when modified
+             *       `aspects`, `permissions`, `approval`, `schema_changes`
+             *       (`[{path, change, breaking, from?, to?}]`) and `version`.
+             *     * `dependency`: `from` and/or `to` (the manifest dependency).
+             *     * `code`: `base_commit`, `candidate_commit`,
+             *       `changed_file_count`, `changed_files`,
+             *       `changed_files_truncated`.
+             */
+            detail: Record<string, unknown>;
+        };
+        /** @description A changed graph component, as the graph service's blast-radius request takes it. */
+        ChangeSeed: {
+            component: {
+                /** @enum {string} */
+                kind: "AGENT_VERSION" | "PROMPT" | "MODEL" | "TOOL" | "RETRIEVAL_SOURCE" | "POLICY" | "EVALUATOR" | "DATASET";
+                key: string;
+            };
+            change: components["schemas"]["ChangeType"];
+            summary?: string;
+            mentions?: string[];
+        };
+        /** @description The traversal is restricted to the candidate version. */
+        ChangeScope: {
+            agent: string;
+            version: string;
+        };
+        ChangeCounts: {
+            items: number;
+            breaking: number;
+            seeds: number;
+            /** @description Items per kind. */
+            kinds: {
+                [key: string]: number;
+            };
+            /** @description Items per confidence. */
+            confidence: {
+                [key: string]: number;
+            };
+        };
+        ChangeSetVersionRef: {
+            id: components["schemas"]["Uuid"];
+            version: string;
+        };
+        ChangeSetSummary: {
+            id: components["schemas"]["Uuid"];
+            project_id: components["schemas"]["Uuid"];
+            agent_id: components["schemas"]["Uuid"];
+            agent_name: string;
+            base: components["schemas"]["ChangeSetVersionRef"];
+            candidate: components["schemas"]["ChangeSetVersionRef"];
+            title: string;
+            summary: components["schemas"]["ChangeCounts"];
+            content_sha256: components["schemas"]["Sha256"];
+            created_by: components["schemas"]["Actor"];
+            created_at: components["schemas"]["Timestamp"];
+        };
+        ChangeSet: components["schemas"]["ChangeSetSummary"] & {
+            git: components["schemas"]["ChangeSetGit"] | null;
+            declared: components["schemas"]["DeclaredChange"][];
+            items: components["schemas"]["ChangeItem"][];
+            seeds: components["schemas"]["ChangeSeed"][];
+            scope: components["schemas"]["ChangeScope"];
+        };
+        CreatedChangeSet: components["schemas"]["ChangeSet"] & {
+            /** @description False when the same change set was stored before (nothing was stored). */
+            created: boolean;
+        };
+        ChangeSetPage: {
+            items: components["schemas"]["ChangeSetSummary"][];
+            /** @description The cursor of the next page; `null` on the last page. */
+            next_cursor: string | null;
+        };
         AuditEntry: {
             id: components["schemas"]["Uuid"];
             organization_id: components["schemas"]["Uuid"];
@@ -1227,6 +1421,9 @@ export interface components {
         ProjectId: components["schemas"]["Uuid"];
         KeyId: components["schemas"]["Uuid"];
         AgentId: components["schemas"]["Uuid"];
+        ChangeSetId: components["schemas"]["Uuid"];
+        /** @description The `next_cursor` of the previous page. */
+        Cursor: string;
         Limit: number;
         /** @description The git commit the manifest was built from (a JSON envelope's field wins). */
         CommitSha: components["schemas"]["CommitSha"];
@@ -2128,6 +2325,139 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    listChangeSets: {
+        parameters: {
+            query?: {
+                /** @description Only the change sets of this agent (by name); an unknown name matches nothing. */
+                agent?: string;
+                limit?: components["parameters"]["Limit"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of change sets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSetPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    createChangeSet: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChangeSetRequest"];
+            };
+        };
+        responses: {
+            /** @description The same change set was stored before; nothing was stored. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedChangeSet"];
+                };
+            };
+            /** @description The change set was computed and stored. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedChangeSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description The project, the agent or one of the versions does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            409: components["responses"]["IdempotencyInProgress"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    getChangeSet: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                change_set_id: components["parameters"]["ChangeSetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The change set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Internal"];
         };

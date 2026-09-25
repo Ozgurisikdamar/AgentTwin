@@ -13,13 +13,14 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError, api, withQuery } from "@/lib/api";
+import { type BodyOf, queryOf } from "@/lib/api/simulation";
 import type {
   Agent,
   AgentVersion,
   Project,
+  RunResponse,
   ScenarioPage,
   SimulationCapabilities,
-  SimulationRun,
 } from "@/lib/types";
 import { useActionKey } from "@/lib/use-action-key";
 import { SeverityBadge } from "./badges";
@@ -98,7 +99,7 @@ export function NewSimulation() {
       api<ScenarioPage>(
         withQuery(
           "/scenarios",
-          new URLSearchParams({ project_id: project, agent: agent!.name, limit: "200" }),
+          queryOf<"listScenarios">({ project_id: project, agent: agent!.name, limit: 200 }),
         ),
         { signal },
       ),
@@ -109,7 +110,7 @@ export function NewSimulation() {
 
   const start = useMutation({
     mutationFn: () =>
-      api<{ run: SimulationRun }>("/simulations", {
+      api<RunResponse>("/simulations", {
         method: "POST",
         idempotencyKey: startKey.key,
         body: {
@@ -119,7 +120,7 @@ export function NewSimulation() {
           // Everything selected: let the service pick every scenario of the agent.
           ...(excluded.size ? { scenarios: selected.map((s) => s.name) } : {}),
           ...(seed.trim() ? { seed: Number(seed) } : {}),
-        },
+        } satisfies BodyOf<"startSimulation">,
       }),
     onSuccess: (res) => router.push(`/simulations/${res.run.id}`),
     onSettled: (_data, error) => startKey.settle(error),

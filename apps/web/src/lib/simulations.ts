@@ -29,6 +29,16 @@ export const RUN_STATUSES: readonly RunStatus[] = [
 ];
 export const SEVERITIES: readonly Severity[] = ["critical", "high", "medium", "low"];
 
+/** A run status read from untrusted text (a URL), or undefined when it is not one. */
+export function asRunStatus(value: string): RunStatus | undefined {
+  return RUN_STATUSES.find((s) => s === value);
+}
+
+/** A severity read from untrusted text (a URL), or undefined when it is not one. */
+export function asSeverity(value: string): Severity | undefined {
+  return SEVERITIES.find((s) => s === value);
+}
+
 /** A run that has not reached a final status (the page keeps polling it). */
 export function isRunActive(status: RunStatus): boolean {
   return !FINAL_RUN_STATUSES.has(status);

@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError, api, withQuery } from "@/lib/api";
+import { type BodyOf, queryOf } from "@/lib/api/simulation";
 import { formatDateTime, shortId } from "@/lib/format";
 import { asScenario, getIn, newScenarioYaml, parseYaml, scenarioName, setIn } from "@/lib/scenario-yaml";
 import { actorLabel } from "@/lib/simulations";
@@ -24,13 +25,14 @@ import type {
   Agent,
   AgentVersion,
   Project,
+  RunResponse,
   ScenarioDetail,
   ScenarioPage,
   ScenarioSaved,
   ScenarioValidation,
   SimulationCapabilities,
-  SimulationRun,
-  TwinSummary,
+  TwinDetail,
+  TwinList,
 } from "@/lib/types";
 import { useActionKey } from "@/lib/use-action-key";
 import { ScenarioForm } from "./scenario-form";
@@ -93,10 +95,15 @@ function RunNow({
   const runnable = agentName ? (capabilities.data?.agents ?? []).includes(agentName) : false;
   const start = useMutation({
     mutationFn: () =>
-      api<{ run: SimulationRun }>("/simulations", {
+      api<RunResponse>("/simulations", {
         method: "POST",
         idempotencyKey: runKey.key,
-        body: { project_id: projectId, agent: agentName, agent_version: chosen, scenarios: [scenario] },
+        body: {
+          project_id: projectId,
+          agent: agentName ?? "",
+          agent_version: chosen,
+          scenarios: [scenario],
+        } satisfies BodyOf<"startSimulation">,
       }),
     onSuccess: (res) => router.push(`/simulations/${res.run.id}`),
     onSettled: (_d, error) => runKey.settle(error),
@@ -175,7 +182,7 @@ export function ScenarioEditor({ scenarioId }: { scenarioId?: string }) {
       api<ScenarioDetail>(
         withQuery(
           `/scenarios/${sourceId}`,
-          new URLSearchParams(versionParam ? { version: versionParam } : {}),
+          queryOf<"getScenario">({ version: versionParam ? Number(versionParam) : undefined }),
         ),
         { signal },
       ),
@@ -186,9 +193,7 @@ export function ScenarioEditor({ scenarioId }: { scenarioId?: string }) {
   const twins = useQuery({
     queryKey: ["twins", projectId],
     queryFn: ({ signal }) =>
-      api<{ items: TwinSummary[] }>(withQuery("/twins", new URLSearchParams({ project_id: projectId })), {
-        signal,
-      }),
+      api<TwinList>(withQuery("/twins", queryOf<"listTwins">({ project_id: projectId })), { signal }),
     enabled: Boolean(projectId),
   });
 
@@ -231,10 +236,7 @@ export function ScenarioEditor({ scenarioId }: { scenarioId?: string }) {
   const twinRow = twins.data?.items.find((t) => t.name === twinName);
   const twinDetail = useQuery({
     queryKey: ["twin", twinRow?.id],
-    queryFn: ({ signal }) =>
-      api<{ twin: TwinSummary & { tools: { name: string; risk: string }[] } }>(`/twins/${twinRow!.id}`, {
-        signal,
-      }),
+    queryFn: ({ signal }) => api<TwinDetail>(`/twins/${twinRow!.id}`, { signal }),
     enabled: Boolean(twinRow),
     staleTime: 300_000,
   });
@@ -246,7 +248,7 @@ export function ScenarioEditor({ scenarioId }: { scenarioId?: string }) {
     queryFn: ({ signal }) =>
       api<ScenarioValidation>("/scenarios/validate", {
         method: "POST",
-        body: { project_id: projectId, yaml: toValidate },
+        body: { project_id: projectId, yaml: toValidate } satisfies BodyOf<"validateScenario">,
         signal,
       }),
     enabled: Boolean(projectId && toValidate && parseYaml(toValidate).ok),
@@ -264,7 +266,7 @@ export function ScenarioEditor({ scenarioId }: { scenarioId?: string }) {
       api<ScenarioPage>(
         withQuery(
           "/scenarios",
-          new URLSearchParams({ project_id: projectId, name: otherName!, include_archived: "true" }),
+          queryOf<"listScenarios">({ project_id: projectId, name: otherName!, include_archived: "true" }),
         ),
         { signal },
       ),
@@ -283,7 +285,7 @@ export function ScenarioEditor({ scenarioId }: { scenarioId?: string }) {
       api<ScenarioSaved>("/scenarios", {
         method: "POST",
         idempotencyKey: saveKey.key,
-        body: { project_id: projectId, yaml: text },
+        body: { project_id: projectId, yaml: text } satisfies BodyOf<"saveScenario">,
       }),
     onSuccess: (res) => {
       setNotice(

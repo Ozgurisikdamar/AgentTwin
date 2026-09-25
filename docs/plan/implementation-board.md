@@ -77,8 +77,32 @@ Go 103 tests + 81 subtests with real PostgreSQL + RabbitMQ (0 skipped), Python
 web 101; `make dev` healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical);
 `make doctor` 0 failed; `make e2e` 10/10.
 
-Next: the clients checked against the document (web types, Python SDK), then
-the control-plane and trace-service documents with the same traffic check in Go.
+### Clients held to the contract (2026-09-25)
+
+| Check | Result |
+|---|---|
+| Web types | `apps/web/src/lib/api/simulation.gen.ts` generated from the document (openapi-typescript 7.13.0); embedded documents (`x-agenttwin-schema`) typed from `scenario.v1` / `twin.v1`; a unit test and `make contracts-check` fail when it is stale |
+| Web, compile time | every hand-written response type accepts the documented response of its operation (15 checks); request bodies, query parameters and the unit tests' fixtures are typed by the contract |
+| Python fakes | the SDK's and the demo seed's test fakes answer with contract payloads (`agenttwin_core.simulation_fakes`) and check every exchange; the seed's run exercises `registerTwin`, `saveScenario`, `startSimulation`, `getSimulation` |
+| Mutation proofs | UI type reading `verdict.score` as never null, an unknown body field (`priority`), an undocumented query parameter (`order`) and a fixture with a status the service never sends each fail `tsc`; a contract change (`reason` made optional) fails the drift test, then — regenerated — `tsc` names the field, and `make contracts-check` reports it; an SDK request with a renamed field and the demo fake's old partial twin answer each fail their tests |
+
+Found and fixed: the UI read a verdict's score as always a number (`null`
+when nothing was evaluated); evidence without a reference rendered an empty
+element and the evaluators' expected and actual values were never shown; the
+SDK's and the demo seed's fakes answered with shapes the service never sends.
+The contract now documents exactly which expectation a result is for
+(`id`, `type`, `critical` and four optional fields) and types a case's fault
+rules by `scenario.v1#/$defs/fault`.
+
+Gates on this state: `make lint` clean (mypy strict, 64 files); `make test` —
+Go 103 tests + 81 subtests with real PostgreSQL + RabbitMQ (0 skipped), Python
+409 (core 138, simulation service 140, SDK 71, demo 31, contracts check 29),
+web 106; `make contracts-check` (events, API document, generated types);
+`make dev` healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical); `make doctor`
+0 failed; `make e2e` 10/10.
+
+Next: the control-plane and trace-service documents with the same traffic
+check in Go.
 
 ## Definition of Done tracking
 

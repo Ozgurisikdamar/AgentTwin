@@ -133,7 +133,11 @@ API: dict[str, Any] = {
                                 "type": "object",
                                 "additionalProperties": False,
                                 "required": ["agent"],
-                                "properties": {"agent": {"type": "string"}, "seed": {"type": "integer"}},
+                                "properties": {
+                                    "agent": {"type": "string"},
+                                    "seed": {"type": "integer"},
+                                    "document": {"type": "object"},
+                                },
                             }
                         }
                     },
@@ -185,7 +189,14 @@ API: dict[str, Any] = {
             "RunDetail": {
                 "allOf": [
                     {"$ref": "#/components/schemas/Run"},
-                    {"type": "object", "required": ["cases"], "properties": {"cases": {"type": "array"}}},
+                    {
+                        "type": "object",
+                        "required": ["cases"],
+                        "properties": {
+                            "cases": {"type": "array"},
+                            "scenario": {"type": "object", "x-agenttwin-schema": "scenario.v1"},
+                        },
+                    },
                 ]
             },
         }
@@ -211,7 +222,11 @@ def test_openapi_fingerprint_merges_allof_and_reads_null_unions() -> None:
     flat["components"]["schemas"]["RunDetail"] = {
         "type": "object",
         "required": ["id", "status", "cases"],
-        "properties": {**run["properties"], "cases": {"type": "array"}},
+        "properties": {
+            **run["properties"],
+            "cases": {"type": "array"},
+            "scenario": {"type": "object", "x-agenttwin-schema": "scenario.v1"},
+        },
     }
     assert api_check(flat) == []
 
@@ -233,6 +248,13 @@ def test_openapi_additive_changes_are_compatible() -> None:
         "type": "string"
     }
     del webhook["responses"]["200"]["content"]["application/json"]["schema"]["properties"]["output"]
+    # A new response field may be a canonical document, and an existing one may
+    # become one (clients receive less variety than before).
+    schemas["Run"]["properties"]["twin"] = {"type": "object", "x-agenttwin-schema": "twin.v1"}
+    schemas["RunDetail"]["allOf"][1]["properties"]["cases"]["items"] = {
+        "type": "object",
+        "x-agenttwin-schema": "scenario.v1#/$defs/fault",
+    }
     assert api_check(new) == []
 
 
@@ -288,6 +310,22 @@ def _hook(doc: dict[str, Any], part: str) -> dict[str, Any]:
         (
             lambda d: _hook(d, "response").update(required=["output"]),
             "WEBHOOK agentRun 200 response: /output became required",
+        ),
+        (
+            lambda d: d["components"]["schemas"]["RunDetail"]["allOf"][1]["properties"]["scenario"].update(
+                {"x-agenttwin-schema": "scenario.v2"}
+            ),
+            "GET /runs 200 response: /scenario changed from scenario.v1 to scenario.v2",
+        ),
+        (
+            lambda d: d["components"]["schemas"]["RunDetail"]["allOf"][1]["properties"]["scenario"].pop(
+                "x-agenttwin-schema"
+            ),
+            "GET /runs 200 response: /scenario changed from scenario.v1 to any value",
+        ),
+        (
+            lambda d: _post_body(d)["properties"]["document"].update({"x-agenttwin-schema": "scenario.v1"}),
+            "POST /runs request: /document changed from any value to scenario.v1",
         ),
     ],
 )

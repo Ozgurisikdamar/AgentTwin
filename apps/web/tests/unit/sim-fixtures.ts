@@ -2,11 +2,13 @@
  * A simulation case as the simulation service returned it on a live run
  * (refund-tool-success-lie against support-refund-agent 1.3.0), trimmed to
  * what the case components read. Kept verbatim so the tests exercise the
- * real payload shape rather than a hand-written approximation.
+ * real payload shape rather than a hand-written approximation — and typed by
+ * the API contract (`satisfies`), so a fixture the service could not send
+ * does not compile.
  */
-import type { CaseStep, ExpectationResult, ScenarioFault, StateChange } from "@/lib/types";
+import type { SimulationSchemas } from "@/lib/api/simulation";
 
-export const liveResults: ExpectationResult[] = [
+export const liveResults = [
   {
     label: "HALLUCINATED_SUCCESS",
     score: 0.0,
@@ -66,9 +68,9 @@ export const liveResults: ExpectationResult[] = [
     },
     evaluator_version: "1.0.0",
   },
-];
+] satisfies SimulationSchemas["ExpectationResult"][];
 
-export const liveSteps: CaseStep[] = [
+export const liveSteps = [
   {
     seq: 1,
     kind: "tool_call",
@@ -197,9 +199,9 @@ export const liveSteps: CaseStep[] = [
       policy_violation: null,
     },
   },
-];
+] satisfies SimulationSchemas["Step"][];
 
-export const liveStateDiff: StateChange[] = [
+export const liveStateDiff = [
   {
     op: "added",
     path: "emails[0]",
@@ -210,13 +212,13 @@ export const liveStateDiff: StateChange[] = [
       message_id: "EM-0003",
     },
   },
-];
+] satisfies SimulationSchemas["StateChange"][];
 
-export const liveFaults: ScenarioFault[] = [
+export const liveFaults = [
   {
     target: "refund_payment",
     behavior: {
       type: "success_without_mutation",
     },
   },
-];
+] satisfies SimulationSchemas["ScenarioV1Fault"][];

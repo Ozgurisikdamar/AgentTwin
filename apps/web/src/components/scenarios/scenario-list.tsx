@@ -14,8 +14,9 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { api, withQuery } from "@/lib/api";
+import { queryOf } from "@/lib/api/simulation";
 import { formatRelative } from "@/lib/format";
-import { SEVERITIES } from "@/lib/simulations";
+import { SEVERITIES, asSeverity } from "@/lib/simulations";
 import type { Scenario, ScenarioPage } from "@/lib/types";
 import { useUrlQuery } from "@/lib/use-url-query";
 
@@ -89,12 +90,14 @@ export function ScenarioList() {
   const scenarios = useInfiniteQuery({
     queryKey: ["scenarios-list", severity, tag, q, archived],
     queryFn: ({ pageParam, signal }) => {
-      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
-      if (severity) params.set("severity", severity);
-      if (tag) params.set("tag", tag);
-      if (q) params.set("q", q);
-      if (archived) params.set("include_archived", "1");
-      if (pageParam) params.set("cursor", pageParam);
+      const params = queryOf<"listScenarios">({
+        limit: PAGE_SIZE,
+        severity: asSeverity(severity),
+        tag,
+        q,
+        include_archived: archived ? "1" : undefined,
+        cursor: pageParam,
+      });
       return api<ScenarioPage>(withQuery("/scenarios", params), { signal });
     },
     initialPageParam: "",

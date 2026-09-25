@@ -54,9 +54,31 @@ export function ExpectationResults({ results }: { results: ExpectationResult[] }
           {r.evidence?.length ? (
             <ul className="space-y-0.5 text-xs text-slate-600" aria-label="Evidence">
               {r.evidence.map((e, j) => (
-                <li key={`${e.ref}-${j}`} className="flex gap-2">
-                  <EvidenceRef refId={e.ref} />
+                // The spaces between the parts are for assistive technology and
+                // copied text; the flex gap spaces them visually.
+                <li key={`${e.ref ?? e.kind}-${j}`} className="flex flex-wrap gap-x-2" data-testid="evidence">
+                  {e.ref ? (
+                    <>
+                      <EvidenceRef refId={e.ref} />{" "}
+                    </>
+                  ) : null}
                   <span>{e.detail}</span>
+                  {e.expected !== undefined ? (
+                    <>
+                      {" "}
+                      <span className="text-slate-500">
+                        expected <code className="text-slate-700">{formatValue(e.expected, 80)}</code>
+                      </span>
+                    </>
+                  ) : null}
+                  {e.actual !== undefined ? (
+                    <>
+                      {" "}
+                      <span className="text-slate-500">
+                        actual <code className="text-slate-700">{formatValue(e.actual, 80)}</code>
+                      </span>
+                    </>
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -12,5 +12,7 @@ export default defineConfig([
     "next-env.d.ts",
     "playwright-report/**",
     "test-results/**",
+    // Generated from the OpenAPI documents (scripts/api-types.ts).
+    "src/lib/api/*.gen.ts",
   ]),
 ]);

@@ -13,8 +13,9 @@ import { Label, Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { api, withQuery } from "@/lib/api";
+import { queryOf } from "@/lib/api/simulation";
 import { formatDuration, formatRelative, shortId } from "@/lib/format";
-import { RUN_STATUSES, actorLabel, isRunActive, runDurationMs } from "@/lib/simulations";
+import { RUN_STATUSES, actorLabel, asRunStatus, isRunActive, runDurationMs } from "@/lib/simulations";
 import type { Project, SimulationCapabilities, SimulationPage, SimulationRun } from "@/lib/types";
 import { useUrlQuery } from "@/lib/use-url-query";
 import { RunStatusBadge } from "./badges";
@@ -101,11 +102,13 @@ export function SimulationList() {
   const runs = useInfiniteQuery({
     queryKey: ["simulations", status, agent, projectId],
     queryFn: ({ pageParam, signal }) => {
-      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
-      if (status) params.set("status", status);
-      if (agent) params.set("agent", agent);
-      if (projectId) params.set("project_id", projectId);
-      if (pageParam) params.set("cursor", pageParam);
+      const params = queryOf<"listSimulations">({
+        limit: PAGE_SIZE,
+        status: asRunStatus(status),
+        agent,
+        project_id: projectId,
+        cursor: pageParam,
+      });
       return api<SimulationPage>(withQuery("/simulations", params), { signal });
     },
     initialPageParam: "",

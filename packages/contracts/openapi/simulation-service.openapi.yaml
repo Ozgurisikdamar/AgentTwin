@@ -1872,12 +1872,23 @@ components:
           type: boolean
         expectation:
           type: object
-          description: The expectation as written in the scenario (with its parameters).
-          additionalProperties: true
+          description: Which expectation of the scenario this result is for.
+          required: [id, type, critical]
           properties:
             id:
               type: string
+              description: The expectation's `id`, or `e<n>` (its position, from 1) when it has none.
             type:
+              type: string
+            critical:
+              type: boolean
+            description:
+              type: string
+            category:
+              type: string
+            tool:
+              type: string
+            path:
               type: string
         evidence:
           type: array
@@ -2097,9 +2108,10 @@ components:
               x-agenttwin-schema: scenario.v1
             faults:
               type: array
-              description: The scenario's fault rules.
+              description: The scenario's fault rules (its `spec.faults`).
               items:
                 type: object
+                x-agenttwin-schema: scenario.v1#/$defs/fault
         twin:
           anyOf:
             - type: object

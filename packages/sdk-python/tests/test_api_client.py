@@ -1,4 +1,11 @@
-"""REST client and outcome reporting against a local stub of the API."""
+"""REST client and outcome reporting against a local stub of the API.
+
+The stub's answers on the simulation API follow its contract
+(``packages/contracts/openapi/simulation-service.openapi.yaml``), and every
+request the client sends there is checked against it (ADR-0021): a request the
+service would reject, or a stub answer the service could not give, fails the
+test that sees it.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +18,12 @@ from typing import Any
 import pytest
 
 from agenttwin import APIError, Client, Config, OutcomeReportError, report_outcome
+from agenttwin_core import simulation_fakes as fake
 
 KEY = "atk_test0000_secret-value-that-must-not-leak"
-PROJECT = "0197a0c4-7b8e-7000-8000-000000000001"
+PROJECT = fake.PROJECT
+RUN = fake.uuid(0xA001)
+STUCK = fake.uuid(0xA002)
 
 
 class Stub:
@@ -21,6 +31,10 @@ class Stub:
         self.requests: list[dict[str, Any]] = []
         self.ready_after = 0  # number of 503s before /health/ready answers 200
         self.polls = 0
+        self.checker = fake.ExchangeChecker()
+
+    def check(self, h: BaseHTTPRequestHandler, body: bytes, status: int, payload: Any) -> None:
+        self.checker.check(h.command, h.path, dict(h.headers.items()), body, status, payload)
 
     def handle(self, h: BaseHTTPRequestHandler) -> tuple[int, Any]:
         length = int(h.headers.get("Content-Length") or 0)
@@ -33,6 +47,11 @@ class Stub:
                 "body": body,
             }
         )
+        status, payload = self.answer(h, body)
+        self.check(h, body, status, payload)
+        return status, payload
+
+    def answer(self, h: BaseHTTPRequestHandler, body: bytes) -> tuple[int, Any]:
         if h.path == "/health/ready":
             if self.ready_after > 0:
                 self.ready_after -= 1
@@ -48,27 +67,34 @@ class Stub:
             return 201, {"created": True, "version": {"version": "1.0.0"}}
         if h.command == "POST" and h.path.endswith("/outcome"):
             return 200, {"status": json.loads(body)["status"], "recorded": True}
-        if h.command == "POST" and h.path in ("/api/v1/twins", "/api/v1/scenarios"):
-            doc = json.loads(body)
-            if "kind: Broken" in doc["yaml"]:
-                return 400, {
-                    "error": {
-                        "code": "SCENARIO_INVALID",
-                        "message": "invalid",
-                        "details": {"problems": ["x"]},
-                    }
-                }
-            return 201, {"created": True, "project": doc["project_id"]}
+        if h.command == "POST" and h.path == "/api/v1/twins":
+            return 201, {"twin": fake.twin(), "created": True}
+        if h.command == "POST" and h.path == "/api/v1/scenarios":
+            if "kind: Broken" in json.loads(body)["yaml"]:
+                return 400, fake.error("SCENARIO_INVALID", "invalid", problems=["x"])
+            return 201, {"scenario": fake.scenario(), "version": 1, "created": True, "warnings": []}
         if h.command == "POST" and h.path == "/api/v1/scenarios/validate":
-            return 200, {"valid": True, "problems": [], "warnings": []}
+            return 200, {
+                "valid": True,
+                "problems": [],
+                "warnings": [],
+                "spec_hash": "b" * 64,
+                "twin": fake.twin_summary(),
+            }
         if h.command == "POST" and h.path == "/api/v1/simulations":
-            return 202, {"run": {"id": "run-1", "status": "QUEUED"}, "request": json.loads(body)}
-        if h.command == "GET" and h.path == "/api/v1/simulations/run-1":
-            self.polls += 1
-            return 200, {"run": {"id": "run-1", "status": "COMPLETED" if self.polls >= 3 else "RUNNING"}}
-        if h.command == "GET" and h.path == "/api/v1/simulations/stuck":
-            return 200, {"run": {"id": "stuck", "status": "RUNNING"}}
-        return 404, {"error": {"code": "NOT_FOUND", "message": "Not found."}}
+            req = json.loads(body)
+            queued = fake.run(
+                id=RUN, agent_name=req["agent"], agent_version=req["agent_version"], case_count=1
+            )
+            queued["pinning"]["seed"] = req.get("seed", 42)
+            return 202, {"run": queued, "cases": [fake.queued_case(0, "refund-happy-path")]}
+        if h.command == "GET" and h.path in (f"/api/v1/simulations/{RUN}", f"/api/v1/simulations/{STUCK}"):
+            status = "RUNNING"
+            if h.path.endswith(RUN):
+                self.polls += 1
+                status = "COMPLETED" if self.polls >= 3 else "RUNNING"
+            return 200, fake.run_detail(fake.run(id=h.path.rsplit("/", 1)[1], status=status), [])
+        return 404, fake.error("NOT_FOUND", "Not found.")
 
 
 @pytest.fixture
@@ -93,9 +119,12 @@ def stub() -> Iterator[tuple[Stub, str]]:
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
-    yield state, f"http://127.0.0.1:{server.server_address[1]}"
-    server.shutdown()
-    server.server_close()
+    try:
+        yield state, f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert not state.checker.violations, "\n".join(state.checker.violations)
 
 
 def test_client_authenticates_and_resolves_projects(stub: tuple[Stub, str]) -> None:
@@ -196,7 +225,8 @@ def test_report_outcome_round_trip_and_validation(stub: tuple[Stub, str]) -> Non
 def test_twins_scenarios_and_simulations(stub: tuple[Stub, str]) -> None:
     state, url = stub
     client = Client(url, KEY)
-    assert client.register_twin(PROJECT, "kind: TwinDefinition") == {"created": True, "project": PROJECT}
+    registered = client.register_twin(PROJECT, "kind: TwinDefinition")
+    assert registered["created"] is True and registered["twin"]["project_id"] == PROJECT
     assert json.loads(state.requests[-1]["body"]) == {"project_id": PROJECT, "yaml": "kind: TwinDefinition"}
     assert client.validate_scenario(PROJECT, "kind: Scenario")["valid"] is True
     assert client.save_scenario(PROJECT, "kind: Scenario")["created"] is True
@@ -204,11 +234,15 @@ def test_twins_scenarios_and_simulations(stub: tuple[Stub, str]) -> None:
         client.save_scenario(PROJECT, "kind: Broken")
     assert (e.value.status, e.value.code, e.value.details) == (400, "SCENARIO_INVALID", {"problems": ["x"]})
 
-    started = client.start_simulation(PROJECT, "agent", "1.2.4", tags=["smoke"], seed=7, release_id="rel-1")
-    assert started["request"] == {
+    started = client.start_simulation(
+        PROJECT, "agent", "1.2.4", scenarios=["refund-happy-path"], tags=["smoke"], seed=7, release_id="rel-1"
+    )
+    assert started["run"]["status"] == "QUEUED" and started["run"]["pinning"]["seed"] == 7
+    assert json.loads(state.requests[-1]["body"]) == {
         "project_id": PROJECT,
         "agent": "agent",
         "agent_version": "1.2.4",
+        "scenarios": ["refund-happy-path"],
         "tags": ["smoke"],
         "seed": 7,
         "release_id": "rel-1",
@@ -216,8 +250,61 @@ def test_twins_scenarios_and_simulations(stub: tuple[Stub, str]) -> None:
     assert "idempotency-key" not in state.requests[-1]["headers"]
     client.start_simulation(PROJECT, "agent", "1.2.4", idempotency_key="ci-build-42:1.2.4")
     assert state.requests[-1]["headers"]["idempotency-key"] == "ci-build-42:1.2.4"
-    done = client.wait_for_simulation("run-1", timeout_s=10, interval_s=0.01)
+    done = client.wait_for_simulation(RUN, timeout_s=10, interval_s=0.01)
     assert done["run"]["status"] == "COMPLETED" and state.polls == 3
     with pytest.raises(APIError) as e:
-        client.wait_for_simulation("stuck", timeout_s=0.05, interval_s=0.01)
+        client.wait_for_simulation(STUCK, timeout_s=0.05, interval_s=0.01)
     assert e.value.code == "TIMEOUT"
+    # Every simulation API call the client makes was checked against the contract.
+    used = {"registerTwin", "validateScenario", "saveScenario", "startSimulation", "getSimulation"}
+    assert used <= state.checker.succeeded()
+
+
+@pytest.mark.parametrize(
+    ("call", "violation"),
+    [
+        # A seed the service does not accept (the contract bounds it to uint32).
+        (lambda c: c.start_simulation(PROJECT, "agent", "1.2.4", seed=2**32), "seed"),
+        # An idempotency key the edge rejects (8-128 of [A-Za-z0-9._:-]).
+        (
+            lambda c: c.start_simulation(PROJECT, "agent", "1.2.4", idempotency_key="bad key!"),
+            "idempotency-key",
+        ),
+        # A run id that is not one.
+        (lambda c: c.simulation("run-1"), "run_id"),
+    ],
+)
+def test_requests_the_service_would_reject_are_caught(call: Any, violation: str) -> None:
+    """The contract check has teeth: the stub accepts these requests, the
+    service would not, so the check reports them."""
+    state = Stub()
+
+    class Handler(BaseHTTPRequestHandler):
+        def _serve(self) -> None:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length else b""
+            # A valid answer, so what is reported is the request.
+            status, payload = (202, {"run": fake.run(), "cases": []})
+            if self.command == "GET":
+                status, payload = (200, fake.run_detail(fake.run(status="RUNNING"), []))
+            state.check(self, body, status, payload)
+            raw = json.dumps(payload).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        do_GET = do_POST = _serve
+
+        def log_message(self, *args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        call(Client(f"http://127.0.0.1:{server.server_address[1]}", KEY))
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert any(violation in v for v in state.checker.violations), state.checker.violations

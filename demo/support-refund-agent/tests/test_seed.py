@@ -1,5 +1,6 @@
 """``support-refund-agent seed`` against a recording fake of the AgentTwin API:
-what it registers, in which order, and when it reports failure."""
+what it registers, in which order, and when it reports failure. The fake's
+exchanges on the simulation API are held to its contract (ADR-0021)."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from typing import Any
 import pytest
 import yaml
 
+from agenttwin_core import simulation_fakes as fake
 from support_refund_agent.cli import default_assurance_dir, main
 
 PROJECT = "0199a0a0-0000-7000-8000-000000000001"
@@ -31,6 +33,7 @@ class FakeAPI:
         # agent version -> (run status, {scenario: case status}); missing scenarios pass
         self.outcomes: dict[str, tuple[str, dict[str, str]]] = {}
         self.runs: dict[str, str] = {}
+        self.checker = fake.ExchangeChecker()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
 
@@ -52,27 +55,37 @@ class FakeAPI:
         if (method, path) == ("POST", "/api/v1/twins"):
             if self.twin_error:
                 status, code = self.twin_error
-                return status, {"error": {"code": code, "message": "not available"}}
+                return status, fake.error(code, "not available")
             name = yaml.safe_load(body["yaml"])["metadata"]["name"]
-            return 200, {"twin": {"name": name, "version": 1}, "created": self._created(f"twin:{name}")}
+            created = self._created(f"twin:{name}")
+            return 201 if created else 200, {"twin": fake.twin(name=name), "created": created}
         if (method, path) == ("POST", "/api/v1/scenarios"):
             name = yaml.safe_load(body["yaml"])["metadata"]["name"]
-            return 200, {"scenario": {"name": name}, "version": 1, "created": self._created(f"sc:{name}")}
+            created = self._created(f"sc:{name}")
+            saved = {"scenario": fake.scenario(name=name), "version": 1, "created": created, "warnings": []}
+            return 201 if created else 200, saved
         if (method, path) == ("POST", "/api/v1/simulations"):
-            run_id = f"run-{len(self.runs) + 1}"
+            run_id = fake.uuid(0xE000 + len(self.runs) + 1)
             self.runs[run_id] = body["agent_version"]
-            cases = [{"scenario_name": s} for s in SCENARIOS]
-            return 202, {"run": {"id": run_id, "status": "QUEUED"}, "cases": cases}
+            run = fake.run(id=run_id, agent_version=body["agent_version"], case_count=len(SCENARIOS))
+            return 202, {"run": run, "cases": [fake.queued_case(i, s) for i, s in enumerate(SCENARIOS)]}
         if method == "GET" and path.startswith("/api/v1/simulations/"):
             run_id = path.rsplit("/", 1)[1]
             status, overrides = self.outcomes.get(self.runs[run_id], ("COMPLETED", {}))
-            cases = [{"scenario_name": s, "status": overrides.get(s, "PASSED")} for s in SCENARIOS]
+            cases = [fake.case_summary(i, s, overrides.get(s, "PASSED")) for i, s in enumerate(SCENARIOS)]
             counts = {
                 k: sum(1 for c in cases if c["status"] == k.upper()) for k in ("passed", "failed", "errored")
             }
-            run = {"id": run_id, "status": status, "case_count": len(cases), "critical_failures": 0, **counts}
-            return 200, {"run": run, "cases": cases}
-        return 404, {"error": {"code": "NOT_FOUND", "message": path}}
+            run = fake.run(
+                id=run_id,
+                status=status,
+                agent_version=self.runs[run_id],
+                case_count=len(cases),
+                finished_cases=len(cases),
+                **counts,
+            )
+            return 200, fake.run_detail(run, cases)
+        return 404, fake.error("NOT_FOUND", path)
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
         api = self
@@ -85,6 +98,7 @@ class FakeAPI:
                     body = json.loads(body)
                 assert self.headers.get("X-AgentTwin-Api-Key") == "seed-key" or self.path == "/health/ready"
                 status, out = api.respond(method, self.path.split("?")[0], body)
+                api.checker.check(method, self.path, dict(self.headers.items()), raw, status, out)
                 data = json.dumps(out).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
@@ -106,15 +120,18 @@ class FakeAPI:
 
 @pytest.fixture
 def api(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeAPI]:
-    fake = FakeAPI()
-    thread = threading.Thread(target=fake.server.serve_forever, daemon=True)
+    api = FakeAPI()
+    thread = threading.Thread(target=api.server.serve_forever, daemon=True)
     thread.start()
-    monkeypatch.setenv("AGENTTWIN_API_URL", fake.url)
+    monkeypatch.setenv("AGENTTWIN_API_URL", api.url)
     monkeypatch.setenv("AGENTTWIN_API_KEY", "seed-key")
     monkeypatch.delenv("AGENTTWIN_UI_URL", raising=False)
-    yield fake
-    fake.server.shutdown()
-    fake.server.server_close()
+    try:
+        yield api
+    finally:
+        api.server.shutdown()
+        api.server.server_close()
+    assert not api.checker.violations, "\n".join(api.checker.violations)
 
 
 def seed(capsys: pytest.CaptureFixture[str], *extra: str) -> tuple[int, dict[str, Any]]:
@@ -147,7 +164,7 @@ def test_seed_registers_the_suite_then_runs_it(api: FakeAPI, capsys: pytest.Capt
     base, candidate = summary["simulations"]
     assert base == {
         "version": "1.2.4",
-        "run_id": "run-1",
+        "run_id": fake.uuid(0xE001),
         "status": "COMPLETED",
         "cases": 9,
         "passed": 9,
@@ -159,6 +176,8 @@ def test_seed_registers_the_suite_then_runs_it(api: FakeAPI, capsys: pytest.Capt
     }
     # A candidate with regressions is what the demo is for, not a seed failure.
     assert candidate["failed_scenarios"] == ["refund-happy-path", "refund-tool-success-lie"]
+    # What the seed sent and read on the simulation API was checked against its contract.
+    assert {"registerTwin", "saveScenario", "startSimulation", "getSimulation"} <= api.checker.succeeded()
 
     # Seeding again changes nothing but starts new runs.
     code, again = seed(capsys, "--simulate", "1.2.4")
@@ -166,7 +185,7 @@ def test_seed_registers_the_suite_then_runs_it(api: FakeAPI, capsys: pytest.Capt
     assert again["twin"]["created"] is False
     assert again["scenarios"] == {"saved": [], "unchanged": SCENARIOS}
     assert [m["created"] for m in again["manifests"]] == [False] * len(again["manifests"])
-    assert again["simulations"][0]["run_id"] == "run-3"
+    assert again["simulations"][0]["run_id"] == fake.uuid(0xE003)
 
 
 @pytest.mark.parametrize(

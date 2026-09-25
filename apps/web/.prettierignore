@@ -5,3 +5,5 @@ test-results
 next-env.d.ts
 tsconfig.tsbuildinfo
 public
+# Generated from the OpenAPI documents (scripts/api-types.ts); checked byte for byte.
+src/lib/api/*.gen.ts

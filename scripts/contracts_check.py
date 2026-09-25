@@ -16,9 +16,9 @@ HTTP APIs, per operation —
   parameter or field is required, a type changes or an allowed enum value is
   removed;
 * responses (clients may rely on what was documented): a success status
-  disappears, a required field is removed or made optional, or a type changes.
-  New fields and new enum values are compatible: clients ignore what they do
-  not know.
+  disappears, a required field is removed or made optional, a type changes or
+  an embedded document (``x-agenttwin-schema``) changes its schema. New fields
+  and new enum values are compatible: clients ignore what they do not know.
 Webhooks reverse the roles: the service sends the request (response rules) and
 reads the answer (request rules).
 
@@ -120,6 +120,8 @@ def fingerprint(schema: Any, root: dict[str, Any] | None = None) -> Fingerprint:
             out["enums"][key] = sorted(json.dumps(v, sort_keys=True) for v in node["enum"])
         if node.get("required"):
             out["required"][key] = sorted(node["required"])
+        if isinstance(node.get("x-agenttwin-schema"), str):
+            out.setdefault("embedded", {})[key] = [node["x-agenttwin-schema"]]
         for name, sub in (node.get("properties") or {}).items():
             walk(sub, f"{path}/{name}", seen)
         if isinstance(node.get("items"), dict):
@@ -267,12 +269,36 @@ def _request_changes(where: str, old: Fingerprint, new: Fingerprint, *, strict: 
         for f in fields:
             if f not in old["required"].get(path, []) and (path in old["types"] or path == "/"):
                 problems.append(f"{where}: {_join(path, f)} became required")
-    return problems + _type_changes(where, old, new) + _enum_removals(where, old, new)
+    return (
+        problems
+        + _type_changes(where, old, new)
+        + _enum_removals(where, old, new)
+        + _embedded_changes(where, old, new, reader=False)
+    )
+
+
+def _embedded_changes(where: str, old: Fingerprint, new: Fingerprint, *, reader: bool) -> list[str]:
+    """A field documented as a canonical document (``x-agenttwin-schema``)
+    that changes its schema: a reader may no longer rely on the one it knew; a
+    writer may no longer send what was accepted when the service starts
+    demanding one."""
+    before, after = old.get("embedded", {}), new.get("embedded", {})
+    paths = before if reader else after
+    return [
+        f"{where}: {path} changed from {(before.get(path) or ['any value'])[0]} "
+        f"to {(after.get(path) or ['any value'])[0]}"
+        for path in sorted(paths)
+        if before.get(path) != after.get(path)
+    ]
 
 
 def _response_changes(where: str, old: Fingerprint, new: Fingerprint) -> list[str]:
     """What a client that followed the old document may no longer receive."""
-    return _removed_or_optional(where, old, new) + _type_changes(where, old, new)
+    return (
+        _removed_or_optional(where, old, new)
+        + _type_changes(where, old, new)
+        + _embedded_changes(where, old, new, reader=True)
+    )
 
 
 def openapi_breaking_changes(

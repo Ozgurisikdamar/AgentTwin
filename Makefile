@@ -115,8 +115,13 @@ e2e: env ## Playwright end-to-end tests against the running stack (make dev firs
 	$(LOAD_ENV); cd apps/web && $(PNPM) exec playwright test
 
 .PHONY: contracts-check
-contracts-check: ## Detect breaking changes in event schemas and API documents
+contracts-check: ## Detect breaking changes in event schemas and API documents; check generated API types
 	$(UV) run python scripts/contracts_check.py
+	$(PNPM) --filter @agenttwin/web run check:api
+
+.PHONY: gen-api
+gen-api: ## Regenerate the web's API types from the OpenAPI documents
+	$(PNPM) --filter @agenttwin/web run gen:api
 
 .PHONY: build
 build: ## Build all Go binaries and container images

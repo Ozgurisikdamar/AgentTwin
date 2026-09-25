@@ -46,17 +46,26 @@ the service in four ways (ADR-0021):
 | Part | Breaking | Compatible |
 |---|---|---|
 | Request (parameters, body) | operation, parameter or body field removed (bodies are strict: unknown fields are rejected); new required parameter or field; body newly required; type changed; allowed enum value removed | new optional parameter or field; new enum value |
-| Response (success statuses) | success status removed; required field removed or made optional; type changed | new field; new enum value; new status |
+| Response (success statuses) | success status removed; required field removed or made optional; type changed; an embedded document (`x-agenttwin-schema`) changes its schema or loses it | new field; new enum value; new status; a field becomes an embedded document |
 | Webhook | the same rules with the roles reversed: the service sends the request and reads the answer (ignoring unknown fields) | |
 
 Clients must ignore response fields and enum values they do not know. Error
 responses (`{"error": {"code", "message", "request_id", "details"?}}`) are
 documented but not versioned by shape: their `code` values are the contract.
 
+The clients are held to the documents too (ADR-0021): the web app's API types
+are generated from them (`make gen-api` writes
+`apps/web/src/lib/api/*.gen.ts`; a unit test and `make contracts-check` fail
+when they are stale), its hand-written types must accept every documented
+response at compile time, and the Python SDK's and the demo seed's test fakes
+answer with contract payloads and check every exchange
+(`agenttwin_core.simulation_fakes`).
+
 To change an API: edit the document with the code, run the service's tests
-(route parity and traffic), then `make contracts-check`. A breaking change needs
-a new operation or version; after a reviewed, compatible change record the
-baseline with `python scripts/contracts_check.py --update`.
+(route parity and traffic), `make gen-api`, then `make contracts-check`. A
+breaking change needs a new operation or version; after a reviewed,
+compatible change record the baseline with
+`python scripts/contracts_check.py --update`.
 
 ## Canonical JSON and content hashes
 

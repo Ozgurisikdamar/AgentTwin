@@ -14,6 +14,7 @@ from the implementation unnoticed:
   sees it;
 * ``x-agenttwin-schema: <name>`` marks an embedded document (a scenario, a
   twin definition), which must also be valid against that canonical schema;
+  ``<name>#/$defs/<definition>`` marks a part of one (a scenario's fault rule);
 * accepted requests must match the documented parameters and body, so a client
   cannot depend on something the contract does not promise;
 * every checked exchange is recorded, so a test can require that each
@@ -22,6 +23,7 @@ from the implementation unnoticed:
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from collections import defaultdict
@@ -37,7 +39,7 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from jsonschema.protocols import Validator
 from jsonschema.validators import extend
 
-from agenttwin_core.schemas import document_validator, schema_root
+from agenttwin_core.schemas import document_definition_validator, document_validator, schema_root
 from agenttwin_core.yamlsafe import load_yaml
 
 __all__ = [
@@ -46,6 +48,7 @@ __all__ = [
     "ContractViolation",
     "Operation",
     "contract_path",
+    "embedded_validator",
     "strictify",
 ]
 
@@ -67,6 +70,8 @@ _SCHEMA_VALUES = (
     "then",
     "else",
 )
+_UNEXPECTED = re.compile(r"\((.+) (?:was|were) unexpected\)$")
+_EMBEDDED = re.compile(r"^([a-z][a-z0-9-]*\.v[0-9]+)(?:#/\$defs/([A-Za-z][A-Za-z0-9_]*))?$")
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _DATE_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
 
@@ -112,13 +117,27 @@ def _is_uri(value: object) -> bool:
     return bool(parts.scheme and parts.netloc)
 
 
+def embedded_validator(name: str) -> Draft202012Validator:
+    """The canonical validator an ``x-agenttwin-schema`` value names: a
+    document schema (``scenario.v1``) or one of its definitions
+    (``scenario.v1#/$defs/fault``)."""
+    m = _EMBEDDED.match(name)
+    if not m:
+        raise ValueError(f"invalid x-agenttwin-schema {name!r}")
+    document, definition = m.groups()
+    return document_definition_validator(document, definition) if definition else document_validator(document)
+
+
 def _embedded(
     validator: Validator, name: Any, instance: Any, schema: Mapping[str, Any]
 ) -> Iterator[ValidationError]:
-    """``x-agenttwin-schema``: the instance is a document of a canonical schema."""
-    for err in document_validator(str(name)).iter_errors(instance):
+    """``x-agenttwin-schema``: the instance is a document of a canonical schema
+    (or a part of one)."""
+    document, _, definition = str(name).partition("#/$defs/")
+    what = f"{document} {definition}" if definition else f"{document} document"
+    for err in embedded_validator(str(name)).iter_errors(instance):
         where = "/".join(str(p) for p in err.absolute_path) or "(root)"
-        yield ValidationError(f"is not a valid {name} document: {where}: {err.message}")
+        yield ValidationError(f"is not a valid {what}: {where}: {err.message}")
 
 
 _ContractValidator: Any = extend(  # type: ignore[no-untyped-call]
@@ -237,8 +256,32 @@ def _coerce(raw: str, schema: Mapping[str, Any]) -> Any:
     return raw
 
 
+def _unexpected(error: ValidationError) -> tuple[str, ...] | None:
+    """The property names an ``unevaluatedProperties`` error reports."""
+    m = _UNEXPECTED.search(error.message)
+    if error.validator != "unevaluatedProperties" or not m:
+        return None
+    try:
+        names = ast.literal_eval(f"({m.group(1)},)")
+    except (ValueError, SyntaxError):
+        return None
+    return tuple(str(n) for n in names)
+
+
 def _problems(errors: Iterable[ValidationError]) -> list[str]:
-    ordered = sorted(errors, key=lambda e: [str(p) for p in e.absolute_path])
+    errors = list(errors)
+
+    def echo(e: ValidationError) -> bool:
+        # A property that fails its own schema is not "evaluated", so it is
+        # also reported as unexpected by its object: keep only the cause.
+        names = _unexpected(e)
+        base = list(e.absolute_path)
+        return bool(names) and all(
+            any(list(o.absolute_path)[: len(base) + 1] == [*base, n] for o in errors if o is not e)
+            for n in names or ()
+        )
+
+    ordered = sorted((e for e in errors if not echo(e)), key=lambda e: [str(p) for p in e.absolute_path])
     return [f"  at /{'/'.join(str(p) for p in e.absolute_path)}: {e.message}" for e in ordered[:10]]
 
 
@@ -387,6 +430,7 @@ class Contract:
         """Checks one response; records it for :meth:`uncovered`."""
         op, _ = self._operation(method, path)
         self._check_response_of(op, status, content_type, body)
+        self.seen[op.operation_id].add(status)
         return op
 
     def _check_response_of(self, op: Operation, status: int, content_type: str | None, body: bytes) -> None:
@@ -396,7 +440,6 @@ class Contract:
                 f"{self.name}: {op.operation_id} answered {status}, which is not documented"
             )
         key, response = matched
-        self.seen[op.operation_id].add(status)
         self._check_body(
             f"{self.name}: {op.operation_id} {status} response",
             response.get("content"),
@@ -504,6 +547,7 @@ class Contract:
                 request.headers.get("content-type"),
                 request.content,
             )
+        self.seen[op.operation_id].add(response.status_code)
         return op
 
     def check_webhook(self, name: str, request: httpx.Request, response: httpx.Response | None) -> None:
@@ -515,6 +559,7 @@ class Contract:
             self._check_response_of(
                 op, response.status_code, response.headers.get("content-type"), response.content
             )
+            self.seen[op.operation_id].add(response.status_code)
 
     def response_hook(self) -> Callable[[httpx.Response], Awaitable[None]]:
         """An ``httpx.AsyncClient`` response event hook checking every exchange."""
@@ -526,7 +571,7 @@ class Contract:
         return hook
 
     def uncovered(self) -> list[str]:
-        """Operations for which no successful (2xx) response was checked."""
+        """Operations without a successful (2xx) exchange that passed its check."""
         return sorted(
             op_id
             for op_id in self.operations

@@ -11,7 +11,8 @@ owns the resource; the contracts are OpenAPI 3.1 documents in
 
 Each document is checked against its service on every test run (ADR-0021), so
 it describes what the service does, not what it once did. Open it in any
-OpenAPI viewer.
+OpenAPI viewer, or generate a client from it: the web app's TypeScript types
+are generated this way (`make gen-api`).
 
 ## Authentication
 

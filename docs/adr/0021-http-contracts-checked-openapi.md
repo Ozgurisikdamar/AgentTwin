@@ -31,14 +31,32 @@ drifts silently unless something holds it to the service.
      carry undocumented ones, even through `allOf`; every request the service
      accepts (a documented parameter, field and value); and every call the
      worker makes to the agent, request and answer. Embedded documents marked
-     `x-agenttwin-schema` are validated against their canonical JSON Schema. A
-     contract walk requires a checked success response for every operation.
+     `x-agenttwin-schema` are validated against their canonical JSON Schema
+     (`scenario.v1`), or against one of its definitions
+     (`scenario.v1#/$defs/fault`). A contract walk requires a checked success
+     response for every operation.
   4. *Compatibility:* `make contracts-check` compares each operation with a
      committed baseline. Requests break when an operation, parameter or body
      field disappears (the services reject unknown fields), something new is
      required, a type changes or an allowed value is removed. Responses break
      when a success status disappears, a required field is removed or made
-     optional, or a type changes. Webhooks reverse the roles.
+     optional, a type changes or an embedded document changes its schema.
+     Webhooks reverse the roles.
+* **The clients are held to the same documents.**
+  * *Web:* its API types are generated from the documents
+    (`apps/web/scripts/api-types.ts`, openapi-typescript), with each embedded
+    document typed from the canonical JSON Schema the traffic check validates
+    it against. A unit test fails when the committed types are not what the
+    documents generate. The UI keeps its hand-written types (what it reads),
+    and a compile-time check requires each of them to accept every response
+    the document allows for the operation that returns it; request bodies
+    (`satisfies BodyOf<op>`), query parameters (`queryOf<op>`) and the unit
+    tests' fixtures are typed by the contract. A contract change that breaks
+    an assumption of the UI does not compile, and names the field.
+  * *Python:* the fakes that stand in for the service in the SDK's and the
+    demo seed's tests answer with contract payloads
+    (`agenttwin_core.simulation_fakes`) and check every exchange — the
+    request the client sent, the answer the fake gave.
 * **The promise stays open, the check is strict.** Responses may gain fields
   and enum values; clients ignore what they do not know. Strictness belongs to
   the test, so a field the service sends without documenting it fails the test
@@ -55,5 +73,10 @@ drifts silently unless something holds it to the service.
   only returned in lists, and an agent's answer was stored with whatever types
   the agent sent, so a misbehaving agent could make the API serve a string where
   an integer is promised. Both are fixed and pinned by tests.
-* Checking the clients (the web app's types, the SDKs) against the documents
-  is a separate step; the Go services need the same traffic check in Go.
+* Checking the clients found three more: the UI assumed a verdict's score is
+  always a number (it is `null` when nothing was evaluated); evidence without
+  a reference rendered an empty element, and the expected and actual values
+  the evaluators record were never shown; and the SDK's and the demo seed's
+  test fakes answered with shapes the service never sends, so those tests
+  exercised an API that does not exist.
+* The Go services need the same traffic check in Go.

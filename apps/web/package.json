@@ -11,6 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "gen:api": "node --disable-warning=ExperimentalWarning scripts/api-types.ts",
+    "check:api": "node --disable-warning=ExperimentalWarning scripts/api-types.ts --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test"
@@ -42,6 +44,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.6",
     "jsdom": "30.1.1",
+    "openapi-typescript": "7.13.0",
     "prettier": "3.9.9",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",

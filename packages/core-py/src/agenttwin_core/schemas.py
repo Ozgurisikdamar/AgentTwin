@@ -16,7 +16,13 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-__all__ = ["document_validator", "event_payload_validator", "load_topology", "schema_root"]
+__all__ = [
+    "document_definition_validator",
+    "document_validator",
+    "event_payload_validator",
+    "load_topology",
+    "schema_root",
+]
 
 
 @cache
@@ -48,13 +54,31 @@ def load_topology() -> dict[str, Any]:
 
 
 @cache
-def document_validator(name: str) -> Draft202012Validator:
-    """Validator for a user-authored document schema, e.g. ``scenario.v1``."""
+def _document_schema(name: str) -> dict[str, Any]:
     if "/" in name or "\\" in name or ".." in name:
         raise ValueError(f"invalid schema name {name!r}")
-    schema = _read(schema_root() / "scenario-schema" / "schemas" / f"{name}.schema.json")
+    schema: dict[str, Any] = _read(schema_root() / "scenario-schema" / "schemas" / f"{name}.schema.json")
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    return schema
+
+
+@cache
+def document_validator(name: str) -> Draft202012Validator:
+    """Validator for a user-authored document schema, e.g. ``scenario.v1``."""
+    return Draft202012Validator(_document_schema(name), format_checker=FormatChecker())
+
+
+@cache
+def document_definition_validator(name: str, definition: str) -> Draft202012Validator:
+    """Validator for one definition (``$defs``) of a document schema, e.g. the
+    ``fault`` rule of ``scenario.v1``. References between definitions resolve
+    as they do in the whole document."""
+    defs = _document_schema(name).get("$defs") or {}
+    if definition not in defs:
+        raise KeyError(f"{name} has no definition {definition!r}")
+    return Draft202012Validator(
+        {"$ref": f"#/$defs/{definition}", "$defs": defs}, format_checker=FormatChecker()
+    )
 
 
 @cache

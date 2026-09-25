@@ -5,13 +5,20 @@ and the webhook transport."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 
-from agenttwin_core.openapi_contract import Contract, ContractTransport, ContractViolation, strictify
+from agenttwin_core.openapi_contract import (
+    Contract,
+    ContractTransport,
+    ContractViolation,
+    embedded_validator,
+    strictify,
+)
 
 UUID = "0190f3b4-0000-7000-8000-000000000001"
 
@@ -163,6 +170,10 @@ DOC: dict[str, Any] = {
                         "properties": {
                             "kind": {"anyOf": [{"$ref": "#/components/schemas/Kind"}, {"type": "null"}]},
                             "scenario": {"type": "object", "x-agenttwin-schema": "scenario.v1"},
+                            "faults": {
+                                "type": "array",
+                                "items": {"type": "object", "x-agenttwin-schema": "scenario.v1#/$defs/fault"},
+                            },
                             "meta": {"type": "object", "additionalProperties": True, "properties": {"a": {}}},
                         },
                     },
@@ -251,6 +262,38 @@ def test_embedded_documents_are_checked_against_their_schema() -> None:
     broken = SCENARIO | {"metadata": {"name": "s", "severity": "urgent"}}
     with pytest.raises(ContractViolation, match=r"is not a valid scenario\.v1 document: metadata/severity"):
         respond(c, "GET", f"/things/{UUID}", 200, THING | {"scenario": broken})
+
+
+def test_embedded_definitions_are_checked_against_their_part_of_the_schema() -> None:
+    c = contract()
+    fault = {"target": "refund", "when": {"callNumber": 2}, "behavior": {"type": "timeout_after_mutation"}}
+    respond(c, "GET", f"/things/{UUID}", 200, THING | {"faults": [fault]})
+    for bad, where in (
+        ({"behavior": {"type": "delay"}}, r"\(root\): 'target' is a required property"),
+        (fault | {"behavior": {"type": "meteor_strike"}}, "behavior/type"),
+        (fault | {"when": {"callNumber": 0}}, "when/callNumber"),
+    ):
+        with pytest.raises(ContractViolation) as e:
+            respond(c, "GET", f"/things/{UUID}", 200, THING | {"faults": [bad]})
+        # The cause only: the failing property is not also reported as unexpected.
+        problems = str(e.value).splitlines()[1:]
+        assert len(problems) == 1, problems
+        assert re.match(rf"  at /faults/0: is not a valid scenario\.v1 fault: {where}", problems[0])
+    # An undocumented field next to a failing one is still reported.
+    with pytest.raises(ContractViolation, match=r"'surprise' were unexpected"):
+        respond(c, "GET", f"/things/{UUID}", 200, THING | {"faults": [{}], "surprise": 1})
+
+
+def test_embedded_schema_names_are_checked() -> None:
+    assert embedded_validator("scenario.v1").schema["title"]
+    assert embedded_validator("scenario.v1#/$defs/fault").is_valid(
+        {"target": "t", "behavior": {"type": "delay", "delayMs": 5}}
+    )
+    with pytest.raises(KeyError, match="no definition 'meteor'"):
+        embedded_validator("scenario.v1#/$defs/meteor")
+    for bad in ("scenario", "scenario.v1#/properties/spec", "../x.v1", "Scenario.v1"):
+        with pytest.raises(ValueError, match="invalid x-agenttwin-schema"):
+            embedded_validator(bad)
 
 
 def test_literal_paths_win_and_statuses_fall_back_to_ranges_and_default() -> None:

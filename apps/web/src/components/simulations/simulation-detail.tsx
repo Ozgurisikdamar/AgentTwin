@@ -15,6 +15,7 @@ import { KeyValue } from "@/components/ui/key-value";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError, api } from "@/lib/api";
+import type { BodyOf } from "@/lib/api/simulation";
 import { countOf, formatDateTime, formatDuration, formatPercent, humanize, shortId } from "@/lib/format";
 import {
   actorLabel,
@@ -25,7 +26,7 @@ import {
   runVerdictSummary,
   sortCases,
 } from "@/lib/simulations";
-import type { SimulationCase, SimulationRun, SimulationRunDetail } from "@/lib/types";
+import type { RunResponse, SimulationCase, SimulationRun, SimulationRunDetail } from "@/lib/types";
 import { useActionKey } from "@/lib/use-action-key";
 import { CaseStatusBadge, FailureLabel, RunStatusBadge, SeverityBadge } from "./badges";
 import { RunProgress } from "./run-progress";
@@ -129,7 +130,7 @@ export function SimulationDetail({ runId }: { runId: string }) {
 
   const cancel = useMutation({
     mutationFn: () =>
-      api<{ run: SimulationRun }>(`/simulations/${runId}/cancel`, {
+      api<RunResponse>(`/simulations/${runId}/cancel`, {
         method: "POST",
         idempotencyKey: cancelKey.key,
       }),
@@ -141,7 +142,7 @@ export function SimulationDetail({ runId }: { runId: string }) {
       if (!run) throw new Error("run not loaded");
       const scenarios =
         run.pinning?.scenarios?.map((s) => s.scenario) ?? detail.data?.cases.map((c) => c.scenario_name);
-      return api<{ run: SimulationRun }>("/simulations", {
+      return api<RunResponse>("/simulations", {
         method: "POST",
         idempotencyKey: rerunKey.key,
         body: {
@@ -150,7 +151,7 @@ export function SimulationDetail({ runId }: { runId: string }) {
           agent_version: run.agent_version,
           scenarios,
           seed: run.pinning?.seed,
-        },
+        } satisfies BodyOf<"startSimulation">,
       });
     },
     onSuccess: (res) => router.push(`/simulations/${res.run.id}`),

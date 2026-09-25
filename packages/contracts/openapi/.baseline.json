@@ -300,6 +300,11 @@
       "request": null,
       "responses": {
         "200": {
+          "embedded": {
+            "/document": [
+              "scenario.v1"
+            ]
+          },
           "enums": {
             "/scenario/severity": [
               "\"critical\"",
@@ -1326,6 +1331,14 @@
       "request": null,
       "responses": {
         "200": {
+          "embedded": {
+            "/scenario/document": [
+              "scenario.v1"
+            ],
+            "/scenario/faults/[]": [
+              "scenario.v1#/$defs/fault"
+            ]
+          },
           "enums": {
             "/case/agent_result/kind": [
               "\"http_error\"",
@@ -1458,6 +1471,11 @@
             "/case/results/[]/evidence/[]": [
               "detail",
               "kind"
+            ],
+            "/case/results/[]/expectation": [
+              "critical",
+              "id",
+              "type"
             ],
             "/case/state_diff/[]": [
               "op",
@@ -1667,7 +1685,22 @@
             "/case/results/[]/expectation": [
               "object"
             ],
+            "/case/results/[]/expectation/category": [
+              "string"
+            ],
+            "/case/results/[]/expectation/critical": [
+              "boolean"
+            ],
+            "/case/results/[]/expectation/description": [
+              "string"
+            ],
             "/case/results/[]/expectation/id": [
+              "string"
+            ],
+            "/case/results/[]/expectation/path": [
+              "string"
+            ],
+            "/case/results/[]/expectation/tool": [
               "string"
             ],
             "/case/results/[]/expectation/type": [
@@ -2059,6 +2092,11 @@
       "request": null,
       "responses": {
         "200": {
+          "embedded": {
+            "/document": [
+              "twin.v1"
+            ]
+          },
           "enums": {
             "/twin/tools/[]/handler": [
               "\"custom\"",

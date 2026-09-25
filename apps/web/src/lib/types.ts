@@ -405,10 +405,18 @@ export interface SimulationPage {
   next_cursor: string | null;
 }
 
-export interface EvidenceRef {
-  ref: string;
+/** A started, cancelled or re-run simulation. */
+export interface RunResponse {
+  run: SimulationRun;
+}
+
+export interface Evidence {
   kind: string;
   detail: string;
+  /** What the evidence points at (`tool_call:3`); absent for the agent's answer and state checks. */
+  ref?: string;
+  expected?: unknown;
+  actual?: unknown;
 }
 
 export interface ExpectationResult {
@@ -417,7 +425,7 @@ export interface ExpectationResult {
   score: number | null;
   reason: string;
   critical: boolean;
-  evidence: EvidenceRef[] | null;
+  evidence: Evidence[] | null;
   evaluator: string;
   evaluator_version: string;
   /** The expectation as the scenario declared it, parameters included (tool, path, ...). */
@@ -478,7 +486,7 @@ export interface AgentResult {
   business_outcome?: string | null;
   steps?: number;
   model?: string;
-  http_status?: number;
+  http_status?: number | null;
   elapsed_ms?: number;
   error?: string | null;
   trace_id?: string | null;
@@ -487,7 +495,8 @@ export interface AgentResult {
 export interface Verdict {
   status: CaseStatus;
   reason: string;
-  score: number;
+  /** Share of the evaluated expectations that passed; null when none was evaluated. */
+  score: number | null;
   labels: string[];
   passed: number;
   failed: number;
@@ -620,4 +629,17 @@ export interface TwinSummary {
   spec_hash: string;
   tool_count: number;
   created_at: string;
+}
+
+export interface TwinList {
+  items: TwinSummary[];
+}
+
+export interface TwinTool {
+  name: string;
+  risk: string;
+}
+
+export interface TwinDetail {
+  twin: TwinSummary & { tools: TwinTool[] };
 }

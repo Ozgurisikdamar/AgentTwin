@@ -184,6 +184,11 @@ attributes supplied by the agent.
 
 ### 3.3 Release evaluation (asynchronous)
 
+A release is a candidate version of an agent recorded against its baseline,
+with the change set between them (§3.7). Each evaluation of it is a
+**revision** that records what it rests on and is decided once
+([ADR-0031](../adr/0031-a-release-evaluation-is-a-revision-and-its-decision-is-hashed-evidence.md)).
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -193,29 +198,50 @@ sequenceDiagram
   participant SS as simulation-service
   participant ES as evaluation-service
   participant MQ as RabbitMQ
-  U->>CP: POST /releases/{id}/evaluate (Idempotency-Key)
-  CP->>CP: the release's change set (stored, immutable — §3.7)
-  CP->>GS: POST /api/v1/blast-radius (changed components)
+  U->>CP: POST /releases (Idempotency-Key) or POST /releases/{id}/evaluate
+  CP->>GS: POST /api/v1/blast-radius (the change set's seeds)
   GS-->>CP: affected components, paths, linked scenarios
-  CP->>SS: POST /api/v1/scenarios/match (names, tags, sources, similarity queries)
-  SS-->>CP: scenarios + selection reasons (graph / tag / known regression / similarity)
-  CP->>CP: persist ReleaseEvaluation + outbox(evaluation.run_requested.v1) in one tx
-  CP-->>U: 202 {evaluation_id, status: QUEUED}
+  CP->>SS: POST /api/v1/scenarios/match (names, tags, similarity queries)
+  SS-->>CP: scenarios + selection reasons, each at a scenario version
+  CP->>CP: one tx: release_evaluation (revision n: policy, impact, pinned suite, tools, seed) + outbox(evaluation.run_requested.v1)
+  CP-->>U: 202 gate {status: EVALUATING, effective_outcome: PENDING}
   CP->>MQ: evaluation.run_requested.v1 (outbox relay, publisher confirms)
-  MQ->>ES: consume → create EvalRun (idempotent)
-  ES->>SS: POST /internal/v1/simulation-pairs (baseline + candidate on one pinned suite)
-  SS->>MQ: simulation.run_requested.v1 (outbox; wakes a worker)
-  MQ->>SS: worker claims run (lease), runs cases in isolated twins
+  MQ->>ES: consume → create EvalRun for the release evaluation (idempotent)
+  ES->>SS: POST /internal/v1/simulation-pairs (baseline + candidate, the pinned scenario versions, the release's seed)
+  SS->>MQ: simulation.run_requested.v1 → a worker runs both sides in isolated twins
   SS->>MQ: simulation.run_completed.v1
-  MQ->>ES: both sides done → evaluate expectations, compare, first divergence
-  ES->>MQ: evaluation.run_completed.v1
-  MQ->>CP: compute gate (deterministic rules) → immutable GateDecision + evidence
+  MQ->>ES: both sides done → expectations, comparison, first divergence
+  ES->>MQ: evaluation.run_completed.v1 (release_evaluation_id)
+  MQ->>CP: read the run and its cases → gate rules → gate_decision {input, decision, sha256(input, decision)}
+  U->>CP: GET /releases/{id}/gate (the CLI polls; the UI refreshes while PENDING)
 ```
 
-Any missing mandatory result, failed simulation, evaluator `ERROR` or stale run
-produces **BLOCK (INCOMPLETE)** — infrastructure uncertainty never yields PASS.
-Steps 2–6 exist since Phase 4 as the change impact of §3.7; an impact that is
-not `complete` counts as a missing mandatory result.
+The gate's rules are pure and deterministic (`internal/gate`, ADR-0007): the
+same input always yields the same outcome, rules and risk index. The decision
+is stored with the input it rests on and the SHA-256 of both; the database
+refuses to change a release, an evaluation's input or a decision (§6), and
+every read of the gate says whether the stored decision still hashes to its
+recorded value (`evidence_verified`).
+
+**Never a silent pass.** A mandatory scenario without a result, a scenario
+the library could not pin, a failed or cancelled run, an impact that is not
+`complete` or an evaluation service that does not know the run: each is
+**BLOCK (incomplete)**. A suite with nothing to run is decided at once: an
+empty suite is a coverage warning, a suite no scenario of which could be
+pinned is missing evidence.
+
+**Overrides** are separate, immutable records (spec §92): who, why, the
+ticket, until when (≤ 90 days). The decision keeps its outcome; the gate
+reports `effective_outcome: OVERRIDDEN` next to `decision.outcome` and the
+original outcome, and only the latest revision's WARN or BLOCK can be
+overridden, once. Reviewers override only when the project's gate policy
+allows it.
+
+**In CI** the `agenttwin` CLI (`packages/cli`) creates the release with an
+`Idempotency-Key` derived from the request (a retried job does not create a
+second release), polls the gate, prints why it decided and exits with it:
+`0` PASS or overridden, `2` WARN (with `--ci`, only when the policy fails CI
+on warnings), `3` BLOCK, `4` an infrastructure or configuration error.
 
 ### 3.4 Simulation run
 
@@ -358,7 +384,7 @@ through REST (synchronous, owner-validated) or events (asynchronous).
 
 | Schema | Owner | Main tables |
 |---|---|---|
-| `control` | control-plane | organization, app_user, membership, project, environment, api_key, agent, agent_version, prompt_version, tool, tool_version, tool_catalog, change_set, release_candidate, release_evaluation, gate_decision, gate_override, gate_policy, audit_event, outbox, processed_event |
+| `control` | control-plane | organization, app_user, membership, project, environment, api_key, agent, agent_version, prompt_version, tool, tool_version, tool_catalog, change_set, release, release_evaluation, gate_decision, gate_override, audit_event, idempotency_record, outbox, processed_event (the gate policy is a column of `project`) |
 | `trace` | trace-service | trace, span, outcome, trace_flag, outbox |
 | `graph` | graph-service | component, dependency_edge, edge_evidence, outbox, processed_event |
 | `evaluation` | evaluation-service | dataset, dataset_version, eval_run, eval_run_transition, eval_case_result, judgment (verdict cache), human_review, judge_calibration, outbox, processed_event (regression mining adds its tables in Phase 6) |

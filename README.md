@@ -324,12 +324,12 @@ AgentTwin does **not** turn these into a misleading “95% safe” claim.
 
 ## Development
 
-> **AgentTwin is under active phased development.** Phases 0–4 are done; the
-> release gate, regression miner and runtime gateway follow.
+> **AgentTwin is under active phased development.** Phases 0–5 are done; the
+> regression miner and the runtime gateway follow.
 
 Track live build status and the evidence of each phase: [docs/plan/implementation-board.md](docs/plan/implementation-board.md)
 
-### What works today (Phases 1–4)
+### What works today (Phases 1–5)
 
 * **Trace ingestion** from any OpenTelemetry-instrumented agent through the
   OTel Collector into the trace service: GenAI semantic conventions, per-project
@@ -366,12 +366,29 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   embedding model behind `EMBEDDING_PROVIDER`), always run by the gate
   policy, or a known production regression. An impact a service could not
   compute says so (`complete: false`) instead of listing fewer scenarios.
+* **Release gate**: a release records a candidate version against its
+  baseline; each evaluation is a revision that pins what it rests on — the
+  gate policy, the change's impact, the suite at the scenario versions it
+  selected, the tools — and runs both versions on it with the release's
+  seed. The gate's deterministic rules decide **PASS / WARN / BLOCK** with
+  the evidence of every rule that fired (the scenario, the candidate against
+  the baseline, what was observed, the first divergence, the trace);
+  missing evidence is BLOCK, never a pass. The decision is stored once with
+  its input and their SHA-256, and every read says whether it still
+  verifies. An override (owners, admins, and reviewers when the policy
+  allows) records who, why, the ticket and until when, and never turns the
+  decision into a PASS.
+* **CLI** ([`packages/cli`](packages/cli)): `agenttwin release check` creates a
+  release from CI, waits for its gate, prints why it decided and exits with
+  it (0 pass, 2 warn, 3 block, 4 infrastructure error), with JUnit and JSON
+  reports; `agenttwin agent register` registers a version from its manifest.
 * **Web UI**: trace explorer and trace detail with waterfall; scenarios and
   simulations with the evidence down to the tool call and the state diff;
   evaluations, compared cases side by side, datasets, the review queue and
   judge calibration; change sets with what each change requires and why,
   and the dependency graph with a change's blast radius, evidence filters
-  and manual mappings.
+  and manual mappings; releases with why each gate decided, its evidence
+  and hash, the pinned suite, the audit trail, and overrides.
 * **Demo**: *Demo Co*'s support-refund agent with production-like tools,
   driven by a deterministic scripted planner (or Anthropic Claude when
   `DEMO_AGENT_MODEL=anthropic` and a key are set). Version 1.2.4 is good,
@@ -383,7 +400,8 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   (two new critical failures and one regressed case), the payments and
   orders APIs (OpenAPI) and the support desk's MCP tools, and two change
   sets — the prompt change 1.2.4 → 1.3.0 and the tool change 1.3.1 → 1.3.2 —
-  each listing the scenarios it requires and why.
+  each listing the scenarios it requires and why, and two gated releases:
+  1.2.4 → 1.3.0, **BLOCKED**, and its fix 1.2.4 → 1.3.1, which is not.
 
 ### Quick start (local)
 
@@ -420,6 +438,20 @@ make lint       # formatters, linters and type checkers for Go, Python and TypeS
 make down       # stop (keeps data) · make reset: wipe data and start again
 ```
 
+Gate a release from the command line (or CI) against the local stack:
+
+```bash
+make cli        # builds bin/agenttwin
+set -a; . ./.env; set +a
+AGENTTWIN_API_KEY=$AGENTTWIN_DEMO_API_KEY AGENTTWIN_WEB_URL=http://localhost:3000 \
+  bin/agenttwin release check --project support \
+    --baseline support-refund-agent@1.2.4 --candidate support-refund-agent@1.3.0 --ci
+echo $?         # 3: blocked, with the rules and evidence printed above
+```
+
+See [`packages/cli/README.md`](packages/cli/README.md) for the flags, the
+reports and a GitHub Actions step.
+
 Instrument your own agent with the Python SDK: see
 [`packages/sdk-python/README.md`](packages/sdk-python/README.md). Point
 `AGENTTWIN_OTLP_ENDPOINT` at `http://localhost:4318` and use the demo project
@@ -434,7 +466,7 @@ apps/
   web/                Next.js UI and its BFF (/api/v1 through the control plane)
 
 services/
-  control-plane/      Go · auth, tenancy, projects, agents, tool imports, change sets, audit, API edge
+  control-plane/      Go · auth, tenancy, projects, agents, tool imports, change sets, releases and gates, audit, API edge
   trace-service/      Go · OTLP ingestion, traces, outcomes
   graph-service/      Go · dependency graph, evidence, bounded blast radius
   simulation-service/ Python · scenarios, tool twins, faults, simulation runs

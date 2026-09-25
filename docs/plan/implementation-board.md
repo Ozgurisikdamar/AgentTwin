@@ -10,7 +10,7 @@ tested software and is committed separately. Status is updated as work lands.
 | 2 | Scenarios, declarative stateful tool twin, fault injection, simulation runs + UI | happy path and timeout-after-mutation scenarios run | done |
 | 3 | Evaluators (deterministic, trajectory, judge adapter), datasets, eval runs, baseline vs candidate | candidate regression detected | done |
 | 4 | Graph, manifest/OpenAPI/MCP import, observed edges, change set, bounded blast radius, impacted selection | prompt/tool change selects refund scenarios with reasons | done |
-| 5 | Release, gate rules, immutable evidence, CLI CI output, release UI | bad candidate BLOCKED | pending |
+| 5 | Release, gate rules, immutable evidence, CLI CI output, release UI | bad candidate BLOCKED | done |
 | 6 | Regression miner: features, embeddings, grouping, taxonomy, inbox, promotion | demo failure → regression case → auto-included in next gate | pending |
 | 7 | Runtime gateway: CEL policies, approvals, idempotency, SSRF-safe proxy, audit | over-limit refund requires approval; tampered args rejected | pending |
 | 8 | Tenant isolation, SSRF, redaction, chaos, load, security, E2E, docs, screenshots | Definition of Done checklist | pending |
@@ -265,6 +265,55 @@ Found on the way and fixed:
   all five service schemas.
 * **The graph's component search form shared its input's accessible name.**
   The Phase 4 e2e test found it; the form is now "Component search".
+
+## Phase 5 evidence (2026-09-25)
+
+Acceptance: *a bad candidate is BLOCKED.* It holds on a stack built from
+scratch, through the seed, through the CLI a CI job runs and through the UI
+(the Phase 5 e2e tests). Commands run on the Phase 5 code, with their results:
+
+| Command | Result |
+|---|---|
+| `make reset` (drop volumes, then `make dev`: build, start, wait until healthy, seed) | Stack healthy and seeded in 93 s. Besides everything Phase 4 seeded (5 manifests, the twin, 9 scenarios, 3 tool catalogs, 2 change sets, the two simulations, the dataset, the 1.3.0 evaluation, 40 conversations), 2 releases gated: **1.2.4 → 1.3.0 BLOCK**, exit code 3, risk index 90/100, rules `duplicate_side_effect`, `unverified_success`, `policy_violation`, `critical_failure`, `regression`, `semantic_regression`, evidence verified; **1.2.4 → 1.3.1 PASS**, exit code 0, risk index 10/100, no rule, evidence verified |
+| `bin/agenttwin release check --project support --baseline support-refund-agent@1.2.4 --candidate support-refund-agent@1.3.0 --ci` | **exit 3**. "Gate BLOCK. Blocked: an action took effect twice (1); success the final state disproves (1); a new policy violation (1); a critical expectation fails (3); a non-critical expectation newly fails (3); answers judged worse (1)." Required scenarios passed 6/9. Every rule with its scenario, expectation, what was observed ("The side effect refund:ORD-1001 was applied 2 times"), the first divergence ("At step 2 the baseline called get_refund_policy(order_id=ORD-1001); the candidate called refund_payment(amount=40, order_id=ORD-1001)") and the trace id. Evidence sha256 `890bf974…` (verified), details URL |
+| The same for 1.3.1 | **exit 0**. "Gate PASS. Every required scenario passed (9 of 9); no rule triggered." Risk index 10/100, evidence verified |
+| `release check --release <id> --format junit` / `--format json` | exit 3 both. JUnit: 11 tests (the gate, the 9 scenarios, the one rule without a scenario), 3 failures (the gate and the two scenarios that block; the warnings are reported in their output, not as failures), with the release, outcome, exit code, risk index, rules version and evidence hash as properties. JSON: the gate as the API answered it |
+| `bin/agenttwin doctor` | control plane ready; API key credential in Demo Co; "can create and check releases" |
+| `make e2e` | 23/23 Playwright tests. Phase 1: 7, Phase 2: 5, Phase 3: 4, Phase 4: 4, Phase 5: 3. The Phase 5 tests cover: the seeded 1.3.0 BLOCKED and 1.3.1 not, why, every rule's evidence, the verified hash and the eval case it opens; a release created in the UI that evaluates and blocks on its own, an engineer who cannot override it, a reviewer who does (a reason too short is refused) and a gate that then reads "Overridden, originally BLOCK" everywhere with CI's exit code 0, and the owner's audit trail; a viewer's read-only view. A second run on the same stack failed once (the test took the newest 1.3.0 release, which the first run had overridden); the tests now pick the seed's releases by title, and passed three more times on that stack (twice alone, then in this full run). Screenshots in `docs/screenshots/phase5-*.png` |
+| `make doctor` | 0 failed, 1 warning (development placeholder secrets). All migrations applied (control plane 4, trace 1, graph 1, simulation 3, evaluation 2); every service ready; dead-letter queues empty; no event waiting without a consumer. Demo workspace: traces, 9 scenarios, a completed evaluation run and, new in Phase 5, the gated releases with their outcomes (after two e2e runs: 2 BLOCK, 2 PASS, 2 OVERRIDDEN — the seed's and the CLI's releases, and one overridden release per e2e run) |
+| `make lint` | gofmt clean; `go vet` clean; golangci-lint 0 issues; ruff, ruff format (187 files) and mypy strict (84 files) clean; Prettier, ESLint and `tsc` clean |
+| `make test` | Go: 285 tests and 233 subtests pass with real PostgreSQL and RabbitMQ (0 failed, 0 skipped; 245 and 141 at the end of Phase 4). Python: 686 (core 194, simulation service 171, evaluation service 142, SDK 74, demo 56, contracts and document checks 49). Web: 241 (24 files). 367 s |
+| `make contracts-check` | 14 event schemas and 5 API documents (92 operations, 86 at the end of Phase 4) compatible with the baselines; the five generated web type files up to date |
+
+## Phase 5 progress (2026-09-25)
+
+Pieces landed, each with its tests and the mutations they catch (same method
+as Phases 3 and 4):
+
+| Piece | Tests | Mutations caught |
+|---|---|---|
+| Gate rules (`control-plane/internal/gate`, spec §28, §67) — PASS/WARN/BLOCK from the release's evaluation, the change's impact and the resolved gate policy; missing evidence blocks; every rule names its evidence; counts, coverage ratios, a risk index that never decides, the CLI exit code | the table of spec §67 and every rule's own case (32 cases), evidence down to both sides and the first divergence, determinism over shuffled inputs, two properties over 2,000 random releases (a missing result never passes; a new critical failure never helps). Coverage 97.3% | 31 of 31 — three survived a first run and got tests; the determinism test found evidence keeping its input order |
+| A release runs exactly the scenario versions it selected (simulation and evaluation services) — pairs pinned to scenario versions, one evaluation run per release evaluation, judge spend capped by the gate budget | 9 release-run tests (7 on PostgreSQL over the real simulation service and demo agent) and 3 new pair tests | 46 of 46 (evaluation service), 15 of 15 (simulation service) |
+| The release's evidence mapped for the gate (`control-plane/internal/release`) — the suite pinned from the impact, which components the suite tests, new privileges, the run's cases and observations, judge calibration, cost | the mapping over a real captured release evaluation (1.2.4 → 1.3.0) plus unit tests | 34 of 34, and 1 of 1 on the impact's version id |
+| Releases, revisioned evaluations, hashed gate decisions, overrides (ADR-0031) — API, event consumer, immutability triggers, audit | integration tests through contract-checked fakes: the bad candidate BLOCKED, a mirrored candidate passes, an empty suite warns; overrides, tampering, missing evidence, retries, tenancy, CI keys | 50 of 51 (the survivor is enforced again by a unique constraint) |
+| `agenttwin` CLI (spec §39, §101) — `release check` (text, JSON, JUnit; exit codes 0/2/3/4; CI detection; idempotent retries), `agent validate`, `agent register`, `doctor` | every command against a fake control plane answering with the control plane's captured responses, each exchange held to the contract | 50 of 50 |
+| Web: `/releases` and `/releases/{id}` (spec §41.2, §78, §91, §92, §122) — the list's columns, why a gate decided, every rule's evidence linked to the eval case and the trace, coverage, risk index, revisions, the hashed evidence and whether it verifies, the override form; an override never reads as a pass | 27 (helpers 11, components 16) on captured live payloads, typed by the contract | 84 of 84 (helpers 55, components 29) |
+| SDK and demo seed — create, list, read and evaluate releases, wait for a gate; the seed gates 1.3.0 and 1.3.1 and fails when a gate does not decide, decides without evidence or does not verify | SDK exchanges held to the contract; seed tests with fakes | 10 of 10 |
+| Phase 5 end to end (`apps/web/e2e/phase5-releases.spec.ts`) | 3 Playwright tests against the running stack: the seeded bad candidate BLOCKED and its fix not, with why, evidence and the eval case it opens; a release created in the UI, gated, then overridden by a reviewer without reading as a pass, with the audit trail; a viewer's read-only view | — |
+
+Found on the way and fixed:
+
+* **Rules gave different answers to the same evidence in another order.**
+  The gate's determinism test (shuffled inputs) found evidence without a
+  scenario keeping its input order; rules and evidence are now sorted.
+* **A release evaluated too early pins a suite from an incomplete impact.**
+  The demo seed evaluates its releases only once the dependency graph knows
+  their change set; an evaluation started before would have run a suite that
+  misses the scenarios the change reaches.
+* **Every short id read alike.** The Phase 5 screenshots showed a user, an
+  API key and two evaluation runs all labelled `01a0d92e`: the web shortened
+  identifiers to their first 8 characters, which in a UUIDv7 are its
+  creation time. A UUID now keeps its random end; hashes keep their start.
 
 ## Definition of Done tracking
 

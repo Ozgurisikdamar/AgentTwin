@@ -31,3 +31,16 @@ exposed the disagreement: the confirming re-read shows "Retries 0".
   rewards) no longer counts as a retry or triggers a violation.
 * The rule lives in three languages until the evaluation service owns trace
   features (Phase 3); a change must update all three and their tests.
+
+## Addendum (2026-09-25, Phase 3)
+The `maxRetries` scenario expectation counted every identical repeat of a
+call, so it still called 1.2.4's confirming re-read a retry — the
+disagreement this ADR removed from traces had survived in the evaluator. The
+rule now also lives in `agenttwin_core.evaluators.signals.retries`, applied
+to the twin's records: the previous call of the same tool had the same
+arguments and failed. The twin's transport faults (`dropped`, `partial`,
+`malformed`) reach the agent as unusable answers and count as failures; a
+definitive `not_found` does not. The evaluator's version is `1.1.0` (1.0.0
+counted repeats), and the baseline/candidate comparison counts retries with
+the same function, so a verdict and a comparison never count one run
+differently.

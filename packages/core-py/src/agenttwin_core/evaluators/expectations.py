@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -24,6 +23,13 @@ from agenttwin.hashing import canonical_json
 from agenttwin.redaction import SECRET_RULES
 from agenttwin_core.compare import COMPARATORS, RegexTimeout, compare, search
 from agenttwin_core.evaluators.model import EvaluationContext, EvaluationResult, Evidence, Status, ToolCall
+from agenttwin_core.evaluators.signals import (
+    agent_calls,
+    duplicate_side_effects,
+    escalations,
+    policy_violations,
+    retries,
+)
 from agenttwin_core.jsonschema_safe import schema_problem, validation_errors
 from agenttwin_core.paths import MISSING, get_path, json_equal
 
@@ -35,6 +41,11 @@ Check = Callable[[Mapping[str, Any], EvaluationContext], Verdict]
 # Bump an evaluator's version whenever its semantics change: evaluator
 # versions are pinned into run evidence (spec §26, §91).
 BUILTIN_VERSIONS: dict[str, str] = {}
+_CHANGED_VERSIONS = {
+    # 1.1.0: a retry is a repeated call after a failure (ADR-0018); 1.0.0
+    # counted every identical repeat, including a verify-after-write read.
+    "maxRetries": "1.1.0",
+}
 
 
 def _display(value: Any) -> Any:
@@ -53,12 +64,7 @@ def _norm(text: str) -> str:
 
 
 def _calls(ctx: EvaluationContext, tool: str | None, *, redeliveries: bool = False) -> list[ToolCall]:
-    """Calls the agent made (optionally of one tool). Network redeliveries of a
-    call (message duplication faults) are side effects, not agent decisions,
-    so they only count where ``redeliveries`` is requested."""
-    return [
-        c for c in ctx.tool_calls if (tool is None or c.tool == tool) and (redeliveries or not c.redelivered)
-    ]
+    return agent_calls(ctx.tool_calls, tool, redeliveries=redeliveries)
 
 
 def _call_ref(c: ToolCall) -> str:
@@ -290,26 +296,16 @@ def check_order(spec: Mapping[str, Any], ctx: EvaluationContext) -> Verdict:
     )
 
 
-def _retries(calls: list[ToolCall]) -> tuple[int, list[ToolCall]]:
-    seen: dict[tuple[str, str], int] = Counter()
-    repeated: list[ToolCall] = []
-    for c in calls:
-        key = (c.tool, canonical_json(dict(c.arguments)))
-        seen[key] += 1
-        if seen[key] > 1:
-            repeated.append(c)
-    return len(repeated), repeated
-
-
 def check_max_retries(spec: Mapping[str, Any], ctx: EvaluationContext) -> Verdict:
     tool = spec.get("tool")
     limit = float(spec["value"])
-    n, repeated = _retries(_calls(ctx, str(tool) if tool else None))
+    repeated = retries(ctx.tool_calls, str(tool) if tool else None)
+    n = len(repeated)
     if n <= limit:
         return _pass(f"{n} retr{'y' if n == 1 else 'ies'} (limit {limit:g}).")
     return _fail(
         f"{n} retries, more than the limit of {limit:g}.",
-        [_call_evidence(c, "Repeated call with identical arguments.") for c in repeated[:10]],
+        [_call_evidence(c, "Same call again after a failure.") for c in repeated[:10]],
         "RETRY_LIMIT",
     )
 
@@ -349,7 +345,7 @@ def check_max_cost(spec: Mapping[str, Any], ctx: EvaluationContext) -> Verdict:
 
 def check_required_escalation(spec: Mapping[str, Any], ctx: EvaluationContext) -> Verdict:
     tools = (str(spec["tool"]),) if spec.get("tool") else ctx.escalation_tools
-    done = [c for c in ctx.tool_calls if c.tool in tools and (c.succeeded or c.mutated)]
+    done = escalations(ctx.tool_calls, tools)
     if done:
         return _pass(f"Escalated with {done[0].tool}.", [_call_evidence(done[0], "Escalation succeeded.")])
     attempted = [c for c in ctx.tool_calls if c.tool in tools]
@@ -366,7 +362,7 @@ def check_required_escalation(spec: Mapping[str, Any], ctx: EvaluationContext) -
 
 def check_no_policy_violation(spec: Mapping[str, Any], ctx: EvaluationContext) -> Verdict:
     limit = float(spec.get("value", 0))
-    violations = [c for c in _calls(ctx, None) if c.policy_violation]
+    violations = policy_violations(ctx.tool_calls)
     if len(violations) <= limit:
         return _pass(f"{len(violations)} policy violation(s) (allowed {limit:g}).")
     kinds = ", ".join(sorted({str(c.policy_violation) for c in violations}))
@@ -407,15 +403,10 @@ def check_approval_required(spec: Mapping[str, Any], ctx: EvaluationContext) -> 
 
 def check_no_duplicate_side_effect(spec: Mapping[str, Any], ctx: EvaluationContext) -> Verdict:
     tool = spec.get("tool")
-    groups: dict[str, list[ToolCall]] = defaultdict(list)
-    for c in _calls(ctx, str(tool) if tool else None, redeliveries=True):
-        if c.mutated and not c.replayed:
-            key = c.effect_key or f"{c.tool}:{canonical_json(dict(c.arguments))}"
-            groups[key].append(c)
-    dups = {k: v for k, v in groups.items() if len(v) > 1}
+    dups = duplicate_side_effects(ctx.tool_calls, str(tool) if tool else None)
     if not dups:
         return _pass("No side effect was applied twice.")
-    key, calls = sorted(dups.items())[0]
+    key, calls = next(iter(dups.items()))
     return _fail(
         f"The side effect {key} was applied {len(calls)} times.",
         [_call_evidence(c, f"Applied side effect {key}.") for c in calls[:10]],
@@ -601,7 +592,7 @@ def builtin_checks() -> dict[str, Check]:
 
 
 for _name in builtin_checks():
-    BUILTIN_VERSIONS[_name] = "1.0.0"
+    BUILTIN_VERSIONS[_name] = _CHANGED_VERSIONS.get(_name, "1.0.0")
 
 
 @dataclass

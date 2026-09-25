@@ -23,18 +23,24 @@ from agenttwin_core.openapi_contract import Contract, ContractViolation, contrac
 __all__ = [
     "ExchangeChecker",
     "agent",
+    "agent_result",
     "agent_version",
     "agent_version_detail",
+    "case_detail",
     "case_summary",
     "error",
+    "expectation_result",
+    "expectation_spec",
     "manifest",
     "outcome",
     "project",
     "queued_case",
     "registered_version",
+    "retrieval_step",
     "run",
     "run_detail",
     "scenario",
+    "tool_step",
     "twin",
     "twin_summary",
     "uuid",
@@ -319,6 +325,208 @@ def case_summary(position: int, name: str, status: str, **over: Any) -> dict[str
 def run_detail(run_: Mapping[str, Any], cases: list[dict[str, Any]]) -> dict[str, Any]:
     """``getSimulation``: the run, its cases and no transitions."""
     return {"run": dict(run_), "cases": cases, "transitions": []}
+
+
+def tool_step(seq: int, tool: str, arguments: Mapping[str, Any] | None = None, **over: Any) -> dict[str, Any]:
+    """A tool call as the twin recorded it (a ``Step`` of ``getSimulationCase``).
+    ``over`` sets fields of the record; ``latency_ms`` sets the step's."""
+    latency = over.pop("latency_ms", 5.0)
+    http = over.get("http_status", 200)
+    record = {
+        "seq": seq,
+        "call_number": 1,
+        "tool": tool,
+        "arguments": dict(arguments or {}),
+        "http_status": http,
+        "status": "ok",
+        "error_code": None,
+        "response": {},
+        "risk": "READ",
+        "fault": None,
+        "mutated": False,
+        "expects_mutation": False,
+        "replayed": False,
+        "effect_key": None,
+        "cross_tenant": None,
+        "policy_violation": None,
+        "redelivered": False,
+        "changes": [],
+        "delay_ms": 0,
+    } | over
+    return {
+        "seq": seq,
+        "kind": "tool_call",
+        "tool": tool,
+        "latency_ms": latency,
+        "created_at": NOW,
+        "record": record,
+    }
+
+
+def retrieval_step(seq: int, query: str, documents: list[str] | None = None) -> dict[str, Any]:
+    record = {
+        "seq": seq,
+        "kind": "retrieval",
+        "query": query,
+        "limit": 3,
+        "documents": [{"id": d, "trusted": True} for d in documents or []],
+    }
+    return {
+        "seq": seq,
+        "kind": "retrieval",
+        "tool": None,
+        "latency_ms": 1.0,
+        "created_at": NOW,
+        "record": record,
+    }
+
+
+def expectation_result(
+    expectation_id: str,
+    status: str = "PASS",
+    *,
+    type_: str = "toolCalled",
+    critical: bool = False,
+    **over: Any,
+) -> dict[str, Any]:
+    """One expectation result of a case (``ExpectationResult``)."""
+    return {
+        "status": status,
+        "reason": over.pop("reason", f"{expectation_id}: {status.lower()}"),
+        "evaluator": f"expectation.{type_}",
+        "evaluator_version": "1.0.0",
+        "score": {"PASS": 1.0, "FAIL": 0.0}.get(status),
+        "label": None,
+        "critical": critical,
+        "expectation": {"id": expectation_id, "type": type_, "critical": critical},
+        "evidence": [],
+    } | over
+
+
+def agent_result(**over: Any) -> dict[str, Any]:
+    """What the simulation kept of the agent's answer (``AgentResult``)."""
+    return {
+        "kind": "ok",
+        "http_status": 200,
+        "elapsed_ms": 80.0,
+        "output": "Done.",
+        "status": "completed",
+        "agent_version": "1.2.4",
+        "model": "scripted-planner",
+        "model_kind": "deterministic-fake",
+        "steps": 3,
+        "claimed_outcome": "SUCCESS",
+        "business_outcome": None,
+        "tool_calls": [],
+    } | over
+
+
+# The fields scenario.v1 requires per expectation type, with a plausible
+# value, so a case's embedded scenario document is valid (ADR-0021).
+_REQUIRED_FIELDS: dict[str, dict[str, Any]] = {
+    "state": {"path": "orders"},
+    "stateUnchanged": {"path": "orders"},
+    "outputJsonPath": {"path": "$.status", "equals": "ok"},
+    "toolCalled": {"tool": "lookup_order"},
+    "toolNotCalled": {"tool": "delete_customer"},
+    "toolArgs": {"tool": "refund_payment", "path": "amount", "lte": 100},
+    "toolStatus": {"tool": "refund_payment", "status": 200},
+    "approvalRequired": {"tool": "refund_payment"},
+    "maxToolCalls": {"value": 10},
+    "maxRetries": {"value": 1},
+    "maxSteps": {"value": 10},
+    "maxLatencyMs": {"value": 5000},
+    "maxCostUsd": {"value": 1},
+    "order": {"mustCall": ["get_refund_policy"], "before": ["refund_payment"]},
+    "finalOutcome": {"equals": "SUCCESS"},
+    "outputContains": {"value": "refund"},
+    "outputNotContains": {"value": "password"},
+    "outputRegex": {"pattern": "refund"},
+    "outputJsonSchema": {"schema": {"type": "object"}},
+    "semantic": {"rubric": "The reply explains what happened to the refund."},
+}
+
+
+def expectation_spec(result: Mapping[str, Any]) -> dict[str, Any]:
+    """The scenario expectation an ``expectation_result`` is for."""
+    meta = result["expectation"]
+    spec = {"id": meta["id"], "type": meta["type"], "critical": meta["critical"]}
+    return spec | _REQUIRED_FIELDS.get(str(meta["type"]), {})
+
+
+def case_detail(
+    position: int,
+    name: str,
+    status: str,
+    *,
+    steps: list[dict[str, Any]] | None = None,
+    results: list[dict[str, Any]] | None = None,
+    agent: dict[str, Any] | None = None,
+    initial: dict[str, Any] | None = None,
+    final: dict[str, Any] | None = None,
+    **over: Any,
+) -> dict[str, Any]:
+    """``getSimulationCase``: a finished case with its steps and results. The
+    verdict is computed from ``results`` as the simulation worker would."""
+    results = results if results is not None else [expectation_result("e1")]
+    counts = {k: sum(1 for r in results if r["status"] == k) for k in ("PASS", "FAIL", "ERROR", "SKIPPED")}
+    evaluated = counts["PASS"] + counts["FAIL"] + counts["ERROR"]
+    verdict = None
+    if status in ("PASSED", "FAILED", "ERRORED"):
+        verdict = {
+            "status": status,
+            "reason": over.get("reason") or f"{name} {status.lower()}",
+            "passed": counts["PASS"],
+            "failed": counts["FAIL"],
+            "errored": counts["ERROR"],
+            "skipped": counts["SKIPPED"],
+            "critical_failures": sum(1 for r in results if r["critical"] and r["status"] == "FAIL"),
+            "score": counts["PASS"] / evaluated if evaluated else None,
+            "labels": sorted({r["label"] for r in results if r["status"] == "FAIL" and r["label"]}),
+        }
+    steps = steps if steps is not None else []
+    summary = (
+        case_summary(
+            position,
+            name,
+            status,
+            call_count=sum(1 for s in steps if s["kind"] == "tool_call"),
+            reason=verdict["reason"] if verdict else None,
+            latency_ms=over.pop("latency_ms", 120.0),
+            labels=verdict["labels"] if verdict else [],
+            score=verdict["score"] if verdict else None,
+        )
+        | over
+    )
+    return {
+        "case": summary
+        | {
+            "verdict": verdict,
+            "results": results,
+            "state_diff": [],
+            "agent_result": agent if agent is not None else agent_result(),
+        },
+        "scenario": {
+            "document": {
+                "apiVersion": "agenttwin.dev/v1",
+                "kind": "Scenario",
+                "metadata": {"name": name, "severity": summary["severity"]},
+                "spec": {
+                    "agent": "support-refund-agent",
+                    "twin": "demo-co-support",
+                    "input": {"message": "Please refund my order."},
+                    "expectations": [expectation_spec(r) for r in results],
+                },
+            },
+            "faults": [],
+        },
+        "twin": {"id": uuid(0xC101), "name": "demo-co-support", "version": 1, "spec_hash": sha256("c")},
+        "steps": steps,
+        "state": {
+            "initial": initial if initial is not None else {},
+            "final": final if final is not None else {},
+        },
+    }
 
 
 def error(code: str, message: str, **details: Any) -> dict[str, Any]:

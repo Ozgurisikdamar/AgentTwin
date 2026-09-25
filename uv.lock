@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "agenttwin",
     "agenttwin-core",
+    "agenttwin-evaluation",
     "agenttwin-simulation",
     "support-refund-agent",
 ]
@@ -83,6 +84,17 @@ requires-dist = [
     { name = "regex", specifier = ">=2026.9" },
     { name = "uvicorn", specifier = ">=0.53,<1" },
 ]
+
+[[package]]
+name = "agenttwin-evaluation"
+version = "0.1.0"
+source = { editable = "services/evaluation-service" }
+dependencies = [
+    { name = "agenttwin-core" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "agenttwin-core", editable = "packages/core-py" }]
 
 [[package]]
 name = "agenttwin-simulation"

@@ -54,6 +54,38 @@ class ToolCall:
     policy_violation: str | None = None
     latency_ms: float = 0.0
 
+    @classmethod
+    def from_record(cls, record: Mapping[str, Any], latency_ms: float | None = None) -> ToolCall:
+        """A tool call as the twin recorded it (the simulation contract's
+        ``ToolCallRecord``): the one conversion the simulation worker and the
+        evaluation service share, so both evaluate the same call."""
+
+        def text(key: str) -> str | None:
+            value = record.get(key)
+            return value if isinstance(value, str) else None
+
+        arguments = record.get("arguments")
+        return cls(
+            seq=int(record["seq"]),
+            tool=str(record["tool"]),
+            arguments=dict(arguments) if isinstance(arguments, Mapping) else {},
+            http_status=int(record.get("http_status") or 0),
+            status=str(record.get("status") or "error"),
+            response=record.get("response"),
+            error_code=text("error_code"),
+            risk=text("risk"),
+            fault=text("fault"),
+            mutated=bool(record.get("mutated", False)),
+            expects_mutation=bool(record.get("expects_mutation", False)),
+            replayed=bool(record.get("replayed", False)),
+            approved=bool(record.get("approved", False)),
+            redelivered=bool(record.get("redelivered", False)),
+            effect_key=text("effect_key"),
+            cross_tenant=text("cross_tenant"),
+            policy_violation=text("policy_violation"),
+            latency_ms=float(latency_ms or record.get("delay_ms") or 0.0),
+        )
+
     @property
     def succeeded(self) -> bool:
         return 200 <= self.http_status < 300
@@ -107,6 +139,17 @@ class Evidence:
             out["actual"] = self.actual
         return out
 
+    @classmethod
+    def from_json(cls, raw: Mapping[str, Any]) -> Evidence:
+        ref = raw.get("ref")
+        return cls(
+            kind=str(raw.get("kind") or ""),
+            detail=str(raw.get("detail") or ""),
+            ref=ref if isinstance(ref, str) else None,
+            expected=raw.get("expected"),
+            actual=raw.get("actual"),
+        )
+
 
 @dataclass(frozen=True)
 class EvaluationResult:
@@ -135,6 +178,26 @@ class EvaluationResult:
             "expectation": dict(self.expectation),
             "evidence": [e.to_json() for e in self.evidence],
         }
+
+    @classmethod
+    def from_json(cls, raw: Mapping[str, Any]) -> EvaluationResult:
+        """The inverse of ``to_json`` (a stored or received expectation result)."""
+        status = raw.get("status")
+        if status not in ("PASS", "FAIL", "ERROR", "SKIPPED"):
+            raise ValueError(f"unknown result status {status!r}")
+        score, label = raw.get("score"), raw.get("label")
+        expectation = raw.get("expectation")
+        evidence = [e for e in raw.get("evidence") or () if isinstance(e, Mapping)]
+        return cls(
+            status=status,
+            reason=str(raw.get("reason") or ""),
+            evaluator=str(raw.get("evaluator") or "unknown"),
+            evaluator_version=str(raw.get("evaluator_version") or "0"),
+            score=float(score) if isinstance(score, int | float) and not isinstance(score, bool) else None,
+            label=label if isinstance(label, str) else None,
+            evidence=tuple(Evidence.from_json(e) for e in evidence),
+            expectation=dict(expectation) if isinstance(expectation, Mapping) else {},
+        )
 
 
 class Evaluator(Protocol):

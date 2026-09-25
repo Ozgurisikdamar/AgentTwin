@@ -250,18 +250,48 @@ def test_order() -> None:
     assert run(spec, EvaluationContext(tool_calls=(call(1, "lookup_order"),))).status == "PASS"  # vacuous
 
 
-def test_max_retries_counts_identical_repeats() -> None:
-    same = (refund(1, http=504, status="timeout", mutated=True), refund(2), refund(3))
-    assert (
-        run(
-            {"type": "maxRetries", "tool": "refund_order", "value": 2}, EvaluationContext(tool_calls=same)
-        ).status
-        == "PASS"
-    )
-    bad = run({"type": "maxRetries", "tool": "refund_order", "value": 1}, EvaluationContext(tool_calls=same))
-    assert bad.status == "FAIL" and bad.label == "RETRY_LIMIT" and len(bad.evidence) == 2
-    different = (refund(1, 10), refund(2, 20))
+def test_max_retries_counts_calls_repeated_after_a_failure() -> None:
+    # ADR-0018: a retry is the same call again after it failed.
+    timed_out = refund(1, http=504, status="timeout", mutated=True)
+    twice = (timed_out, refund(2, http=504, status="timeout", mutated=True), refund(3))
+    spec = {"type": "maxRetries", "tool": "refund_order", "value": 2}
+    assert run(spec, EvaluationContext(tool_calls=twice)).status == "PASS"
+    bad = run({**spec, "value": 1}, EvaluationContext(tool_calls=twice))
+    assert bad.status == "FAIL" and bad.label == "RETRY_LIMIT"
+    assert [e.ref for e in bad.evidence] == ["tool_call:2", "tool_call:3"]
+    # A call after a success is new: the third refund follows a success.
+    once = (timed_out, refund(2), refund(3))
+    assert run({**spec, "value": 1}, EvaluationContext(tool_calls=once)).status == "PASS"
+    different = (refund(1, 10, http=504, status="timeout"), refund(2, 20))
     assert run({"type": "maxRetries", "value": 0}, EvaluationContext(tool_calls=different)).status == "PASS"
+
+
+def test_a_verify_after_write_read_is_not_a_retry() -> None:
+    # The safe pattern of 1.2.4: refund (times out), re-read the order, go on.
+    lookup = {"order_id": "ORD-1"}
+    calls = (
+        call(1, "lookup_order", lookup),
+        refund(2, http=504, status="timeout"),
+        call(3, "lookup_order", lookup),
+    )
+    assert run({"type": "maxRetries", "value": 0}, EvaluationContext(tool_calls=calls)).status == "PASS"
+    assert BUILTIN_VERSIONS["maxRetries"] == "1.1.0"
+
+
+def test_a_retry_is_counted_against_the_previous_call_of_that_tool() -> None:
+    # A different call in between does not hide a retry of the failed one...
+    lookup = call(2, "lookup_order", {"order_id": "ORD-1"})
+    calls = (refund(1, http=429, status="rate_limited"), lookup, refund(3))
+    assert run({"type": "maxRetries", "value": 0}, EvaluationContext(tool_calls=calls)).label == "RETRY_LIMIT"
+    # ...but a success of the same tool with other arguments does.
+    calls = (refund(1, 10, http=429, status="rate_limited"), refund(2, 20), refund(3, 10))
+    assert run({"type": "maxRetries", "value": 0}, EvaluationContext(tool_calls=calls)).status == "PASS"
+    # Transport faults are failures the agent sees; a definitive 404 is not.
+    for status, http in (("dropped", 0), ("malformed", 200), ("partial", 200), ("not_found", 404)):
+        calls = (refund(1, http=http, status=status), refund(2))
+        n = 0 if status == "not_found" else 1
+        result = run({"type": "maxRetries", "value": 0}, EvaluationContext(tool_calls=calls))
+        assert result.status == ("PASS" if n == 0 else "FAIL"), status
 
 
 def test_budgets() -> None:
@@ -574,3 +604,39 @@ def test_redeliveries_count_as_side_effects_not_agent_calls() -> None:
     # With an idempotency key the redelivery is a replay: no second effect.
     safe = EvaluationContext(tool_calls=(first, refund(2, mutated=False, replayed=True, redelivered=True)))
     assert run({"type": "noDuplicateSideEffect"}, safe).status == "PASS"
+
+
+def test_results_and_recorded_calls_read_back_from_json() -> None:
+    from agenttwin_core import api_fakes as fake
+    from agenttwin_core.evaluators import Evidence
+
+    original = EvaluationResult(
+        status="FAIL",
+        reason="refund_count: expected 1, got 2",
+        evaluator="expectation.state",
+        evaluator_version="1.0.0",
+        score=0.0,
+        label="STATE_MISMATCH",
+        evidence=(Evidence(kind="state", detail="orders.ORD-1.refund_count", expected=1, actual=2),),
+        expectation={"id": "refunded-once", "type": "state", "critical": True},
+    )
+    assert EvaluationResult.from_json(original.to_json()) == original
+    with pytest.raises(ValueError, match="unknown result status"):
+        EvaluationResult.from_json({**original.to_json(), "status": "MAYBE"})
+    step = fake.tool_step(
+        3,
+        "refund_payment",
+        {"amount": 40},
+        risk="WRITE_IRREVERSIBLE",
+        mutated=True,
+        effect_key="refund:ORD-1",
+    )
+    call = ToolCall.from_record(step["record"], step["latency_ms"])
+    assert (call.seq, call.tool, call.risk, call.mutated, call.effect_key) == (
+        3,
+        "refund_payment",
+        "WRITE_IRREVERSIBLE",
+        True,
+        "refund:ORD-1",
+    )
+    assert call.arguments == {"amount": 40} and call.latency_ms == 5.0 and call.executed

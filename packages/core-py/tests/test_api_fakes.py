@@ -53,6 +53,21 @@ def test_builders_are_valid_contract_payloads(contract: Contract) -> None:
     ]
     contract.check_schema("RunDetail", fake.run_detail(fake.run(status="RUNNING"), cases))
     contract.check_schema("Error", fake.error("SCENARIO_INVALID", "invalid", problems=["x"]))
+    steps = [
+        fake.tool_step(1, "lookup_order", {"order_id": "ORD-1"}),
+        fake.retrieval_step(2, "refund policy", ["kb-1"]),
+        fake.tool_step(3, "refund_payment", {"amount": 40}, risk="WRITE_IRREVERSIBLE", mutated=True),
+    ]
+    for status in ("PASSED", "FAILED", "ERRORED"):
+        results = [
+            fake.expectation_result("e1", "PASS"),
+            fake.expectation_result("e2", "FAIL", type_="state", critical=True, label="STATE_MISMATCH"),
+            fake.expectation_result("e3", "SKIPPED", type_="semantic"),
+        ]
+        detail = fake.case_detail(0, "refund-happy-path", status, steps=steps, results=results)
+        contract.check_schema("CaseDetail", detail)
+    no_answer = fake.agent_result(kind="timeout", http_status=None, error="The agent did not answer.")
+    contract.check_schema("CaseDetail", fake.case_detail(1, "s1", "ERRORED", agent=no_answer))
     # Overrides are checked like everything else.
     with pytest.raises(ContractViolation, match="'SOMETIMES' is not one of"):
         contract.check_schema("PinnedRun", fake.run(status="SOMETIMES"))

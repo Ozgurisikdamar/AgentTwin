@@ -18,6 +18,7 @@ Grammar::
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections.abc import Mapping, Sequence
@@ -31,6 +32,7 @@ __all__ = [
     "PathError",
     "Segment",
     "delete_path",
+    "diff_state",
     "format_path",
     "get_path",
     "json_equal",
@@ -40,6 +42,9 @@ __all__ = [
 
 MAX_PATH_LENGTH = 500
 MAX_SEGMENTS = 64
+# diff_state: at most this many changes, each value shown up to this size.
+MAX_CHANGES = 100
+MAX_DISPLAY = 2000
 
 
 class _Missing:
@@ -247,3 +252,51 @@ def format_path(segments: Sequence[Segment]) -> str:
             escaped = str(seg).replace("\\", "\\\\").replace("'", "\\'")
             out.append(f"['{escaped}']")
     return "".join(out)
+
+
+def _display(value: Any) -> Any:
+    text = json.dumps(value, sort_keys=True, default=str)
+    return value if len(text) <= MAX_DISPLAY else text[: MAX_DISPLAY - 3] + "..."
+
+
+def diff_state(before: Any, after: Any, *, limit: int = MAX_CHANGES) -> list[dict[str, Any]]:
+    """The changes between two states, as ``{op, path, before?, after?}``."""
+    out: list[dict[str, Any]] = []
+
+    def walk(a: Any, b: Any, path: tuple[Segment, ...]) -> None:
+        if len(out) >= limit:
+            return
+        if isinstance(a, Mapping) and isinstance(b, Mapping):
+            for k in sorted(set(a) | set(b), key=str):
+                if len(out) >= limit:
+                    return
+                if k not in b:
+                    out.append({"op": "removed", "path": format_path((*path, k)), "before": _display(a[k])})
+                elif k not in a:
+                    out.append({"op": "added", "path": format_path((*path, k)), "after": _display(b[k])})
+                else:
+                    walk(a[k], b[k], (*path, k))
+            return
+        if isinstance(a, list) and isinstance(b, list):
+            if len(b) > len(a) and json_equal(a, b[: len(a)]):
+                for i in range(len(a), len(b)):
+                    if len(out) >= limit:
+                        return
+                    out.append({"op": "added", "path": format_path((*path, i)), "after": _display(b[i])})
+                return
+            if len(a) == len(b):
+                for i, (x, y) in enumerate(zip(a, b, strict=True)):
+                    walk(x, y, (*path, i))
+                return
+        if not json_equal(a, b):
+            out.append(
+                {
+                    "op": "changed",
+                    "path": format_path(path) or "$",
+                    "before": _display(a),
+                    "after": _display(b),
+                }
+            )
+
+    walk(before, after, ())
+    return out

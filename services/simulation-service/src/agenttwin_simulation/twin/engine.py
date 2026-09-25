@@ -28,6 +28,7 @@ from agenttwin_core.paths import (
     PathError,
     Segment,
     delete_path,
+    diff_state,
     format_path,
     get_path,
     json_equal,
@@ -55,8 +56,6 @@ __all__ = [
 Transport = Literal["normal", "drop", "partial", "malformed"]
 Mode = Literal["normal", "no_mutation", "first_effect_only", "stale"]
 MAX_ARGUMENT_BYTES = 256 * 1024
-MAX_CHANGES = 100
-MAX_DISPLAY = 2000
 
 
 # ---------------------------------------------------------------- data
@@ -173,25 +172,7 @@ class CallRecord:
         return cls(**{k: v for k, v in raw.items() if k in fields})
 
     def to_tool_call(self, latency_ms: float = 0.0) -> ToolCall:
-        return ToolCall(
-            seq=self.seq,
-            tool=self.tool,
-            arguments=self.arguments,
-            http_status=self.http_status,
-            status=self.status,
-            response=self.response,
-            error_code=self.error_code,
-            risk=self.risk,
-            fault=self.fault,
-            mutated=self.mutated,
-            expects_mutation=self.expects_mutation,
-            replayed=self.replayed,
-            effect_key=self.effect_key,
-            cross_tenant=self.cross_tenant,
-            policy_violation=self.policy_violation,
-            redelivered=self.redelivered,
-            latency_ms=latency_ms or float(self.delay_ms),
-        )
+        return ToolCall.from_record(self.to_json(), latency_ms)
 
 
 @dataclass
@@ -249,54 +230,6 @@ def call_status(http_status: int, transport: Transport = "normal", error_code: s
     if http_status in (400, 409, 422):
         return "invalid"
     return "error"
-
-
-def _display(value: Any) -> Any:
-    text = json.dumps(value, sort_keys=True, default=str)
-    return value if len(text) <= MAX_DISPLAY else text[: MAX_DISPLAY - 3] + "..."
-
-
-def diff_state(before: Any, after: Any, *, limit: int = MAX_CHANGES) -> list[dict[str, Any]]:
-    """The changes between two states, as ``{op, path, before?, after?}``."""
-    out: list[dict[str, Any]] = []
-
-    def walk(a: Any, b: Any, path: tuple[Segment, ...]) -> None:
-        if len(out) >= limit:
-            return
-        if isinstance(a, Mapping) and isinstance(b, Mapping):
-            for k in sorted(set(a) | set(b), key=str):
-                if len(out) >= limit:
-                    return
-                if k not in b:
-                    out.append({"op": "removed", "path": format_path((*path, k)), "before": _display(a[k])})
-                elif k not in a:
-                    out.append({"op": "added", "path": format_path((*path, k)), "after": _display(b[k])})
-                else:
-                    walk(a[k], b[k], (*path, k))
-            return
-        if isinstance(a, list) and isinstance(b, list):
-            if len(b) > len(a) and json_equal(a, b[: len(a)]):
-                for i in range(len(a), len(b)):
-                    if len(out) >= limit:
-                        return
-                    out.append({"op": "added", "path": format_path((*path, i)), "after": _display(b[i])})
-                return
-            if len(a) == len(b):
-                for i, (x, y) in enumerate(zip(a, b, strict=True)):
-                    walk(x, y, (*path, i))
-                return
-        if not json_equal(a, b):
-            out.append(
-                {
-                    "op": "changed",
-                    "path": format_path(path) or "$",
-                    "before": _display(a),
-                    "after": _display(b),
-                }
-            )
-
-    walk(before, after, ())
-    return out
 
 
 def _args_hash(args: Mapping[str, Any]) -> str:

@@ -16,7 +16,15 @@ from agenttwin_core.auth import Principal, Role
 from agenttwin_core.db import transaction
 from agenttwin_core.yamlsafe import dump_yaml, load_yaml
 from agenttwin_evaluation.regressions import DATASET
-from eval_testutil import ORG, OTHER_PROJECT, PROJECT, Stack, evaluation_stack, evaluation_with_simulation
+from eval_testutil import (
+    ORG,
+    OTHER_PROJECT,
+    PROJECT,
+    Stack,
+    evaluation_stack,
+    evaluation_with_simulation,
+    run_simulations,
+)
 from regression_testutil import AGENT, ingested, load, mine, mined, variant
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
@@ -604,3 +612,61 @@ async def test_an_archived_regression_dataset_takes_no_more_promotions() -> None
         assert (g["status"], g["scenario_name"], g["dataset_id"]) == ("CANDIDATE", None, None)
         ds = await ev.ok("GET", f"/api/v1/datasets/{first['dataset']['id']}")
         assert (ds["dataset"]["latest_version"], len(ds["version"]["cases"])) == (1, 1)
+
+
+# ---------------------------------------------------------------- acceptance (spec §3.4)
+
+
+async def test_a_production_failure_becomes_a_test_the_next_versions_are_held_to() -> None:
+    """The 1.3.0 incident (a refund that timed out after it was paid, retried
+    without an idempotency key: the customer was refunded twice) is mined,
+    drafted and promoted without editing. The regression dataset then holds
+    1.3.0 to it — it fails again — and 1.3.1, which reuses its idempotency
+    key, passes it: the regression is fixed in 1.3.1."""
+    async with evaluation_with_simulation() as (ev, sim):
+        dup, _ = await mined(ev, "duplicate-refund")
+        out = await ev.ok("POST", f"{BASE}/{dup}/promote", {}, status=201, as_=REVIEWER)
+        name, dataset = out["scenario"]["name"], out["dataset"]["id"]
+
+        async def evaluate(baseline: str, candidate: str) -> tuple[str, dict[str, Any]]:
+            run = await ev.ok(
+                "POST",
+                "/api/v1/eval-runs",
+                {
+                    "project_id": PROJECT,
+                    "agent": AGENT,
+                    "baseline_version": baseline,
+                    "candidate_version": candidate,
+                    "dataset_id": dataset,
+                    "seed": 7,
+                },
+                status=202,
+            )
+            run_id = run["run"]["id"]
+            assert await ev.worker.process_next() == run_id
+            await run_simulations(sim)
+            await ev.worker.check_waiting()
+            done = await ev.ok("GET", f"/api/v1/eval-runs/{run_id}")
+            assert done["run"]["status"] == "COMPLETED", done["run"]["error"]
+            [case] = done["cases"]
+            assert case["scenario_name"] == name
+            return str(run_id), case
+
+        # 1.2.4 was never affected; 1.3.0 is caught by the test made from its own failure.
+        run_id, case = await evaluate("1.2.4", "1.3.0")
+        assert (case["baseline"]["status"], case["candidate"]["status"]) == ("PASSED", "FAILED")
+        assert case["classification"] == "NEW_CRITICAL_FAILURE"
+        detail = await ev.ok("GET", f"/api/v1/eval-runs/{run_id}/cases/{name}")
+        failed = {r["expectation"]["id"] for r in detail["results"]["candidate"] if r["status"] == "FAIL"}
+        assert "no-duplicate-refund-payment" in failed
+        assert (await ev.ok("GET", f"{BASE}/{dup}"))["regression"]["status"] == "PROMOTED"
+
+        # 1.3.1 passes it: fixed in 1.3.1, by that run.
+        run_id, case = await evaluate("1.3.0", "1.3.1")
+        assert (case["baseline"]["status"], case["candidate"]["status"]) == ("FAILED", "PASSED")
+        g = (await ev.ok("GET", f"{BASE}/{dup}"))["regression"]
+        assert (g["status"], g["fixed_version"], g["fixed_eval_run_id"]) == (
+            "FIXED",
+            "1.3.1",
+            run_id,
+        )

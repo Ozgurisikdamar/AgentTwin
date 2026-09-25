@@ -930,6 +930,230 @@ paths:
         '500':
           $ref: '#/components/responses/Internal'
 
+  /api/v1/projects/{project_id}/imports/openapi:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: importOpenApi
+      tags: [Tools]
+      summary: Import tools from an OpenAPI document
+      description: |
+        Reads an OpenAPI 3.0 or 3.1 document (spec §20.2): every operation
+        becomes a tool whose input schema holds its parameters by name and
+        its JSON request body as `body`. Credentials (`Authorization`,
+        cookies) are not arguments. The document's own references are
+        inlined; a reference outside it is recorded, never fetched.
+
+        Risk is the importer's `risk_overrides`, else the operation's
+        `x-agenttwin-risk`, else the method: GET, HEAD, OPTIONS and TRACE
+        read, anything else is `WRITE_IRREVERSIBLE`. Each entry says where
+        its risk came from.
+
+        The registry gets a new tool version where the definition changed.
+        A tool an agent manifest declares is not overwritten
+        (`kept_manifest`), nor one another source defines
+        (`kept_other_source`): map the name in `names` to import it apart.
+        Every import is a revision of the catalog `name`; an import equal to
+        the latest revision stores nothing (`200`, `created: false`). The
+        graph links the tools to the API (`tool.catalog_imported.v1`).
+        Requires `agent.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportOpenApiRequest'
+      responses:
+        '201':
+          description: A catalog revision was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportedCatalog'
+        '200':
+          description: The import equals the latest revision; nothing was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportedCatalog'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: |
+            `IDEMPOTENCY_IN_PROGRESS`, or `CONCURRENT_CHANGE`: the registry
+            changed during the import (a manifest registered one of its
+            tools); retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}/imports/mcp:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: importMcp
+      tags: [Tools]
+      summary: Import the tools an MCP server lists
+      description: |
+        Reads the tools of an MCP server's `tools/list` result (every page;
+        MCP revision 2026-07-28), spec §20.3 and §33. The server is not
+        contacted: its URL is recorded without credentials. A tool needs an
+        object `inputSchema`; names become snake case (`getTicket` →
+        `get_ticket`) unless mapped in `names`.
+
+        Tool annotations are the server's claims and untrusted: they are
+        recorded with the risk they suggest (`hint_risk`) and set risk only
+        with `trust_annotations`. Otherwise a tool is `WRITE_IRREVERSIBLE`
+        unless `risk_overrides` says otherwise. Registry rules, revisions and
+        the graph are as for OpenAPI imports. Requires `agent.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportMcpRequest'
+      responses:
+        '201':
+          description: A catalog revision was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportedCatalog'
+        '200':
+          description: The import equals the latest revision; nothing was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportedCatalog'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: '`IDEMPOTENCY_IN_PROGRESS`, or `CONCURRENT_CHANGE` (retry).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}/tool-catalogs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listToolCatalogs
+      tags: [Tools]
+      summary: List tool catalogs
+      description: The project's imports, newest first, without their entries.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - name: source
+          in: query
+          schema:
+            $ref: '#/components/schemas/CatalogSource'
+        - name: name
+          in: query
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of catalogs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCatalogPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/tool-catalogs/{catalog_id}:
+    get:
+      operationId: getToolCatalog
+      tags: [Tools]
+      summary: Get a tool catalog
+      description: A catalog revision with its entries, skipped operations and warnings.
+      parameters:
+        - $ref: '#/components/parameters/CatalogId'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The catalog.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCatalog'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
   /api/v1/projects/{project_id}/change-sets:
     parameters:
       - $ref: '#/components/parameters/ProjectId'
@@ -1355,6 +1579,12 @@ components:
         $ref: '#/components/schemas/Uuid'
     AgentId:
       name: agent_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    CatalogId:
+      name: catalog_id
       in: path
       required: true
       schema:
@@ -2365,6 +2595,261 @@ components:
         created:
           type: boolean
           description: False when the definition equals the latest version (nothing was stored).
+
+    CatalogSource:
+      type: string
+      enum: [OPENAPI, MCP]
+    CatalogName:
+      type: string
+      description: Identifies an API or MCP server across imports (and in the graph).
+      pattern: ^[a-z0-9][a-z0-9_.-]{0,62}$
+    RiskOverrides:
+      type: object
+      maxProperties: 500
+      description: A risk per tool name or operation (operationId, `METHOD /path`, MCP tool name).
+      additionalProperties:
+        $ref: '#/components/schemas/Risk'
+    ToolNames:
+      type: object
+      maxProperties: 500
+      description: A registry tool name per operation.
+      additionalProperties:
+        type: string
+        pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+    ImportOpenApiRequest:
+      type: object
+      additionalProperties: false
+      required: [name, document]
+      properties:
+        name:
+          $ref: '#/components/schemas/CatalogName'
+        service:
+          type: string
+          description: The service the API belongs to; the graph links the API to it.
+          pattern: ^[a-z0-9][a-z0-9_.-]{0,62}$
+        document:
+          description: The OpenAPI document, as an object or as YAML or JSON text (at most 2 MiB).
+          oneOf:
+            - type: object
+            - type: string
+              minLength: 1
+        risk_overrides:
+          $ref: '#/components/schemas/RiskOverrides'
+        names:
+          $ref: '#/components/schemas/ToolNames'
+    McpServer:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          $ref: '#/components/schemas/CatalogName'
+        url:
+          type: string
+          description: The server's http(s) URL; recorded, never contacted.
+          maxLength: 500
+        version:
+          type: string
+          maxLength: 100
+    ImportMcpRequest:
+      type: object
+      additionalProperties: false
+      required: [server, tools]
+      properties:
+        server:
+          $ref: '#/components/schemas/McpServer'
+        protocol_version:
+          type: string
+          description: The MCP revision the server speaks (a different one than 2026-07-28 is warned about).
+          maxLength: 20
+        tools:
+          type: array
+          maxItems: 1000
+          description: The `tools` of the server's `tools/list` result, every page in order.
+          items: {}
+        risk_overrides:
+          $ref: '#/components/schemas/RiskOverrides'
+        names:
+          $ref: '#/components/schemas/ToolNames'
+        trust_annotations:
+          type: boolean
+          default: false
+          description: Let the server's annotations set risk (readOnlyHint → READ, destructiveHint false → WRITE_REVERSIBLE).
+    CatalogEntry:
+      type: object
+      required: [name, operation, description, risk, risk_source, mutating, input_schema, registry]
+      properties:
+        name:
+          type: string
+          description: The registry tool name.
+        operation:
+          type: string
+          description: The operationId (`METHOD /path` without one), or the MCP tool name.
+        method:
+          type: string
+        path:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        deprecated:
+          type: boolean
+        risk:
+          $ref: '#/components/schemas/Risk'
+        risk_source:
+          type: string
+          description: Where the risk came from, strongest first.
+          enum: [override, declared, annotation, inferred, default]
+        mutating:
+          type: boolean
+        input_schema:
+          type: object
+        hints:
+          type: object
+          description: The MCP server's annotations, as it sent them (untrusted).
+          additionalProperties:
+            type: boolean
+        hint_risk:
+          $ref: '#/components/schemas/Risk'
+        registry:
+          type: string
+          description: |
+            What the import did to the tool registry: a tool `created`, a new
+            version (`updated`), `unchanged`, or the tool kept as another
+            source defines it (`kept_manifest`, `kept_other_source`).
+          enum: [created, updated, unchanged, kept_manifest, kept_other_source]
+        tool_version:
+          type: integer
+          minimum: 1
+        registry_note:
+          type: string
+    CatalogSkipped:
+      type: object
+      required: [operation, reason]
+      properties:
+        operation:
+          type: string
+        reason:
+          type: string
+    CatalogCounts:
+      type: object
+      required: [tools, created, updated, unchanged, kept, skipped, warnings, mutating, risks]
+      properties:
+        tools:
+          type: integer
+          minimum: 1
+        created:
+          type: integer
+          minimum: 0
+        updated:
+          type: integer
+          minimum: 0
+        unchanged:
+          type: integer
+          minimum: 0
+        kept:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        warnings:
+          type: integer
+          minimum: 0
+        mutating:
+          type: integer
+          minimum: 0
+        risks:
+          type: object
+          description: Entries per risk level.
+          additionalProperties:
+            type: integer
+    ToolCatalogSummary:
+      type: object
+      required: [id, project_id, source, name, revision, service, title, api_version, spec_version, summary,
+                 content_sha256, document_sha256, created_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        source:
+          $ref: '#/components/schemas/CatalogSource'
+        name:
+          $ref: '#/components/schemas/CatalogName'
+        revision:
+          type: integer
+          minimum: 1
+        service:
+          type: [string, 'null']
+        title:
+          type: string
+        api_version:
+          type: string
+        spec_version:
+          type: string
+          description: The OpenAPI version, or the MCP revision the server speaks.
+        summary:
+          $ref: '#/components/schemas/CatalogCounts'
+        content_sha256:
+          $ref: '#/components/schemas/Sha256'
+        document_sha256:
+          $ref: '#/components/schemas/Sha256'
+        created_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    ToolCatalog:
+      allOf:
+        - $ref: '#/components/schemas/ToolCatalogSummary'
+        - type: object
+          required: [servers, options, entries, skipped, warnings]
+          properties:
+            servers:
+              type: array
+              description: Server URLs of the document, without credentials or query strings.
+              items:
+                type: string
+            options:
+              type: object
+              description: The importer's `risk_overrides`, `names` and `trust_annotations`.
+            entries:
+              type: array
+              items:
+                $ref: '#/components/schemas/CatalogEntry'
+            skipped:
+              type: array
+              items:
+                $ref: '#/components/schemas/CatalogSkipped'
+            warnings:
+              type: array
+              items:
+                type: string
+    ImportedCatalog:
+      allOf:
+        - $ref: '#/components/schemas/ToolCatalog'
+        - type: object
+          required: [created]
+          properties:
+            created:
+              type: boolean
+              description: False when the import equals the latest revision (nothing was stored).
+    ToolCatalogPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolCatalogSummary'
+        next_cursor:
+          type: [string, 'null']
+          description: The cursor of the next page; `null` on the last page.
 
     CreateChangeSetRequest:
       type: object

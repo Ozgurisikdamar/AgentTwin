@@ -2287,6 +2287,216 @@
         }
       }
     },
+    "GET /api/v1/projects/{project_id}/tool-catalogs": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:name": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:source": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"MCP\"",
+                "\"OPENAPI\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/source": [
+              "\"MCP\"",
+              "\"OPENAPI\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "api_version",
+              "content_sha256",
+              "created_at",
+              "created_by",
+              "document_sha256",
+              "id",
+              "name",
+              "project_id",
+              "revision",
+              "service",
+              "source",
+              "spec_version",
+              "summary",
+              "title"
+            ],
+            "/items/[]/summary": [
+              "created",
+              "kept",
+              "mutating",
+              "risks",
+              "skipped",
+              "tools",
+              "unchanged",
+              "updated",
+              "warnings"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/api_version": [
+              "string"
+            ],
+            "/items/[]/content_sha256": [
+              "string"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/document_sha256": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/revision": [
+              "integer"
+            ],
+            "/items/[]/service": [
+              "null",
+              "string"
+            ],
+            "/items/[]/source": [
+              "string"
+            ],
+            "/items/[]/spec_version": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "object"
+            ],
+            "/items/[]/summary/created": [
+              "integer"
+            ],
+            "/items/[]/summary/kept": [
+              "integer"
+            ],
+            "/items/[]/summary/mutating": [
+              "integer"
+            ],
+            "/items/[]/summary/risks": [
+              "object"
+            ],
+            "/items/[]/summary/skipped": [
+              "integer"
+            ],
+            "/items/[]/summary/tools": [
+              "integer"
+            ],
+            "/items/[]/summary/unchanged": [
+              "integer"
+            ],
+            "/items/[]/summary/updated": [
+              "integer"
+            ],
+            "/items/[]/summary/warnings": [
+              "integer"
+            ],
+            "/items/[]/title": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
     "GET /api/v1/projects/{project_id}/tools": {
       "parameters": {
         "header:x-agenttwin-org": {
@@ -2385,6 +2595,283 @@
               "string"
             ],
             "/items/[]/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/tool-catalogs/{catalog_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:catalog_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/entries/[]/hint_risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/registry": [
+              "\"created\"",
+              "\"kept_manifest\"",
+              "\"kept_other_source\"",
+              "\"unchanged\"",
+              "\"updated\""
+            ],
+            "/entries/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/risk_source": [
+              "\"annotation\"",
+              "\"declared\"",
+              "\"default\"",
+              "\"inferred\"",
+              "\"override\""
+            ],
+            "/source": [
+              "\"MCP\"",
+              "\"OPENAPI\""
+            ]
+          },
+          "required": {
+            "/": [
+              "api_version",
+              "content_sha256",
+              "created_at",
+              "created_by",
+              "document_sha256",
+              "entries",
+              "id",
+              "name",
+              "options",
+              "project_id",
+              "revision",
+              "servers",
+              "service",
+              "skipped",
+              "source",
+              "spec_version",
+              "summary",
+              "title",
+              "warnings"
+            ],
+            "/entries/[]": [
+              "description",
+              "input_schema",
+              "mutating",
+              "name",
+              "operation",
+              "registry",
+              "risk",
+              "risk_source"
+            ],
+            "/skipped/[]": [
+              "operation",
+              "reason"
+            ],
+            "/summary": [
+              "created",
+              "kept",
+              "mutating",
+              "risks",
+              "skipped",
+              "tools",
+              "unchanged",
+              "updated",
+              "warnings"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/api_version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/document_sha256": [
+              "string"
+            ],
+            "/entries": [
+              "array"
+            ],
+            "/entries/[]": [
+              "object"
+            ],
+            "/entries/[]/deprecated": [
+              "boolean"
+            ],
+            "/entries/[]/description": [
+              "string"
+            ],
+            "/entries/[]/hint_risk": [
+              "string"
+            ],
+            "/entries/[]/hints": [
+              "object"
+            ],
+            "/entries/[]/input_schema": [
+              "object"
+            ],
+            "/entries/[]/method": [
+              "string"
+            ],
+            "/entries/[]/mutating": [
+              "boolean"
+            ],
+            "/entries/[]/name": [
+              "string"
+            ],
+            "/entries/[]/operation": [
+              "string"
+            ],
+            "/entries/[]/path": [
+              "string"
+            ],
+            "/entries/[]/registry": [
+              "string"
+            ],
+            "/entries/[]/registry_note": [
+              "string"
+            ],
+            "/entries/[]/risk": [
+              "string"
+            ],
+            "/entries/[]/risk_source": [
+              "string"
+            ],
+            "/entries/[]/tags": [
+              "array"
+            ],
+            "/entries/[]/tags/[]": [
+              "string"
+            ],
+            "/entries/[]/title": [
+              "string"
+            ],
+            "/entries/[]/tool_version": [
+              "integer"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/options": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revision": [
+              "integer"
+            ],
+            "/servers": [
+              "array"
+            ],
+            "/servers/[]": [
+              "string"
+            ],
+            "/service": [
+              "null",
+              "string"
+            ],
+            "/skipped": [
+              "array"
+            ],
+            "/skipped/[]": [
+              "object"
+            ],
+            "/skipped/[]/operation": [
+              "string"
+            ],
+            "/skipped/[]/reason": [
+              "string"
+            ],
+            "/source": [
+              "string"
+            ],
+            "/spec_version": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/created": [
+              "integer"
+            ],
+            "/summary/kept": [
+              "integer"
+            ],
+            "/summary/mutating": [
+              "integer"
+            ],
+            "/summary/risks": [
+              "object"
+            ],
+            "/summary/skipped": [
+              "integer"
+            ],
+            "/summary/tools": [
+              "integer"
+            ],
+            "/summary/unchanged": [
+              "integer"
+            ],
+            "/summary/updated": [
+              "integer"
+            ],
+            "/summary/warnings": [
+              "integer"
+            ],
+            "/title": [
+              "string"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
               "string"
             ]
           }
@@ -6521,6 +7008,1172 @@
               "integer"
             ],
             "/title": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects/{project_id}/imports/mcp": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "server",
+              "tools"
+            ],
+            "/server": [
+              "name"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/names": [
+              "object"
+            ],
+            "/protocol_version": [
+              "string"
+            ],
+            "/risk_overrides": [
+              "object"
+            ],
+            "/server": [
+              "object"
+            ],
+            "/server/name": [
+              "string"
+            ],
+            "/server/url": [
+              "string"
+            ],
+            "/server/version": [
+              "string"
+            ],
+            "/tools": [
+              "array"
+            ],
+            "/trust_annotations": [
+              "boolean"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/entries/[]/hint_risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/registry": [
+              "\"created\"",
+              "\"kept_manifest\"",
+              "\"kept_other_source\"",
+              "\"unchanged\"",
+              "\"updated\""
+            ],
+            "/entries/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/risk_source": [
+              "\"annotation\"",
+              "\"declared\"",
+              "\"default\"",
+              "\"inferred\"",
+              "\"override\""
+            ],
+            "/source": [
+              "\"MCP\"",
+              "\"OPENAPI\""
+            ]
+          },
+          "required": {
+            "/": [
+              "api_version",
+              "content_sha256",
+              "created",
+              "created_at",
+              "created_by",
+              "document_sha256",
+              "entries",
+              "id",
+              "name",
+              "options",
+              "project_id",
+              "revision",
+              "servers",
+              "service",
+              "skipped",
+              "source",
+              "spec_version",
+              "summary",
+              "title",
+              "warnings"
+            ],
+            "/entries/[]": [
+              "description",
+              "input_schema",
+              "mutating",
+              "name",
+              "operation",
+              "registry",
+              "risk",
+              "risk_source"
+            ],
+            "/skipped/[]": [
+              "operation",
+              "reason"
+            ],
+            "/summary": [
+              "created",
+              "kept",
+              "mutating",
+              "risks",
+              "skipped",
+              "tools",
+              "unchanged",
+              "updated",
+              "warnings"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/api_version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/document_sha256": [
+              "string"
+            ],
+            "/entries": [
+              "array"
+            ],
+            "/entries/[]": [
+              "object"
+            ],
+            "/entries/[]/deprecated": [
+              "boolean"
+            ],
+            "/entries/[]/description": [
+              "string"
+            ],
+            "/entries/[]/hint_risk": [
+              "string"
+            ],
+            "/entries/[]/hints": [
+              "object"
+            ],
+            "/entries/[]/input_schema": [
+              "object"
+            ],
+            "/entries/[]/method": [
+              "string"
+            ],
+            "/entries/[]/mutating": [
+              "boolean"
+            ],
+            "/entries/[]/name": [
+              "string"
+            ],
+            "/entries/[]/operation": [
+              "string"
+            ],
+            "/entries/[]/path": [
+              "string"
+            ],
+            "/entries/[]/registry": [
+              "string"
+            ],
+            "/entries/[]/registry_note": [
+              "string"
+            ],
+            "/entries/[]/risk": [
+              "string"
+            ],
+            "/entries/[]/risk_source": [
+              "string"
+            ],
+            "/entries/[]/tags": [
+              "array"
+            ],
+            "/entries/[]/tags/[]": [
+              "string"
+            ],
+            "/entries/[]/title": [
+              "string"
+            ],
+            "/entries/[]/tool_version": [
+              "integer"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/options": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revision": [
+              "integer"
+            ],
+            "/servers": [
+              "array"
+            ],
+            "/servers/[]": [
+              "string"
+            ],
+            "/service": [
+              "null",
+              "string"
+            ],
+            "/skipped": [
+              "array"
+            ],
+            "/skipped/[]": [
+              "object"
+            ],
+            "/skipped/[]/operation": [
+              "string"
+            ],
+            "/skipped/[]/reason": [
+              "string"
+            ],
+            "/source": [
+              "string"
+            ],
+            "/spec_version": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/created": [
+              "integer"
+            ],
+            "/summary/kept": [
+              "integer"
+            ],
+            "/summary/mutating": [
+              "integer"
+            ],
+            "/summary/risks": [
+              "object"
+            ],
+            "/summary/skipped": [
+              "integer"
+            ],
+            "/summary/tools": [
+              "integer"
+            ],
+            "/summary/unchanged": [
+              "integer"
+            ],
+            "/summary/updated": [
+              "integer"
+            ],
+            "/summary/warnings": [
+              "integer"
+            ],
+            "/title": [
+              "string"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
+              "string"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/entries/[]/hint_risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/registry": [
+              "\"created\"",
+              "\"kept_manifest\"",
+              "\"kept_other_source\"",
+              "\"unchanged\"",
+              "\"updated\""
+            ],
+            "/entries/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/risk_source": [
+              "\"annotation\"",
+              "\"declared\"",
+              "\"default\"",
+              "\"inferred\"",
+              "\"override\""
+            ],
+            "/source": [
+              "\"MCP\"",
+              "\"OPENAPI\""
+            ]
+          },
+          "required": {
+            "/": [
+              "api_version",
+              "content_sha256",
+              "created",
+              "created_at",
+              "created_by",
+              "document_sha256",
+              "entries",
+              "id",
+              "name",
+              "options",
+              "project_id",
+              "revision",
+              "servers",
+              "service",
+              "skipped",
+              "source",
+              "spec_version",
+              "summary",
+              "title",
+              "warnings"
+            ],
+            "/entries/[]": [
+              "description",
+              "input_schema",
+              "mutating",
+              "name",
+              "operation",
+              "registry",
+              "risk",
+              "risk_source"
+            ],
+            "/skipped/[]": [
+              "operation",
+              "reason"
+            ],
+            "/summary": [
+              "created",
+              "kept",
+              "mutating",
+              "risks",
+              "skipped",
+              "tools",
+              "unchanged",
+              "updated",
+              "warnings"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/api_version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/document_sha256": [
+              "string"
+            ],
+            "/entries": [
+              "array"
+            ],
+            "/entries/[]": [
+              "object"
+            ],
+            "/entries/[]/deprecated": [
+              "boolean"
+            ],
+            "/entries/[]/description": [
+              "string"
+            ],
+            "/entries/[]/hint_risk": [
+              "string"
+            ],
+            "/entries/[]/hints": [
+              "object"
+            ],
+            "/entries/[]/input_schema": [
+              "object"
+            ],
+            "/entries/[]/method": [
+              "string"
+            ],
+            "/entries/[]/mutating": [
+              "boolean"
+            ],
+            "/entries/[]/name": [
+              "string"
+            ],
+            "/entries/[]/operation": [
+              "string"
+            ],
+            "/entries/[]/path": [
+              "string"
+            ],
+            "/entries/[]/registry": [
+              "string"
+            ],
+            "/entries/[]/registry_note": [
+              "string"
+            ],
+            "/entries/[]/risk": [
+              "string"
+            ],
+            "/entries/[]/risk_source": [
+              "string"
+            ],
+            "/entries/[]/tags": [
+              "array"
+            ],
+            "/entries/[]/tags/[]": [
+              "string"
+            ],
+            "/entries/[]/title": [
+              "string"
+            ],
+            "/entries/[]/tool_version": [
+              "integer"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/options": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revision": [
+              "integer"
+            ],
+            "/servers": [
+              "array"
+            ],
+            "/servers/[]": [
+              "string"
+            ],
+            "/service": [
+              "null",
+              "string"
+            ],
+            "/skipped": [
+              "array"
+            ],
+            "/skipped/[]": [
+              "object"
+            ],
+            "/skipped/[]/operation": [
+              "string"
+            ],
+            "/skipped/[]/reason": [
+              "string"
+            ],
+            "/source": [
+              "string"
+            ],
+            "/spec_version": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/created": [
+              "integer"
+            ],
+            "/summary/kept": [
+              "integer"
+            ],
+            "/summary/mutating": [
+              "integer"
+            ],
+            "/summary/risks": [
+              "object"
+            ],
+            "/summary/skipped": [
+              "integer"
+            ],
+            "/summary/tools": [
+              "integer"
+            ],
+            "/summary/unchanged": [
+              "integer"
+            ],
+            "/summary/updated": [
+              "integer"
+            ],
+            "/summary/warnings": [
+              "integer"
+            ],
+            "/title": [
+              "string"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects/{project_id}/imports/openapi": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "document",
+              "name"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document/oneOf[0]": [
+              "object"
+            ],
+            "/document/oneOf[1]": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/names": [
+              "object"
+            ],
+            "/risk_overrides": [
+              "object"
+            ],
+            "/service": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/entries/[]/hint_risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/registry": [
+              "\"created\"",
+              "\"kept_manifest\"",
+              "\"kept_other_source\"",
+              "\"unchanged\"",
+              "\"updated\""
+            ],
+            "/entries/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/risk_source": [
+              "\"annotation\"",
+              "\"declared\"",
+              "\"default\"",
+              "\"inferred\"",
+              "\"override\""
+            ],
+            "/source": [
+              "\"MCP\"",
+              "\"OPENAPI\""
+            ]
+          },
+          "required": {
+            "/": [
+              "api_version",
+              "content_sha256",
+              "created",
+              "created_at",
+              "created_by",
+              "document_sha256",
+              "entries",
+              "id",
+              "name",
+              "options",
+              "project_id",
+              "revision",
+              "servers",
+              "service",
+              "skipped",
+              "source",
+              "spec_version",
+              "summary",
+              "title",
+              "warnings"
+            ],
+            "/entries/[]": [
+              "description",
+              "input_schema",
+              "mutating",
+              "name",
+              "operation",
+              "registry",
+              "risk",
+              "risk_source"
+            ],
+            "/skipped/[]": [
+              "operation",
+              "reason"
+            ],
+            "/summary": [
+              "created",
+              "kept",
+              "mutating",
+              "risks",
+              "skipped",
+              "tools",
+              "unchanged",
+              "updated",
+              "warnings"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/api_version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/document_sha256": [
+              "string"
+            ],
+            "/entries": [
+              "array"
+            ],
+            "/entries/[]": [
+              "object"
+            ],
+            "/entries/[]/deprecated": [
+              "boolean"
+            ],
+            "/entries/[]/description": [
+              "string"
+            ],
+            "/entries/[]/hint_risk": [
+              "string"
+            ],
+            "/entries/[]/hints": [
+              "object"
+            ],
+            "/entries/[]/input_schema": [
+              "object"
+            ],
+            "/entries/[]/method": [
+              "string"
+            ],
+            "/entries/[]/mutating": [
+              "boolean"
+            ],
+            "/entries/[]/name": [
+              "string"
+            ],
+            "/entries/[]/operation": [
+              "string"
+            ],
+            "/entries/[]/path": [
+              "string"
+            ],
+            "/entries/[]/registry": [
+              "string"
+            ],
+            "/entries/[]/registry_note": [
+              "string"
+            ],
+            "/entries/[]/risk": [
+              "string"
+            ],
+            "/entries/[]/risk_source": [
+              "string"
+            ],
+            "/entries/[]/tags": [
+              "array"
+            ],
+            "/entries/[]/tags/[]": [
+              "string"
+            ],
+            "/entries/[]/title": [
+              "string"
+            ],
+            "/entries/[]/tool_version": [
+              "integer"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/options": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revision": [
+              "integer"
+            ],
+            "/servers": [
+              "array"
+            ],
+            "/servers/[]": [
+              "string"
+            ],
+            "/service": [
+              "null",
+              "string"
+            ],
+            "/skipped": [
+              "array"
+            ],
+            "/skipped/[]": [
+              "object"
+            ],
+            "/skipped/[]/operation": [
+              "string"
+            ],
+            "/skipped/[]/reason": [
+              "string"
+            ],
+            "/source": [
+              "string"
+            ],
+            "/spec_version": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/created": [
+              "integer"
+            ],
+            "/summary/kept": [
+              "integer"
+            ],
+            "/summary/mutating": [
+              "integer"
+            ],
+            "/summary/risks": [
+              "object"
+            ],
+            "/summary/skipped": [
+              "integer"
+            ],
+            "/summary/tools": [
+              "integer"
+            ],
+            "/summary/unchanged": [
+              "integer"
+            ],
+            "/summary/updated": [
+              "integer"
+            ],
+            "/summary/warnings": [
+              "integer"
+            ],
+            "/title": [
+              "string"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
+              "string"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/entries/[]/hint_risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/registry": [
+              "\"created\"",
+              "\"kept_manifest\"",
+              "\"kept_other_source\"",
+              "\"unchanged\"",
+              "\"updated\""
+            ],
+            "/entries/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/entries/[]/risk_source": [
+              "\"annotation\"",
+              "\"declared\"",
+              "\"default\"",
+              "\"inferred\"",
+              "\"override\""
+            ],
+            "/source": [
+              "\"MCP\"",
+              "\"OPENAPI\""
+            ]
+          },
+          "required": {
+            "/": [
+              "api_version",
+              "content_sha256",
+              "created",
+              "created_at",
+              "created_by",
+              "document_sha256",
+              "entries",
+              "id",
+              "name",
+              "options",
+              "project_id",
+              "revision",
+              "servers",
+              "service",
+              "skipped",
+              "source",
+              "spec_version",
+              "summary",
+              "title",
+              "warnings"
+            ],
+            "/entries/[]": [
+              "description",
+              "input_schema",
+              "mutating",
+              "name",
+              "operation",
+              "registry",
+              "risk",
+              "risk_source"
+            ],
+            "/skipped/[]": [
+              "operation",
+              "reason"
+            ],
+            "/summary": [
+              "created",
+              "kept",
+              "mutating",
+              "risks",
+              "skipped",
+              "tools",
+              "unchanged",
+              "updated",
+              "warnings"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/api_version": [
+              "string"
+            ],
+            "/content_sha256": [
+              "string"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/document_sha256": [
+              "string"
+            ],
+            "/entries": [
+              "array"
+            ],
+            "/entries/[]": [
+              "object"
+            ],
+            "/entries/[]/deprecated": [
+              "boolean"
+            ],
+            "/entries/[]/description": [
+              "string"
+            ],
+            "/entries/[]/hint_risk": [
+              "string"
+            ],
+            "/entries/[]/hints": [
+              "object"
+            ],
+            "/entries/[]/input_schema": [
+              "object"
+            ],
+            "/entries/[]/method": [
+              "string"
+            ],
+            "/entries/[]/mutating": [
+              "boolean"
+            ],
+            "/entries/[]/name": [
+              "string"
+            ],
+            "/entries/[]/operation": [
+              "string"
+            ],
+            "/entries/[]/path": [
+              "string"
+            ],
+            "/entries/[]/registry": [
+              "string"
+            ],
+            "/entries/[]/registry_note": [
+              "string"
+            ],
+            "/entries/[]/risk": [
+              "string"
+            ],
+            "/entries/[]/risk_source": [
+              "string"
+            ],
+            "/entries/[]/tags": [
+              "array"
+            ],
+            "/entries/[]/tags/[]": [
+              "string"
+            ],
+            "/entries/[]/title": [
+              "string"
+            ],
+            "/entries/[]/tool_version": [
+              "integer"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/options": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revision": [
+              "integer"
+            ],
+            "/servers": [
+              "array"
+            ],
+            "/servers/[]": [
+              "string"
+            ],
+            "/service": [
+              "null",
+              "string"
+            ],
+            "/skipped": [
+              "array"
+            ],
+            "/skipped/[]": [
+              "object"
+            ],
+            "/skipped/[]/operation": [
+              "string"
+            ],
+            "/skipped/[]/reason": [
+              "string"
+            ],
+            "/source": [
+              "string"
+            ],
+            "/spec_version": [
+              "string"
+            ],
+            "/summary": [
+              "object"
+            ],
+            "/summary/created": [
+              "integer"
+            ],
+            "/summary/kept": [
+              "integer"
+            ],
+            "/summary/mutating": [
+              "integer"
+            ],
+            "/summary/risks": [
+              "object"
+            ],
+            "/summary/skipped": [
+              "integer"
+            ],
+            "/summary/tools": [
+              "integer"
+            ],
+            "/summary/unchanged": [
+              "integer"
+            ],
+            "/summary/updated": [
+              "integer"
+            ],
+            "/summary/warnings": [
+              "integer"
+            ],
+            "/title": [
+              "string"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
               "string"
             ]
           }

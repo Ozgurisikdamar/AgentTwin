@@ -397,6 +397,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/imports/openapi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import tools from an OpenAPI document
+         * @description Reads an OpenAPI 3.0 or 3.1 document (spec §20.2): every operation
+         *     becomes a tool whose input schema holds its parameters by name and
+         *     its JSON request body as `body`. Credentials (`Authorization`,
+         *     cookies) are not arguments. The document's own references are
+         *     inlined; a reference outside it is recorded, never fetched.
+         *
+         *     Risk is the importer's `risk_overrides`, else the operation's
+         *     `x-agenttwin-risk`, else the method: GET, HEAD, OPTIONS and TRACE
+         *     read, anything else is `WRITE_IRREVERSIBLE`. Each entry says where
+         *     its risk came from.
+         *
+         *     The registry gets a new tool version where the definition changed.
+         *     A tool an agent manifest declares is not overwritten
+         *     (`kept_manifest`), nor one another source defines
+         *     (`kept_other_source`): map the name in `names` to import it apart.
+         *     Every import is a revision of the catalog `name`; an import equal to
+         *     the latest revision stores nothing (`200`, `created: false`). The
+         *     graph links the tools to the API (`tool.catalog_imported.v1`).
+         *     Requires `agent.write`.
+         */
+        post: operations["importOpenApi"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/imports/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import the tools an MCP server lists
+         * @description Reads the tools of an MCP server's `tools/list` result (every page;
+         *     MCP revision 2026-07-28), spec §20.3 and §33. The server is not
+         *     contacted: its URL is recorded without credentials. A tool needs an
+         *     object `inputSchema`; names become snake case (`getTicket` →
+         *     `get_ticket`) unless mapped in `names`.
+         *
+         *     Tool annotations are the server's claims and untrusted: they are
+         *     recorded with the risk they suggest (`hint_risk`) and set risk only
+         *     with `trust_annotations`. Otherwise a tool is `WRITE_IRREVERSIBLE`
+         *     unless `risk_overrides` says otherwise. Registry rules, revisions and
+         *     the graph are as for OpenAPI imports. Requires `agent.write`.
+         */
+        post: operations["importMcp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/tool-catalogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List tool catalogs
+         * @description The project's imports, newest first, without their entries.
+         */
+        get: operations["listToolCatalogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tool-catalogs/{catalog_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a tool catalog
+         * @description A catalog revision with its entries, skipped operations and warnings.
+         */
+        get: operations["getToolCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/change-sets": {
         parameters: {
             query?: never;
@@ -1002,6 +1116,134 @@ export interface components {
             /** @description False when the definition equals the latest version (nothing was stored). */
             created: boolean;
         };
+        /** @enum {string} */
+        CatalogSource: "OPENAPI" | "MCP";
+        /** @description Identifies an API or MCP server across imports (and in the graph). */
+        CatalogName: string;
+        /** @description A risk per tool name or operation (operationId, `METHOD /path`, MCP tool name). */
+        RiskOverrides: {
+            [key: string]: components["schemas"]["Risk"];
+        };
+        /** @description A registry tool name per operation. */
+        ToolNames: {
+            [key: string]: string;
+        };
+        ImportOpenApiRequest: {
+            name: components["schemas"]["CatalogName"];
+            /** @description The service the API belongs to; the graph links the API to it. */
+            service?: string;
+            /** @description The OpenAPI document, as an object or as YAML or JSON text (at most 2 MiB). */
+            document: Record<string, unknown> | string;
+            risk_overrides?: components["schemas"]["RiskOverrides"];
+            names?: components["schemas"]["ToolNames"];
+        };
+        McpServer: {
+            name: components["schemas"]["CatalogName"];
+            /** @description The server's http(s) URL; recorded, never contacted. */
+            url?: string;
+            version?: string;
+        };
+        ImportMcpRequest: {
+            server: components["schemas"]["McpServer"];
+            /** @description The MCP revision the server speaks (a different one than 2026-07-28 is warned about). */
+            protocol_version?: string;
+            /** @description The `tools` of the server's `tools/list` result, every page in order. */
+            tools: unknown[];
+            risk_overrides?: components["schemas"]["RiskOverrides"];
+            names?: components["schemas"]["ToolNames"];
+            /**
+             * @description Let the server's annotations set risk (readOnlyHint → READ, destructiveHint false → WRITE_REVERSIBLE).
+             * @default false
+             */
+            trust_annotations?: boolean;
+        };
+        CatalogEntry: {
+            /** @description The registry tool name. */
+            name: string;
+            /** @description The operationId (`METHOD /path` without one), or the MCP tool name. */
+            operation: string;
+            method?: string;
+            path?: string;
+            title?: string;
+            description: string;
+            tags?: string[];
+            deprecated?: boolean;
+            risk: components["schemas"]["Risk"];
+            /**
+             * @description Where the risk came from, strongest first.
+             * @enum {string}
+             */
+            risk_source: "override" | "declared" | "annotation" | "inferred" | "default";
+            mutating: boolean;
+            input_schema: Record<string, unknown>;
+            /** @description The MCP server's annotations, as it sent them (untrusted). */
+            hints?: {
+                [key: string]: boolean;
+            };
+            hint_risk?: components["schemas"]["Risk"];
+            /**
+             * @description What the import did to the tool registry: a tool `created`, a new
+             *     version (`updated`), `unchanged`, or the tool kept as another
+             *     source defines it (`kept_manifest`, `kept_other_source`).
+             * @enum {string}
+             */
+            registry: "created" | "updated" | "unchanged" | "kept_manifest" | "kept_other_source";
+            tool_version?: number;
+            registry_note?: string;
+        };
+        CatalogSkipped: {
+            operation: string;
+            reason: string;
+        };
+        CatalogCounts: {
+            tools: number;
+            created: number;
+            updated: number;
+            unchanged: number;
+            kept: number;
+            skipped: number;
+            warnings: number;
+            mutating: number;
+            /** @description Entries per risk level. */
+            risks: {
+                [key: string]: number;
+            };
+        };
+        ToolCatalogSummary: {
+            id: components["schemas"]["Uuid"];
+            project_id: components["schemas"]["Uuid"];
+            source: components["schemas"]["CatalogSource"];
+            name: components["schemas"]["CatalogName"];
+            revision: number;
+            service: string | null;
+            title: string;
+            api_version: string;
+            /** @description The OpenAPI version, or the MCP revision the server speaks. */
+            spec_version: string;
+            summary: components["schemas"]["CatalogCounts"];
+            content_sha256: components["schemas"]["Sha256"];
+            document_sha256: components["schemas"]["Sha256"];
+            created_by: components["schemas"]["Actor"];
+            created_at: components["schemas"]["Timestamp"];
+        };
+        ToolCatalog: components["schemas"]["ToolCatalogSummary"] & {
+            /** @description Server URLs of the document, without credentials or query strings. */
+            servers: string[];
+            /** @description The importer's `risk_overrides`, `names` and `trust_annotations`. */
+            options: Record<string, unknown>;
+            entries: components["schemas"]["CatalogEntry"][];
+            skipped: components["schemas"]["CatalogSkipped"][];
+            warnings: string[];
+        };
+        ImportedCatalog: components["schemas"]["ToolCatalog"] & {
+            /** @description False when the import equals the latest revision (nothing was stored). */
+            created: boolean;
+        };
+        ToolCatalogPage: {
+            items: components["schemas"]["ToolCatalogSummary"][];
+            /** @description The cursor of the next page; `null` on the last page. */
+            next_cursor: string | null;
+        };
         CreateChangeSetRequest: {
             /** @description The agent whose versions are compared. */
             agent: string;
@@ -1421,6 +1663,7 @@ export interface components {
         ProjectId: components["schemas"]["Uuid"];
         KeyId: components["schemas"]["Uuid"];
         AgentId: components["schemas"]["Uuid"];
+        CatalogId: components["schemas"]["Uuid"];
         ChangeSetId: components["schemas"]["Uuid"];
         /** @description The `next_cursor` of the previous page. */
         Cursor: string;
@@ -2325,6 +2568,208 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    importOpenApi: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportOpenApiRequest"];
+            };
+        };
+        responses: {
+            /** @description The import equals the latest revision; nothing was stored. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportedCatalog"];
+                };
+            };
+            /** @description A catalog revision was stored. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportedCatalog"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /**
+             * @description `IDEMPOTENCY_IN_PROGRESS`, or `CONCURRENT_CHANGE`: the registry
+             *     changed during the import (a manifest registered one of its
+             *     tools); retry.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    importMcp: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportMcpRequest"];
+            };
+        };
+        responses: {
+            /** @description The import equals the latest revision; nothing was stored. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportedCatalog"];
+                };
+            };
+            /** @description A catalog revision was stored. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportedCatalog"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description `IDEMPOTENCY_IN_PROGRESS`, or `CONCURRENT_CHANGE` (retry). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    listToolCatalogs: {
+        parameters: {
+            query?: {
+                source?: components["schemas"]["CatalogSource"];
+                name?: components["schemas"]["CatalogName"];
+                limit?: components["parameters"]["Limit"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                project_id: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of catalogs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCatalogPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    getToolCatalog: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                catalog_id: components["parameters"]["CatalogId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The catalog. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCatalog"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Internal"];
         };

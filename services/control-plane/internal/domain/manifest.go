@@ -148,11 +148,17 @@ func problem(path, msg string) *ManifestError {
 // parsed in safe mode (yaml.v3 never instantiates arbitrary types); size is
 // capped; duplicate keys and non-string keys are rejected.
 func DecodeDocument(data []byte) (map[string]any, error) {
+	return DecodeDocumentLimit(data, MaxManifestBytes)
+}
+
+// DecodeDocumentLimit is DecodeDocument with another size bound (an API
+// description is larger than a manifest).
+func DecodeDocumentLimit(data []byte, maxBytes int) (map[string]any, error) {
 	if len(data) == 0 {
 		return nil, problem("/", "document is empty")
 	}
-	if len(data) > MaxManifestBytes {
-		return nil, problem("/", fmt.Sprintf("document exceeds %d bytes", MaxManifestBytes))
+	if len(data) > maxBytes {
+		return nil, problem("/", fmt.Sprintf("document exceeds %d bytes", maxBytes))
 	}
 	trimmed := bytes.TrimSpace(data)
 	var out any

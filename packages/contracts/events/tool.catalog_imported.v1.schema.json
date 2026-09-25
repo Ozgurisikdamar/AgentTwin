@@ -8,6 +8,8 @@
     "source": {"enum": ["OPENAPI", "MCP", "MANUAL"]},
     "source_name": {"type": "string"},
     "service": {"type": ["string", "null"]},
+    "catalog_id": {"type": "string", "format": "uuid", "description": "The control plane's catalog revision (imports)."},
+    "revision": {"type": "integer", "minimum": 1},
     "tools": {
       "type": "array",
       "items": {

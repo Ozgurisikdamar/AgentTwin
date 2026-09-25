@@ -101,6 +101,11 @@ func (s *Server) PublicRoutes(mux Router) {
 	mux.HandleFunc("GET /api/v1/projects/{id}/tools", h(s.listTools))
 	mux.HandleFunc("POST /api/v1/projects/{id}/tools", h(s.createTool))
 
+	mux.HandleFunc("POST /api/v1/projects/{id}/imports/openapi", h(s.importOpenAPI))
+	mux.HandleFunc("POST /api/v1/projects/{id}/imports/mcp", h(s.importMCP))
+	mux.HandleFunc("GET /api/v1/projects/{id}/tool-catalogs", h(s.listCatalogs))
+	mux.HandleFunc("GET /api/v1/tool-catalogs/{id}", h(s.getCatalog))
+
 	mux.HandleFunc("POST /api/v1/projects/{id}/change-sets", h(s.createChangeSet))
 	mux.HandleFunc("GET /api/v1/projects/{id}/change-sets", h(s.listChangeSets))
 	mux.HandleFunc("GET /api/v1/change-sets/{id}", h(s.getChangeSet))
@@ -513,6 +518,106 @@ func (s *Server) createTool(w http.ResponseWriter, r *http.Request) error {
 		status = http.StatusOK
 	}
 	httpx.WriteJSON(w, status, res)
+	return nil
+}
+
+// Bounds of an import request: an OpenAPI document of up to 2 MiB as text
+// (escaped in JSON it grows), a tools/list result of up to 1000 tools.
+const (
+	maxOpenAPIImportBody = 6 << 20
+	maxMCPImportBody     = 4 << 20
+)
+
+// importStatus is 201 when a catalog revision was stored, 200 when the
+// import equals the latest revision.
+func importStatus(c app.ImportedCatalog) int {
+	if c.Created {
+		return http.StatusCreated
+	}
+	return http.StatusOK
+}
+
+func (s *Server) importOpenAPI(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	var in app.ImportOpenAPIInput
+	if err := httpx.DecodeJSON(w, r, &in, maxOpenAPIImportBody); err != nil {
+		return err
+	}
+	c, err := s.App.ImportOpenAPI(r.Context(), principal(r), id, in)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, importStatus(c), c)
+	return nil
+}
+
+func (s *Server) importMCP(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	var in app.ImportMCPInput
+	if err := httpx.DecodeJSON(w, r, &in, maxMCPImportBody); err != nil {
+		return err
+	}
+	c, err := s.App.ImportMCP(r.Context(), principal(r), id, in)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, importStatus(c), c)
+	return nil
+}
+
+func (s *Server) listCatalogs(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	limit, err := httpx.QueryInt(r, "limit", 50, 1, 200)
+	if err != nil {
+		return err
+	}
+	cur, err := httpx.DecodeCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		return err
+	}
+	if cur != nil && !ids.Valid(cur.ID) {
+		return httpx.Invalid("INVALID_CURSOR", "Cursor is malformed.", nil)
+	}
+	q := r.URL.Query()
+	items, err := s.App.ListCatalogs(r.Context(), principal(r), id, app.CatalogPage{
+		Source: q.Get("source"), Name: q.Get("name"), Before: cur, Limit: limit + 1,
+	})
+	if err != nil {
+		return err
+	}
+	var next *string // null on the last page
+	if len(items) > limit {
+		items = items[:limit]
+		last := items[len(items)-1]
+		c := httpx.EncodeCursor(httpx.Cursor{TS: last.CreatedAt, ID: last.ID})
+		next = &c
+	}
+	if items == nil {
+		items = []store.CatalogSummary{}
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next})
+	return nil
+}
+
+func (s *Server) getCatalog(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "catalog_id")
+	if err != nil {
+		return err
+	}
+	c, err := s.App.GetCatalog(r.Context(), principal(r), id)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusOK, c)
 	return nil
 }
 

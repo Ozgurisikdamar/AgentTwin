@@ -279,7 +279,7 @@ func TestDocumentsThatAreNotImported(t *testing.T) {
 	}
 }
 
-// A document is untrusted input (spec §37): references outside it are not
+// A document is untrusted input (spec §111): references outside it are not
 // followed, cycles and reference bombs end, and sizes are bounded.
 func TestHostileDocumentsAreBounded(t *testing.T) {
 	var bomb strings.Builder

@@ -573,6 +573,12 @@
       "/": [
         "object"
       ],
+      "/catalog_id": [
+        "string"
+      ],
+      "/revision": [
+        "integer"
+      ],
       "/service": [
         "null",
         "string"

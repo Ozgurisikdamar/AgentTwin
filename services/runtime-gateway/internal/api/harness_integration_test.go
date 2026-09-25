@@ -387,6 +387,7 @@ func (s *toolStub) tool(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(map[string]any{"error": "payments are down"})
 	case "reject":
+		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		_ = json.NewEncoder(w).Encode(map[string]any{"error": "no such order"})
 	case "slow":
@@ -433,6 +434,13 @@ func (s *toolStub) mcp(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		if r.Header.Get("Mcp-Session-Id") != "session-1" {
 			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if req.Params["name"] == "confused" {
+			// Not JSON-RPC: an answer is a result or an error, never both.
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": req.ID,
+				"result": map[string]any{"content": []any{}}, "error": map[string]any{"code": -32000, "message": "failed"}})
 			return
 		}
 		if req.Params["name"] == "broken" {

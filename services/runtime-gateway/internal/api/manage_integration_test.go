@@ -92,7 +92,7 @@ func TestToolEndpoints(t *testing.T) {
 		t.Fatalf("audit %v", got)
 	}
 	// The audit keeps the host, not the URL.
-	if meta := h.outbox("audit.recorded.v1")[0]["metadata"].(map[string]any); meta["host"] == "" || meta["url"] != nil {
+	if meta := h.outbox("audit.recorded.v1")[0]["metadata"].(map[string]any); meta["host"] != strings.TrimPrefix(h.tools.srv.URL, "http://") || meta["url"] != nil {
 		t.Fatalf("audit metadata %v", meta)
 	}
 }
@@ -154,8 +154,10 @@ func TestPolicyLifecycle(t *testing.T) {
 	// A new version; the same document again is not another version.
 	v2doc := strings.Replace(refundPolicy, "args.amount > 500", "args.amount > 400", 1)
 	v2doc = strings.Replace(v2doc, "amount: 900}", "amount: 450}", 1)
+	v2doc = strings.Replace(v2doc, "description: Refunds the support agent may issue on its own.", "description: Refunds up to 400.", 1)
 	added := h.ok(201, h.owner(), "POST", "/api/v1/policies/"+id+"/versions", map[string]any{"project_id": h.project, "document": v2doc})
-	if added["version"].(map[string]any)["version"] != 2.0 || added["created"] != true || added["policy"].(map[string]any)["latest_version"] != 2.0 {
+	if added["version"].(map[string]any)["version"] != 2.0 || added["created"] != true || added["policy"].(map[string]any)["latest_version"] != 2.0 ||
+		added["policy"].(map[string]any)["description"] != "Refunds up to 400." {
 		t.Fatalf("added %v", added)
 	}
 	same := h.ok(200, h.owner(), "POST", "/api/v1/policies/"+id+"/versions", map[string]any{"project_id": h.project, "document": v2doc + "\n# a comment\n"})
@@ -258,6 +260,21 @@ func TestPolicyTesting(t *testing.T) {
 	if report["passed"] != false || last["passed"] != false ||
 		last["why"] != "expected allow, the policy decided require_approval (Refunds above 100 need a person's approval.)" {
 		t.Fatalf("failing case %v", last)
+	}
+	// Boundaries are probed from the base action: a second refund in the
+	// conversation is denied at every amount.
+	draft["base"] = map[string]any{"args": map[string]any{"order_id": "ORD-7", "amount": 10}, "context": map[string]any{"traceCalls": 1}}
+	report = h.ok(200, h.engineer(), "POST", "/api/v1/policies/test", draft)
+	for _, b := range report["boundaries"].([]any) {
+		m := b.(map[string]any)
+		if m["path"] != "args.amount" {
+			continue
+		}
+		for _, p := range m["probes"].([]any) {
+			if pm := p.(map[string]any); pm["effect"] != "deny" || pm["rule"] != "one-refund-per-conversation" {
+				t.Fatalf("probe from the base %v", m)
+			}
+		}
 	}
 
 	// A saved version, against the registered tool: fail_open is refused.

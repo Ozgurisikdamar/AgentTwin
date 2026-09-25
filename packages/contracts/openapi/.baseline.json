@@ -30755,6 +30755,4487 @@
       }
     }
   },
+  "runtime-gateway": {
+    "DELETE /api/v1/tool-endpoints/{tool}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:tool": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "204": null
+      }
+    },
+    "GET /api/v1/approvals": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:status": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"APPROVED\"",
+                "\"DENIED\"",
+                "\"EXPIRED\"",
+                "\"PENDING\"",
+                "\"USED\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:tool": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/items/[]/status": [
+              "\"APPROVED\"",
+              "\"DENIED\"",
+              "\"EXPIRED\"",
+              "\"PENDING\"",
+              "\"USED\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "arguments",
+              "created_at",
+              "decided_at",
+              "decided_by",
+              "decision_id",
+              "decision_reason",
+              "environment",
+              "expires_at",
+              "id",
+              "policy",
+              "policy_version_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "risk",
+              "rule",
+              "status",
+              "summary",
+              "tool",
+              "trace_id",
+              "updated_at",
+              "used_at",
+              "used_decision_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/action_hash": [
+              "string"
+            ],
+            "/items/[]/agent": [
+              "string"
+            ],
+            "/items/[]/agent_version": [
+              "string"
+            ],
+            "/items/[]/arguments": [
+              "object"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/decided_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/decided_by": [
+              "null",
+              "string"
+            ],
+            "/items/[]/decision_id": [
+              "string"
+            ],
+            "/items/[]/decision_reason": [
+              "null",
+              "string"
+            ],
+            "/items/[]/environment": [
+              "string"
+            ],
+            "/items/[]/expires_at": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/policy": [
+              "string"
+            ],
+            "/items/[]/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/reason": [
+              "string"
+            ],
+            "/items/[]/requested_by": [
+              "string"
+            ],
+            "/items/[]/risk": [
+              "string"
+            ],
+            "/items/[]/rule": [
+              "string"
+            ],
+            "/items/[]/status": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "string"
+            ],
+            "/items/[]/tool": [
+              "string"
+            ],
+            "/items/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/items/[]/used_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/used_decision_id": [
+              "null",
+              "string"
+            ],
+            "/next_cursor": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/approvals/{approval_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:approval_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/attempts/[]/result": [
+              "\"executed\"",
+              "\"expired\"",
+              "\"mismatch\"",
+              "\"not_approved\"",
+              "\"used\""
+            ],
+            "/decision/decisions/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/decision/decisions/[]/matched/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/decision/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/decision/outcome": [
+              "\"approval_refused\"",
+              "\"approval_required\"",
+              "\"denied\"",
+              "\"executed\"",
+              "\"failed\"",
+              "\"forwarded\"",
+              "\"replayed\""
+            ],
+            "/decision/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/status": [
+              "\"APPROVED\"",
+              "\"DENIED\"",
+              "\"EXPIRED\"",
+              "\"PENDING\"",
+              "\"USED\""
+            ],
+            "/used_decision/decisions/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/used_decision/decisions/[]/matched/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/used_decision/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/used_decision/outcome": [
+              "\"approval_refused\"",
+              "\"approval_required\"",
+              "\"denied\"",
+              "\"executed\"",
+              "\"failed\"",
+              "\"forwarded\"",
+              "\"replayed\""
+            ],
+            "/used_decision/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "arguments",
+              "attempts",
+              "created_at",
+              "decided_at",
+              "decided_by",
+              "decision",
+              "decision_id",
+              "decision_reason",
+              "environment",
+              "expires_at",
+              "id",
+              "policy",
+              "policy_version_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "risk",
+              "rule",
+              "status",
+              "summary",
+              "tool",
+              "trace_id",
+              "updated_at",
+              "used_at",
+              "used_decision",
+              "used_decision_id"
+            ],
+            "/attempts/[]": [
+              "action_hash",
+              "arguments",
+              "changes",
+              "created_at",
+              "decision_id",
+              "id",
+              "result",
+              "subject",
+              "trace_id"
+            ],
+            "/attempts/[]/changes/[]": [
+              "path"
+            ],
+            "/decision": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "approval_id",
+              "arguments",
+              "completed_at",
+              "created_at",
+              "decisions",
+              "effect",
+              "environment",
+              "error_code",
+              "fail_mode_applied",
+              "id",
+              "idempotency_key",
+              "latency_ms",
+              "limits",
+              "message",
+              "outcome",
+              "policy",
+              "policy_version_id",
+              "risk",
+              "rule",
+              "subject",
+              "summary",
+              "tool",
+              "trace_id",
+              "upstream_status"
+            ],
+            "/decision/decisions/[]": [
+              "effect",
+              "fail_mode_applied",
+              "matched",
+              "message",
+              "policy",
+              "policy_version_id",
+              "version"
+            ],
+            "/decision/decisions/[]/errors/[]": [
+              "error",
+              "rule"
+            ],
+            "/decision/decisions/[]/matched/[]": [
+              "effect",
+              "rule"
+            ],
+            "/used_decision": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "approval_id",
+              "arguments",
+              "completed_at",
+              "created_at",
+              "decisions",
+              "effect",
+              "environment",
+              "error_code",
+              "fail_mode_applied",
+              "id",
+              "idempotency_key",
+              "latency_ms",
+              "limits",
+              "message",
+              "outcome",
+              "policy",
+              "policy_version_id",
+              "risk",
+              "rule",
+              "subject",
+              "summary",
+              "tool",
+              "trace_id",
+              "upstream_status"
+            ],
+            "/used_decision/decisions/[]": [
+              "effect",
+              "fail_mode_applied",
+              "matched",
+              "message",
+              "policy",
+              "policy_version_id",
+              "version"
+            ],
+            "/used_decision/decisions/[]/errors/[]": [
+              "error",
+              "rule"
+            ],
+            "/used_decision/decisions/[]/matched/[]": [
+              "effect",
+              "rule"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/action_hash": [
+              "string"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/arguments": [
+              "object"
+            ],
+            "/attempts": [
+              "array"
+            ],
+            "/attempts/[]": [
+              "object"
+            ],
+            "/attempts/[]/action_hash": [
+              "string"
+            ],
+            "/attempts/[]/arguments": [
+              "object"
+            ],
+            "/attempts/[]/changes": [
+              "array"
+            ],
+            "/attempts/[]/changes/[]": [
+              "object"
+            ],
+            "/attempts/[]/changes/[]/added": [
+              "boolean"
+            ],
+            "/attempts/[]/changes/[]/path": [
+              "string"
+            ],
+            "/attempts/[]/changes/[]/removed": [
+              "boolean"
+            ],
+            "/attempts/[]/created_at": [
+              "string"
+            ],
+            "/attempts/[]/decision_id": [
+              "null",
+              "string"
+            ],
+            "/attempts/[]/id": [
+              "string"
+            ],
+            "/attempts/[]/result": [
+              "string"
+            ],
+            "/attempts/[]/subject": [
+              "string"
+            ],
+            "/attempts/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/decided_at": [
+              "null",
+              "string"
+            ],
+            "/decided_by": [
+              "null",
+              "string"
+            ],
+            "/decision": [
+              "null",
+              "object"
+            ],
+            "/decision/action_hash": [
+              "string"
+            ],
+            "/decision/agent": [
+              "string"
+            ],
+            "/decision/agent_version": [
+              "string"
+            ],
+            "/decision/approval_id": [
+              "null",
+              "string"
+            ],
+            "/decision/arguments": [
+              "object"
+            ],
+            "/decision/completed_at": [
+              "null",
+              "string"
+            ],
+            "/decision/created_at": [
+              "string"
+            ],
+            "/decision/decisions": [
+              "array"
+            ],
+            "/decision/decisions/[]": [
+              "object"
+            ],
+            "/decision/decisions/[]/effect": [
+              "string"
+            ],
+            "/decision/decisions/[]/errors": [
+              "array"
+            ],
+            "/decision/decisions/[]/errors/[]": [
+              "object"
+            ],
+            "/decision/decisions/[]/errors/[]/error": [
+              "string"
+            ],
+            "/decision/decisions/[]/errors/[]/rule": [
+              "string"
+            ],
+            "/decision/decisions/[]/fail_mode_applied": [
+              "boolean"
+            ],
+            "/decision/decisions/[]/limits": [
+              "object"
+            ],
+            "/decision/decisions/[]/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/decision/decisions/[]/limits/timeoutMs": [
+              "integer"
+            ],
+            "/decision/decisions/[]/matched": [
+              "array"
+            ],
+            "/decision/decisions/[]/matched/[]": [
+              "object"
+            ],
+            "/decision/decisions/[]/matched/[]/effect": [
+              "string"
+            ],
+            "/decision/decisions/[]/matched/[]/message": [
+              "string"
+            ],
+            "/decision/decisions/[]/matched/[]/rule": [
+              "string"
+            ],
+            "/decision/decisions/[]/message": [
+              "string"
+            ],
+            "/decision/decisions/[]/policy": [
+              "string"
+            ],
+            "/decision/decisions/[]/policy_version_id": [
+              "string"
+            ],
+            "/decision/decisions/[]/rule": [
+              "string"
+            ],
+            "/decision/decisions/[]/version": [
+              "integer"
+            ],
+            "/decision/effect": [
+              "null",
+              "string"
+            ],
+            "/decision/environment": [
+              "string"
+            ],
+            "/decision/error_code": [
+              "null",
+              "string"
+            ],
+            "/decision/fail_mode_applied": [
+              "boolean"
+            ],
+            "/decision/id": [
+              "string"
+            ],
+            "/decision/idempotency_key": [
+              "null",
+              "string"
+            ],
+            "/decision/latency_ms": [
+              "integer",
+              "null"
+            ],
+            "/decision/limits": [
+              "null",
+              "object"
+            ],
+            "/decision/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/decision/limits/timeoutMs": [
+              "integer"
+            ],
+            "/decision/message": [
+              "string"
+            ],
+            "/decision/outcome": [
+              "string"
+            ],
+            "/decision/policy": [
+              "null",
+              "string"
+            ],
+            "/decision/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/decision/risk": [
+              "string"
+            ],
+            "/decision/rule": [
+              "null",
+              "string"
+            ],
+            "/decision/subject": [
+              "string"
+            ],
+            "/decision/summary": [
+              "string"
+            ],
+            "/decision/tool": [
+              "string"
+            ],
+            "/decision/trace_id": [
+              "null",
+              "string"
+            ],
+            "/decision/upstream_status": [
+              "integer",
+              "null"
+            ],
+            "/decision_id": [
+              "string"
+            ],
+            "/decision_reason": [
+              "null",
+              "string"
+            ],
+            "/environment": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/policy": [
+              "string"
+            ],
+            "/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ],
+            "/requested_by": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/rule": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ],
+            "/summary": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/trace_id": [
+              "null",
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/used_at": [
+              "null",
+              "string"
+            ],
+            "/used_decision": [
+              "null",
+              "object"
+            ],
+            "/used_decision/action_hash": [
+              "string"
+            ],
+            "/used_decision/agent": [
+              "string"
+            ],
+            "/used_decision/agent_version": [
+              "string"
+            ],
+            "/used_decision/approval_id": [
+              "null",
+              "string"
+            ],
+            "/used_decision/arguments": [
+              "object"
+            ],
+            "/used_decision/completed_at": [
+              "null",
+              "string"
+            ],
+            "/used_decision/created_at": [
+              "string"
+            ],
+            "/used_decision/decisions": [
+              "array"
+            ],
+            "/used_decision/decisions/[]": [
+              "object"
+            ],
+            "/used_decision/decisions/[]/effect": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/errors": [
+              "array"
+            ],
+            "/used_decision/decisions/[]/errors/[]": [
+              "object"
+            ],
+            "/used_decision/decisions/[]/errors/[]/error": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/errors/[]/rule": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/fail_mode_applied": [
+              "boolean"
+            ],
+            "/used_decision/decisions/[]/limits": [
+              "object"
+            ],
+            "/used_decision/decisions/[]/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/used_decision/decisions/[]/limits/timeoutMs": [
+              "integer"
+            ],
+            "/used_decision/decisions/[]/matched": [
+              "array"
+            ],
+            "/used_decision/decisions/[]/matched/[]": [
+              "object"
+            ],
+            "/used_decision/decisions/[]/matched/[]/effect": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/matched/[]/message": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/matched/[]/rule": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/message": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/policy": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/policy_version_id": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/rule": [
+              "string"
+            ],
+            "/used_decision/decisions/[]/version": [
+              "integer"
+            ],
+            "/used_decision/effect": [
+              "null",
+              "string"
+            ],
+            "/used_decision/environment": [
+              "string"
+            ],
+            "/used_decision/error_code": [
+              "null",
+              "string"
+            ],
+            "/used_decision/fail_mode_applied": [
+              "boolean"
+            ],
+            "/used_decision/id": [
+              "string"
+            ],
+            "/used_decision/idempotency_key": [
+              "null",
+              "string"
+            ],
+            "/used_decision/latency_ms": [
+              "integer",
+              "null"
+            ],
+            "/used_decision/limits": [
+              "null",
+              "object"
+            ],
+            "/used_decision/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/used_decision/limits/timeoutMs": [
+              "integer"
+            ],
+            "/used_decision/message": [
+              "string"
+            ],
+            "/used_decision/outcome": [
+              "string"
+            ],
+            "/used_decision/policy": [
+              "null",
+              "string"
+            ],
+            "/used_decision/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/used_decision/risk": [
+              "string"
+            ],
+            "/used_decision/rule": [
+              "null",
+              "string"
+            ],
+            "/used_decision/subject": [
+              "string"
+            ],
+            "/used_decision/summary": [
+              "string"
+            ],
+            "/used_decision/tool": [
+              "string"
+            ],
+            "/used_decision/trace_id": [
+              "null",
+              "string"
+            ],
+            "/used_decision/upstream_status": [
+              "integer",
+              "null"
+            ],
+            "/used_decision_id": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/policies": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:tool": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "activated_at",
+              "activated_by",
+              "active",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "tool",
+              "updated_at"
+            ],
+            "/items/[]/active": [
+              "id",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/activated_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/activated_by": [
+              "null",
+              "string"
+            ],
+            "/items/[]/active": [
+              "null",
+              "object"
+            ],
+            "/items/[]/active/id": [
+              "string"
+            ],
+            "/items/[]/active/version": [
+              "integer"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/description": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/latest_version": [
+              "integer"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/tool": [
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/policies/{policy_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:policy_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "activated_at",
+              "activated_by",
+              "active",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "tool",
+              "updated_at",
+              "versions"
+            ],
+            "/active": [
+              "id",
+              "version"
+            ],
+            "/versions/[]": [
+              "active",
+              "created_at",
+              "created_by",
+              "id",
+              "spec_hash",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/activated_at": [
+              "null",
+              "string"
+            ],
+            "/activated_by": [
+              "null",
+              "string"
+            ],
+            "/active": [
+              "null",
+              "object"
+            ],
+            "/active/id": [
+              "string"
+            ],
+            "/active/version": [
+              "integer"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/latest_version": [
+              "integer"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/active": [
+              "boolean"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/id": [
+              "string"
+            ],
+            "/versions/[]/spec_hash": [
+              "string"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/policies/{policy_id}/versions/{version}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:policy_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:version": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "active",
+              "created_at",
+              "created_by",
+              "document",
+              "id",
+              "policy_id",
+              "spec",
+              "spec_hash",
+              "thresholds",
+              "variables",
+              "version"
+            ],
+            "/thresholds/[]": [
+              "integer",
+              "op",
+              "path",
+              "rule",
+              "value"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/active": [
+              "boolean"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/document": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/policy_id": [
+              "string"
+            ],
+            "/spec": [
+              "object"
+            ],
+            "/spec_hash": [
+              "string"
+            ],
+            "/thresholds": [
+              "array"
+            ],
+            "/thresholds/[]": [
+              "object"
+            ],
+            "/thresholds/[]/integer": [
+              "boolean"
+            ],
+            "/thresholds/[]/op": [
+              "string"
+            ],
+            "/thresholds/[]/path": [
+              "string"
+            ],
+            "/thresholds/[]/rule": [
+              "string"
+            ],
+            "/thresholds/[]/value": [
+              "number"
+            ],
+            "/variables": [
+              "array"
+            ],
+            "/variables/[]": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/policy-decisions": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:approval_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:effect": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"allow\"",
+                "\"allow_with_limits\"",
+                "\"deny\"",
+                "\"require_approval\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:outcome": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"approval_refused\"",
+                "\"approval_required\"",
+                "\"denied\"",
+                "\"executed\"",
+                "\"failed\"",
+                "\"forwarded\"",
+                "\"replayed\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:tool": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:trace_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/decisions/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/items/[]/decisions/[]/matched/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/items/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/items/[]/outcome": [
+              "\"approval_refused\"",
+              "\"approval_required\"",
+              "\"denied\"",
+              "\"executed\"",
+              "\"failed\"",
+              "\"forwarded\"",
+              "\"replayed\""
+            ],
+            "/items/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "approval_id",
+              "arguments",
+              "completed_at",
+              "created_at",
+              "decisions",
+              "effect",
+              "environment",
+              "error_code",
+              "fail_mode_applied",
+              "id",
+              "idempotency_key",
+              "latency_ms",
+              "limits",
+              "message",
+              "outcome",
+              "policy",
+              "policy_version_id",
+              "risk",
+              "rule",
+              "subject",
+              "summary",
+              "tool",
+              "trace_id",
+              "upstream_status"
+            ],
+            "/items/[]/decisions/[]": [
+              "effect",
+              "fail_mode_applied",
+              "matched",
+              "message",
+              "policy",
+              "policy_version_id",
+              "version"
+            ],
+            "/items/[]/decisions/[]/errors/[]": [
+              "error",
+              "rule"
+            ],
+            "/items/[]/decisions/[]/matched/[]": [
+              "effect",
+              "rule"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/action_hash": [
+              "string"
+            ],
+            "/items/[]/agent": [
+              "string"
+            ],
+            "/items/[]/agent_version": [
+              "string"
+            ],
+            "/items/[]/approval_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/arguments": [
+              "object"
+            ],
+            "/items/[]/completed_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/decisions": [
+              "array"
+            ],
+            "/items/[]/decisions/[]": [
+              "object"
+            ],
+            "/items/[]/decisions/[]/effect": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/errors": [
+              "array"
+            ],
+            "/items/[]/decisions/[]/errors/[]": [
+              "object"
+            ],
+            "/items/[]/decisions/[]/errors/[]/error": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/errors/[]/rule": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/fail_mode_applied": [
+              "boolean"
+            ],
+            "/items/[]/decisions/[]/limits": [
+              "object"
+            ],
+            "/items/[]/decisions/[]/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/items/[]/decisions/[]/limits/timeoutMs": [
+              "integer"
+            ],
+            "/items/[]/decisions/[]/matched": [
+              "array"
+            ],
+            "/items/[]/decisions/[]/matched/[]": [
+              "object"
+            ],
+            "/items/[]/decisions/[]/matched/[]/effect": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/matched/[]/message": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/matched/[]/rule": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/message": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/policy": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/policy_version_id": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/rule": [
+              "string"
+            ],
+            "/items/[]/decisions/[]/version": [
+              "integer"
+            ],
+            "/items/[]/effect": [
+              "null",
+              "string"
+            ],
+            "/items/[]/environment": [
+              "string"
+            ],
+            "/items/[]/error_code": [
+              "null",
+              "string"
+            ],
+            "/items/[]/fail_mode_applied": [
+              "boolean"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/idempotency_key": [
+              "null",
+              "string"
+            ],
+            "/items/[]/latency_ms": [
+              "integer",
+              "null"
+            ],
+            "/items/[]/limits": [
+              "null",
+              "object"
+            ],
+            "/items/[]/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/items/[]/limits/timeoutMs": [
+              "integer"
+            ],
+            "/items/[]/message": [
+              "string"
+            ],
+            "/items/[]/outcome": [
+              "string"
+            ],
+            "/items/[]/policy": [
+              "null",
+              "string"
+            ],
+            "/items/[]/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/risk": [
+              "string"
+            ],
+            "/items/[]/rule": [
+              "null",
+              "string"
+            ],
+            "/items/[]/subject": [
+              "string"
+            ],
+            "/items/[]/summary": [
+              "string"
+            ],
+            "/items/[]/tool": [
+              "string"
+            ],
+            "/items/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/upstream_status": [
+              "integer",
+              "null"
+            ],
+            "/next_cursor": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/policy-decisions/{decision_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:decision_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/decisions/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/decisions/[]/matched/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/outcome": [
+              "\"approval_refused\"",
+              "\"approval_required\"",
+              "\"denied\"",
+              "\"executed\"",
+              "\"failed\"",
+              "\"forwarded\"",
+              "\"replayed\""
+            ],
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "approval_id",
+              "arguments",
+              "completed_at",
+              "created_at",
+              "decisions",
+              "effect",
+              "environment",
+              "error_code",
+              "fail_mode_applied",
+              "id",
+              "idempotency_key",
+              "latency_ms",
+              "limits",
+              "message",
+              "outcome",
+              "policy",
+              "policy_version_id",
+              "risk",
+              "rule",
+              "subject",
+              "summary",
+              "tool",
+              "trace_id",
+              "upstream_status"
+            ],
+            "/decisions/[]": [
+              "effect",
+              "fail_mode_applied",
+              "matched",
+              "message",
+              "policy",
+              "policy_version_id",
+              "version"
+            ],
+            "/decisions/[]/errors/[]": [
+              "error",
+              "rule"
+            ],
+            "/decisions/[]/matched/[]": [
+              "effect",
+              "rule"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/action_hash": [
+              "string"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/approval_id": [
+              "null",
+              "string"
+            ],
+            "/arguments": [
+              "object"
+            ],
+            "/completed_at": [
+              "null",
+              "string"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/decisions": [
+              "array"
+            ],
+            "/decisions/[]": [
+              "object"
+            ],
+            "/decisions/[]/effect": [
+              "string"
+            ],
+            "/decisions/[]/errors": [
+              "array"
+            ],
+            "/decisions/[]/errors/[]": [
+              "object"
+            ],
+            "/decisions/[]/errors/[]/error": [
+              "string"
+            ],
+            "/decisions/[]/errors/[]/rule": [
+              "string"
+            ],
+            "/decisions/[]/fail_mode_applied": [
+              "boolean"
+            ],
+            "/decisions/[]/limits": [
+              "object"
+            ],
+            "/decisions/[]/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/decisions/[]/limits/timeoutMs": [
+              "integer"
+            ],
+            "/decisions/[]/matched": [
+              "array"
+            ],
+            "/decisions/[]/matched/[]": [
+              "object"
+            ],
+            "/decisions/[]/matched/[]/effect": [
+              "string"
+            ],
+            "/decisions/[]/matched/[]/message": [
+              "string"
+            ],
+            "/decisions/[]/matched/[]/rule": [
+              "string"
+            ],
+            "/decisions/[]/message": [
+              "string"
+            ],
+            "/decisions/[]/policy": [
+              "string"
+            ],
+            "/decisions/[]/policy_version_id": [
+              "string"
+            ],
+            "/decisions/[]/rule": [
+              "string"
+            ],
+            "/decisions/[]/version": [
+              "integer"
+            ],
+            "/effect": [
+              "null",
+              "string"
+            ],
+            "/environment": [
+              "string"
+            ],
+            "/error_code": [
+              "null",
+              "string"
+            ],
+            "/fail_mode_applied": [
+              "boolean"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/idempotency_key": [
+              "null",
+              "string"
+            ],
+            "/latency_ms": [
+              "integer",
+              "null"
+            ],
+            "/limits": [
+              "null",
+              "object"
+            ],
+            "/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/limits/timeoutMs": [
+              "integer"
+            ],
+            "/message": [
+              "string"
+            ],
+            "/outcome": [
+              "string"
+            ],
+            "/policy": [
+              "null",
+              "string"
+            ],
+            "/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/rule": [
+              "null",
+              "string"
+            ],
+            "/subject": [
+              "string"
+            ],
+            "/summary": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/trace_id": [
+              "null",
+              "string"
+            ],
+            "/upstream_status": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/tool-endpoints": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/idempotency": [
+              "\"optional\"",
+              "\"required\""
+            ],
+            "/items/[]/kind": [
+              "\"http\"",
+              "\"mcp\""
+            ],
+            "/items/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "created_at",
+              "forward_headers",
+              "idempotency",
+              "kind",
+              "risk",
+              "timeout_ms",
+              "tool",
+              "updated_at",
+              "updated_by",
+              "url"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/forward_headers": [
+              "array"
+            ],
+            "/items/[]/forward_headers/[]": [
+              "string"
+            ],
+            "/items/[]/idempotency": [
+              "string"
+            ],
+            "/items/[]/kind": [
+              "string"
+            ],
+            "/items/[]/risk": [
+              "string"
+            ],
+            "/items/[]/timeout_ms": [
+              "integer"
+            ],
+            "/items/[]/tool": [
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/items/[]/updated_by": [
+              "string"
+            ],
+            "/items/[]/url": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/tool-endpoints/{tool}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:tool": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/idempotency": [
+              "\"optional\"",
+              "\"required\""
+            ],
+            "/kind": [
+              "\"http\"",
+              "\"mcp\""
+            ],
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created_at",
+              "forward_headers",
+              "idempotency",
+              "kind",
+              "risk",
+              "timeout_ms",
+              "tool",
+              "updated_at",
+              "updated_by",
+              "url"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/forward_headers": [
+              "array"
+            ],
+            "/forward_headers/[]": [
+              "string"
+            ],
+            "/idempotency": [
+              "string"
+            ],
+            "/kind": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/timeout_ms": [
+              "integer"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/updated_by": [
+              "string"
+            ],
+            "/url": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /gateway/v1/approvals/{approval_id}": {
+      "parameters": {
+        "header:x-agenttwin-project": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:approval_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/status": [
+              "\"APPROVED\"",
+              "\"DENIED\"",
+              "\"EXPIRED\"",
+              "\"PENDING\"",
+              "\"USED\""
+            ]
+          },
+          "required": {
+            "/": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "arguments",
+              "created_at",
+              "decided_at",
+              "decided_by",
+              "decision_id",
+              "decision_reason",
+              "environment",
+              "expires_at",
+              "id",
+              "policy",
+              "policy_version_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "risk",
+              "rule",
+              "status",
+              "summary",
+              "tool",
+              "trace_id",
+              "updated_at",
+              "used_at",
+              "used_decision_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/action_hash": [
+              "string"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/arguments": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/decided_at": [
+              "null",
+              "string"
+            ],
+            "/decided_by": [
+              "null",
+              "string"
+            ],
+            "/decision_id": [
+              "string"
+            ],
+            "/decision_reason": [
+              "null",
+              "string"
+            ],
+            "/environment": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/policy": [
+              "string"
+            ],
+            "/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ],
+            "/requested_by": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/rule": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ],
+            "/summary": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/trace_id": [
+              "null",
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/used_at": [
+              "null",
+              "string"
+            ],
+            "/used_decision_id": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/approvals/{approval_id}/approve": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:approval_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "project_id",
+              "reason"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/status": [
+              "\"APPROVED\"",
+              "\"DENIED\"",
+              "\"EXPIRED\"",
+              "\"PENDING\"",
+              "\"USED\""
+            ]
+          },
+          "required": {
+            "/": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "arguments",
+              "created_at",
+              "decided_at",
+              "decided_by",
+              "decision_id",
+              "decision_reason",
+              "environment",
+              "expires_at",
+              "id",
+              "policy",
+              "policy_version_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "risk",
+              "rule",
+              "status",
+              "summary",
+              "tool",
+              "trace_id",
+              "updated_at",
+              "used_at",
+              "used_decision_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/action_hash": [
+              "string"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/arguments": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/decided_at": [
+              "null",
+              "string"
+            ],
+            "/decided_by": [
+              "null",
+              "string"
+            ],
+            "/decision_id": [
+              "string"
+            ],
+            "/decision_reason": [
+              "null",
+              "string"
+            ],
+            "/environment": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/policy": [
+              "string"
+            ],
+            "/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ],
+            "/requested_by": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/rule": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ],
+            "/summary": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/trace_id": [
+              "null",
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/used_at": [
+              "null",
+              "string"
+            ],
+            "/used_decision_id": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/approvals/{approval_id}/deny": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:approval_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "project_id",
+              "reason"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/status": [
+              "\"APPROVED\"",
+              "\"DENIED\"",
+              "\"EXPIRED\"",
+              "\"PENDING\"",
+              "\"USED\""
+            ]
+          },
+          "required": {
+            "/": [
+              "action_hash",
+              "agent",
+              "agent_version",
+              "arguments",
+              "created_at",
+              "decided_at",
+              "decided_by",
+              "decision_id",
+              "decision_reason",
+              "environment",
+              "expires_at",
+              "id",
+              "policy",
+              "policy_version_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "risk",
+              "rule",
+              "status",
+              "summary",
+              "tool",
+              "trace_id",
+              "updated_at",
+              "used_at",
+              "used_decision_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/action_hash": [
+              "string"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/arguments": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/decided_at": [
+              "null",
+              "string"
+            ],
+            "/decided_by": [
+              "null",
+              "string"
+            ],
+            "/decision_id": [
+              "string"
+            ],
+            "/decision_reason": [
+              "null",
+              "string"
+            ],
+            "/environment": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/policy": [
+              "string"
+            ],
+            "/policy_version_id": [
+              "null",
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ],
+            "/requested_by": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/rule": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ],
+            "/summary": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/trace_id": [
+              "null",
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/used_at": [
+              "null",
+              "string"
+            ],
+            "/used_decision_id": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/policies": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "document",
+              "project_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {},
+          "required": {
+            "/": [
+              "policy",
+              "version"
+            ],
+            "/policy": [
+              "activated_at",
+              "activated_by",
+              "active",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "tool",
+              "updated_at"
+            ],
+            "/policy/active": [
+              "id",
+              "version"
+            ],
+            "/version": [
+              "active",
+              "created_at",
+              "created_by",
+              "document",
+              "id",
+              "policy_id",
+              "spec",
+              "spec_hash",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/policy": [
+              "object"
+            ],
+            "/policy/activated_at": [
+              "null",
+              "string"
+            ],
+            "/policy/activated_by": [
+              "null",
+              "string"
+            ],
+            "/policy/active": [
+              "null",
+              "object"
+            ],
+            "/policy/active/id": [
+              "string"
+            ],
+            "/policy/active/version": [
+              "integer"
+            ],
+            "/policy/created_at": [
+              "string"
+            ],
+            "/policy/created_by": [
+              "string"
+            ],
+            "/policy/description": [
+              "string"
+            ],
+            "/policy/id": [
+              "string"
+            ],
+            "/policy/latest_version": [
+              "integer"
+            ],
+            "/policy/name": [
+              "string"
+            ],
+            "/policy/tool": [
+              "string"
+            ],
+            "/policy/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/active": [
+              "boolean"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/document": [
+              "string"
+            ],
+            "/version/id": [
+              "string"
+            ],
+            "/version/policy_id": [
+              "string"
+            ],
+            "/version/spec": [
+              "object"
+            ],
+            "/version/spec_hash": [
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/policies/test": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/cases/[]/expect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ]
+          },
+          "required": {
+            "/": [
+              "project_id"
+            ],
+            "/cases/[]": [
+              "expect",
+              "name"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/base": [
+              "object"
+            ],
+            "/base/args": [
+              "object"
+            ],
+            "/base/context": [
+              "object"
+            ],
+            "/base/context/agent": [
+              "string"
+            ],
+            "/base/context/agentVersion": [
+              "string"
+            ],
+            "/base/context/environment": [
+              "string"
+            ],
+            "/base/context/risk": [
+              "string"
+            ],
+            "/base/context/subject": [
+              "string"
+            ],
+            "/base/context/traceCalls": [
+              "integer"
+            ],
+            "/base/context/traceId": [
+              "string"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/args": [
+              "object"
+            ],
+            "/cases/[]/context": [
+              "object"
+            ],
+            "/cases/[]/context/agent": [
+              "string"
+            ],
+            "/cases/[]/context/agentVersion": [
+              "string"
+            ],
+            "/cases/[]/context/environment": [
+              "string"
+            ],
+            "/cases/[]/context/risk": [
+              "string"
+            ],
+            "/cases/[]/context/subject": [
+              "string"
+            ],
+            "/cases/[]/context/traceCalls": [
+              "integer"
+            ],
+            "/cases/[]/context/traceId": [
+              "string"
+            ],
+            "/cases/[]/expect": [
+              "string"
+            ],
+            "/cases/[]/name": [
+              "string"
+            ],
+            "/cases/[]/rule": [
+              "string"
+            ],
+            "/document": [
+              "string"
+            ],
+            "/policy_id": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/boundaries/[]/probes/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/results/[]/decision/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/results/[]/decision/matched/[]/effect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/results/[]/expect": [
+              "\"allow\"",
+              "\"allow_with_limits\"",
+              "\"deny\"",
+              "\"require_approval\""
+            ],
+            "/tool_risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "activatable",
+              "activation_problems",
+              "boundaries",
+              "passed",
+              "results",
+              "spec_hash",
+              "tool",
+              "tool_risk",
+              "undecided"
+            ],
+            "/activation_problems/[]": [
+              "field",
+              "message"
+            ],
+            "/boundaries/[]": [
+              "integer",
+              "op",
+              "path",
+              "probes",
+              "rule",
+              "value"
+            ],
+            "/boundaries/[]/probes/[]": [
+              "effect",
+              "fail_mode_applied",
+              "value"
+            ],
+            "/results/[]": [
+              "decision",
+              "expect",
+              "name",
+              "passed"
+            ],
+            "/results/[]/decision": [
+              "effect",
+              "fail_mode_applied",
+              "matched",
+              "message",
+              "policy"
+            ],
+            "/results/[]/decision/errors/[]": [
+              "error",
+              "rule"
+            ],
+            "/results/[]/decision/matched/[]": [
+              "effect",
+              "rule"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/activatable": [
+              "boolean"
+            ],
+            "/activation_problems": [
+              "array"
+            ],
+            "/activation_problems/[]": [
+              "object"
+            ],
+            "/activation_problems/[]/field": [
+              "string"
+            ],
+            "/activation_problems/[]/message": [
+              "string"
+            ],
+            "/boundaries": [
+              "array"
+            ],
+            "/boundaries/[]": [
+              "object"
+            ],
+            "/boundaries/[]/integer": [
+              "boolean"
+            ],
+            "/boundaries/[]/op": [
+              "string"
+            ],
+            "/boundaries/[]/path": [
+              "string"
+            ],
+            "/boundaries/[]/probes": [
+              "array"
+            ],
+            "/boundaries/[]/probes/[]": [
+              "object"
+            ],
+            "/boundaries/[]/probes/[]/effect": [
+              "string"
+            ],
+            "/boundaries/[]/probes/[]/fail_mode_applied": [
+              "boolean"
+            ],
+            "/boundaries/[]/probes/[]/rule": [
+              "string"
+            ],
+            "/boundaries/[]/probes/[]/value": [
+              "number"
+            ],
+            "/boundaries/[]/rule": [
+              "string"
+            ],
+            "/boundaries/[]/value": [
+              "number"
+            ],
+            "/passed": [
+              "boolean"
+            ],
+            "/results": [
+              "array"
+            ],
+            "/results/[]": [
+              "object"
+            ],
+            "/results/[]/decision": [
+              "object"
+            ],
+            "/results/[]/decision/effect": [
+              "string"
+            ],
+            "/results/[]/decision/errors": [
+              "array"
+            ],
+            "/results/[]/decision/errors/[]": [
+              "object"
+            ],
+            "/results/[]/decision/errors/[]/error": [
+              "string"
+            ],
+            "/results/[]/decision/errors/[]/rule": [
+              "string"
+            ],
+            "/results/[]/decision/fail_mode_applied": [
+              "boolean"
+            ],
+            "/results/[]/decision/limits": [
+              "object"
+            ],
+            "/results/[]/decision/limits/maxResponseBytes": [
+              "integer"
+            ],
+            "/results/[]/decision/limits/timeoutMs": [
+              "integer"
+            ],
+            "/results/[]/decision/matched": [
+              "array"
+            ],
+            "/results/[]/decision/matched/[]": [
+              "object"
+            ],
+            "/results/[]/decision/matched/[]/effect": [
+              "string"
+            ],
+            "/results/[]/decision/matched/[]/message": [
+              "string"
+            ],
+            "/results/[]/decision/matched/[]/rule": [
+              "string"
+            ],
+            "/results/[]/decision/message": [
+              "string"
+            ],
+            "/results/[]/decision/policy": [
+              "string"
+            ],
+            "/results/[]/decision/rule": [
+              "string"
+            ],
+            "/results/[]/expect": [
+              "string"
+            ],
+            "/results/[]/expect_rule": [
+              "string"
+            ],
+            "/results/[]/name": [
+              "string"
+            ],
+            "/results/[]/passed": [
+              "boolean"
+            ],
+            "/results/[]/why": [
+              "string"
+            ],
+            "/spec_hash": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/tool_risk": [
+              "null",
+              "string"
+            ],
+            "/undecided": [
+              "array"
+            ],
+            "/undecided/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/policies/{policy_id}/activate": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:policy_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "project_id",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "activated_at",
+              "activated_by",
+              "active",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "tool",
+              "updated_at"
+            ],
+            "/active": [
+              "id",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/activated_at": [
+              "null",
+              "string"
+            ],
+            "/activated_by": [
+              "null",
+              "string"
+            ],
+            "/active": [
+              "null",
+              "object"
+            ],
+            "/active/id": [
+              "string"
+            ],
+            "/active/version": [
+              "integer"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/latest_version": [
+              "integer"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/policies/{policy_id}/deactivate": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:policy_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "project_id",
+              "reason"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/reason": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "activated_at",
+              "activated_by",
+              "active",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "tool",
+              "updated_at"
+            ],
+            "/active": [
+              "id",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/activated_at": [
+              "null",
+              "string"
+            ],
+            "/activated_by": [
+              "null",
+              "string"
+            ],
+            "/active": [
+              "null",
+              "object"
+            ],
+            "/active/id": [
+              "string"
+            ],
+            "/active/version": [
+              "integer"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/latest_version": [
+              "integer"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/policies/{policy_id}/versions": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:policy_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "document",
+              "project_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "created",
+              "policy",
+              "version"
+            ],
+            "/policy": [
+              "activated_at",
+              "activated_by",
+              "active",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "tool",
+              "updated_at"
+            ],
+            "/policy/active": [
+              "id",
+              "version"
+            ],
+            "/version": [
+              "active",
+              "created_at",
+              "created_by",
+              "document",
+              "id",
+              "policy_id",
+              "spec",
+              "spec_hash",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/policy": [
+              "object"
+            ],
+            "/policy/activated_at": [
+              "null",
+              "string"
+            ],
+            "/policy/activated_by": [
+              "null",
+              "string"
+            ],
+            "/policy/active": [
+              "null",
+              "object"
+            ],
+            "/policy/active/id": [
+              "string"
+            ],
+            "/policy/active/version": [
+              "integer"
+            ],
+            "/policy/created_at": [
+              "string"
+            ],
+            "/policy/created_by": [
+              "string"
+            ],
+            "/policy/description": [
+              "string"
+            ],
+            "/policy/id": [
+              "string"
+            ],
+            "/policy/latest_version": [
+              "integer"
+            ],
+            "/policy/name": [
+              "string"
+            ],
+            "/policy/tool": [
+              "string"
+            ],
+            "/policy/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/active": [
+              "boolean"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/document": [
+              "string"
+            ],
+            "/version/id": [
+              "string"
+            ],
+            "/version/policy_id": [
+              "string"
+            ],
+            "/version/spec": [
+              "object"
+            ],
+            "/version/spec_hash": [
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ]
+          }
+        },
+        "201": {
+          "enums": {},
+          "required": {
+            "/": [
+              "created",
+              "policy",
+              "version"
+            ],
+            "/policy": [
+              "activated_at",
+              "activated_by",
+              "active",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "tool",
+              "updated_at"
+            ],
+            "/policy/active": [
+              "id",
+              "version"
+            ],
+            "/version": [
+              "active",
+              "created_at",
+              "created_by",
+              "document",
+              "id",
+              "policy_id",
+              "spec",
+              "spec_hash",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/policy": [
+              "object"
+            ],
+            "/policy/activated_at": [
+              "null",
+              "string"
+            ],
+            "/policy/activated_by": [
+              "null",
+              "string"
+            ],
+            "/policy/active": [
+              "null",
+              "object"
+            ],
+            "/policy/active/id": [
+              "string"
+            ],
+            "/policy/active/version": [
+              "integer"
+            ],
+            "/policy/created_at": [
+              "string"
+            ],
+            "/policy/created_by": [
+              "string"
+            ],
+            "/policy/description": [
+              "string"
+            ],
+            "/policy/id": [
+              "string"
+            ],
+            "/policy/latest_version": [
+              "integer"
+            ],
+            "/policy/name": [
+              "string"
+            ],
+            "/policy/tool": [
+              "string"
+            ],
+            "/policy/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/active": [
+              "boolean"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/document": [
+              "string"
+            ],
+            "/version/id": [
+              "string"
+            ],
+            "/version/policy_id": [
+              "string"
+            ],
+            "/version/spec": [
+              "object"
+            ],
+            "/version/spec_hash": [
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /gateway/v1/approvals/{approval_id}/token": {
+      "parameters": {
+        "header:x-agenttwin-project": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:approval_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "201": {
+          "enums": {},
+          "required": {
+            "/": [
+              "approval_id",
+              "expires_at",
+              "token"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/approval_id": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/token": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /gateway/v1/tools/{tool}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:traceparent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-agent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-agent-version": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-approval-token": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-environment": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-project": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-trace-id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:tool": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": false,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "2XX": {
+          "enums": {},
+          "required": {},
+          "types": {}
+        }
+      }
+    },
+    "PUT /api/v1/tool-endpoints/{tool}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:tool": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/idempotency": [
+              "\"optional\"",
+              "\"required\""
+            ],
+            "/kind": [
+              "\"http\"",
+              "\"mcp\""
+            ],
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "project_id",
+              "risk",
+              "url"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/forward_headers": [
+              "array"
+            ],
+            "/forward_headers/[]": [
+              "string"
+            ],
+            "/idempotency": [
+              "string"
+            ],
+            "/kind": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/timeout_ms": [
+              "integer"
+            ],
+            "/url": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/idempotency": [
+              "\"optional\"",
+              "\"required\""
+            ],
+            "/kind": [
+              "\"http\"",
+              "\"mcp\""
+            ],
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created_at",
+              "forward_headers",
+              "idempotency",
+              "kind",
+              "risk",
+              "timeout_ms",
+              "tool",
+              "updated_at",
+              "updated_by",
+              "url"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/forward_headers": [
+              "array"
+            ],
+            "/forward_headers/[]": [
+              "string"
+            ],
+            "/idempotency": [
+              "string"
+            ],
+            "/kind": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/timeout_ms": [
+              "integer"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/updated_by": [
+              "string"
+            ],
+            "/url": [
+              "string"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/idempotency": [
+              "\"optional\"",
+              "\"required\""
+            ],
+            "/kind": [
+              "\"http\"",
+              "\"mcp\""
+            ],
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created_at",
+              "forward_headers",
+              "idempotency",
+              "kind",
+              "risk",
+              "timeout_ms",
+              "tool",
+              "updated_at",
+              "updated_by",
+              "url"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/forward_headers": [
+              "array"
+            ],
+            "/forward_headers/[]": [
+              "string"
+            ],
+            "/idempotency": [
+              "string"
+            ],
+            "/kind": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/timeout_ms": [
+              "integer"
+            ],
+            "/tool": [
+              "string"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/updated_by": [
+              "string"
+            ],
+            "/url": [
+              "string"
+            ]
+          }
+        }
+      }
+    }
+  },
   "simulation-service": {
     "GET /api/v1/scenarios": {
       "parameters": {

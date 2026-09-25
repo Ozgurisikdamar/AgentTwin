@@ -186,7 +186,7 @@ func TestPoliciesDecideEveryCall(t *testing.T) {
 	// No policy guards the read-only tool: it is forwarded.
 	r := h.invoke(agent, "lookup_order", map[string]any{"order_id": "ORD-1001"}, agentHeaders(2, ""))
 	if r.status != 200 || r.json(t)["status"] != "delivered" || r.header.Get("X-AgentTwin-Decision") != "allow" ||
-		r.header.Get("X-AgentTwin-Policy") != "" {
+		r.header.Get("X-AgentTwin-Policy") != "" || r.header.Get("Content-Type") != "application/json" {
 		t.Fatalf("lookup: %d %v %s", r.status, r.header, r.body)
 	}
 
@@ -314,8 +314,10 @@ func TestIdempotencyKeys(t *testing.T) {
 	// A tool's own refusal completes the key.
 	h.register("reject", "WRITE_REVERSIBLE", nil)
 	for range 2 {
-		if r := h.invoke(agent, "reject", map[string]any{"order_id": "X"}, agentHeaders(3, "reject-key")); r.status != 422 {
-			t.Fatalf("tool 422: %d", r.status)
+		// A JSON dialect is answered as JSON.
+		if r := h.invoke(agent, "reject", map[string]any{"order_id": "X"}, agentHeaders(3, "reject-key")); r.status != 422 ||
+			r.header.Get("Content-Type") != "application/json" {
+			t.Fatalf("tool 422: %d %s", r.status, r.header.Get("Content-Type"))
 		}
 	}
 	if n := len(h.tools.received("reject")); n != 1 {
@@ -408,6 +410,13 @@ func TestApprovalsExpire(t *testing.T) {
 	// A pending request past its expiry cannot be decided; a new one opens.
 	first := ask("a")
 	h.clock.advance(21 * time.Minute)
+	// Read before anything closes it: the stored PENDING is shown as it is.
+	if got := h.ok(200, h.viewer(), "GET", h.q("/api/v1/approvals/"+first), nil); got["status"] != "EXPIRED" {
+		t.Fatalf("an expired request reads %v", got["status"])
+	}
+	if got := h.ok(200, h.viewer(), "GET", h.q("/api/v1/approvals"), nil)["items"].([]any); got[0].(map[string]any)["status"] != "EXPIRED" {
+		t.Fatalf("listed as %v", got[0])
+	}
 	r := h.refused(409, "APPROVAL_CLOSED", h.reviewer(), "POST", "/api/v1/approvals/"+first+"/approve", map[string]any{"project_id": h.project, "reason": "late"})
 	if r.details(t)["status"] != "EXPIRED" {
 		t.Fatalf("closed %s", r.body)
@@ -457,6 +466,9 @@ func TestApprovalsExpire(t *testing.T) {
 	// A denied request says who denied it and why.
 	third := ask("c")
 	h.ok(200, h.reviewer(), "POST", "/api/v1/approvals/"+third+"/deny", map[string]any{"project_id": h.project, "reason": "no photos"})
+	if a := h.audits(); a[len(a)-1] != "approval.denied" {
+		t.Fatalf("audit %v", a)
+	}
 	r = h.refused(403, "APPROVAL_DENIED", agent, "POST", "/gateway/v1/approvals/"+third+"/token", nil)
 	if r.details(t)["reason"] != "no photos" {
 		t.Fatalf("denied %s", r.body)
@@ -582,7 +594,7 @@ spec:
 func TestMCPTools(t *testing.T) {
 	h := newHarness(t)
 	agent := h.key("agent")
-	for _, tool := range []string{"lookup_order", "broken"} {
+	for _, tool := range []string{"lookup_order", "broken", "confused"} {
 		h.ok(201, h.owner(), "PUT", "/api/v1/tool-endpoints/"+tool, map[string]any{"project_id": h.project, "kind": "mcp",
 			"url": h.tools.srv.URL + "/mcp", "risk": "READ"})
 	}
@@ -594,6 +606,7 @@ func TestMCPTools(t *testing.T) {
 		t.Fatalf("mcp calls %+v", calls)
 	}
 	expectRefused(t, h.invoke(agent, "broken", map[string]any{}, nil), 502, "TOOL_PROTOCOL_ERROR")
+	expectRefused(t, h.invoke(agent, "confused", map[string]any{}, nil), 502, "TOOL_PROTOCOL_ERROR")
 }
 
 func TestWhatIsRecordedIsRedactedAndTheCallCompletesWithoutTheAgent(t *testing.T) {

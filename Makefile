@@ -115,7 +115,7 @@ e2e: env ## Playwright end-to-end tests against the running stack (make dev firs
 	$(LOAD_ENV); cd apps/web && $(PNPM) exec playwright test
 
 .PHONY: contracts-check
-contracts-check: ## Detect breaking changes in event schemas
+contracts-check: ## Detect breaking changes in event schemas and API documents
 	$(UV) run python scripts/contracts_check.py
 
 .PHONY: build

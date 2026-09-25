@@ -52,6 +52,34 @@ seed reproduces the verdict; the known-good version passes every scenario; an
 engineer authors, versions, runs, cancels and archives a scenario; a viewer is
 read-only in the UI and gets 403 from the API.
 
+## API contracts (2026-09-25)
+
+`packages/contracts/openapi/simulation-service.openapi.yaml` — 17 operations
+(14 public, 2 twin runtime, 1 webhook: the agent adapter contract) — is held to
+the service by four checks (ADR-0021):
+
+| Check | Result |
+|---|---|
+| Document | valid OpenAPI 3.1 (openapi-spec-validator 0.8.5); convention and unused-component checks pass |
+| Routes | the 16 routes the service serves are exactly the 16 documented path operations, both ways |
+| Traffic | the 20 simulation integration tests check every response strictly, every accepted request and every worker → agent call; the contract walk covers all 17 operations |
+| Compatibility | `make contracts-check`: 14 event schemas and 1 API document (17 operations) compatible with the baselines |
+| Mutation proofs | an undocumented response field (`tool_count`), query parameter (`name`) or agent request field (`run_context.case_id`), and an undocumented route (`capabilities`), each fail the tests; four breaking edits (request field removed, response field made optional, type changed, new required parameter) give 12 `BREAKING` lines, two compatible edits none |
+
+Found and fixed while writing it: a twin's description was only returned in
+lists; an agent's answer was stored with whatever types it sent; every
+response the edge proxied carried its five headers twice (`X-Request-Id` and
+the security headers) — a Go test reproduces it and fails without the fix.
+
+Gates on this state: `make lint` clean (mypy strict, 63 files); `make test` —
+Go 103 tests + 81 subtests with real PostgreSQL + RabbitMQ (0 skipped), Python
+399 (core 134, simulation service 140, SDK 68, demo 31, contracts check 26),
+web 101; `make dev` healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical);
+`make doctor` 0 failed; `make e2e` 10/10.
+
+Next: the clients checked against the document (web types, Python SDK), then
+the control-plane and trace-service documents with the same traffic check in Go.
+
 ## Definition of Done tracking
 
 See the final delivery report in `docs/delivery-report.md` (written at the end;

@@ -235,7 +235,7 @@ def tools_json(definition: TwinDefinition) -> list[dict[str, Any]]:
 
 
 def twin_json(row: Mapping[str, Any]) -> dict[str, Any]:
-    return _pick(
+    out = _pick(
         row,
         (
             "id",
@@ -250,6 +250,12 @@ def twin_json(row: Mapping[str, Any]) -> dict[str, Any]:
             "created_at",
         ),
     )
+    doc = row.get("document")
+    if out["description"] is None and isinstance(doc, Mapping):
+        # Lists select the description; a full row carries it in the document.
+        described = (doc.get("metadata") or {}).get("description")
+        out["description"] = described if isinstance(described, str) else None
+    return out
 
 
 def _redact(value: Any, canaries: Sequence[str], depth: int = 0) -> Any:

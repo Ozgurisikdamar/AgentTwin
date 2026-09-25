@@ -74,16 +74,34 @@ func Recover() Middleware {
 	}
 }
 
+// securityHeaders are set on every API response.
+var securityHeaders = [][2]string{
+	{"X-Content-Type-Options", "nosniff"},
+	{"X-Frame-Options", "DENY"},
+	{"Referrer-Policy", "no-referrer"},
+	{"Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"},
+	{"Cache-Control", "no-store"},
+}
+
+// OwnedResponseHeaders are the response headers RequestID and SecurityHeaders
+// set. A reverse proxy behind them must drop these from the upstream's
+// response, or the client receives each twice (the proxy adds, not replaces).
+func OwnedResponseHeaders() []string {
+	out := []string{RequestIDHeader}
+	for _, kv := range securityHeaders {
+		out = append(out, kv[0])
+	}
+	return out
+}
+
 // SecurityHeaders sets conservative headers for API responses.
 func SecurityHeaders() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
-			h.Set("X-Content-Type-Options", "nosniff")
-			h.Set("X-Frame-Options", "DENY")
-			h.Set("Referrer-Policy", "no-referrer")
-			h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-			h.Set("Cache-Control", "no-store")
+			for _, kv := range securityHeaders {
+				h.Set(kv[0], kv[1])
+			}
 			next.ServeHTTP(w, r)
 		})
 	}

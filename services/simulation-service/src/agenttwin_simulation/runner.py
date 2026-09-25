@@ -107,32 +107,31 @@ def completed_event(run: Mapping[str, Any]) -> Envelope:
     )
 
 
-def _truncate(value: Any, limit: int) -> Any:
-    return value[:limit] if isinstance(value, str) else value
+_AGENT_TEXT = ("output", "trace_id", "status", "agent_version", "model", "model_kind", "claimed_outcome")
 
 
 def agent_result_json(call: AgentCall) -> dict[str, Any]:
-    """What is kept of the agent's answer (bounded; never the credentials)."""
+    """What is kept of the agent's answer: bounded, never the credentials, and
+    only values of the types the adapter contract defines — the answer is
+    untrusted input, and what is kept is served as the documented shape."""
     out: dict[str, Any] = {"kind": call.kind, "http_status": call.status_code, "elapsed_ms": call.elapsed_ms}
     if call.error:
         out["error"] = call.error
     body = call.body or {}
-    for key in (
-        "output",
-        "trace_id",
-        "status",
-        "agent_version",
-        "model",
-        "model_kind",
-        "steps",
-        "claimed_outcome",
-        "business_outcome",
-    ):
-        if key in body:
-            out[key] = _truncate(body[key], MAX_OUTPUT_CHARS if key == "output" else 200)
+    for key in _AGENT_TEXT:
+        value = body.get(key)
+        if isinstance(value, str):
+            out[key] = value[: MAX_OUTPUT_CHARS if key == "output" else 200]
+    outcome = body.get("business_outcome", "")
+    if outcome is None or (isinstance(outcome, str) and outcome):
+        out["business_outcome"] = outcome[:200] if outcome else None
+    steps = body.get("steps")
+    if isinstance(steps, int) and not isinstance(steps, bool) and steps >= 0:
+        out["steps"] = steps
     calls = body.get("tool_calls")
     if isinstance(calls, list):
-        out["tool_calls"] = calls[:100]  # the agent's own account, for comparison with the twin's records
+        # The agent's own account, for comparison with the twin's records.
+        out["tool_calls"] = [c for c in calls[:100] if isinstance(c, Mapping)]
     problem = body.get("error")
     if not call.ok and isinstance(problem, Mapping):
         out["agent_error"] = {

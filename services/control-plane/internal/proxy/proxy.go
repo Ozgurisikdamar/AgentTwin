@@ -102,6 +102,11 @@ func New(tokens *authn.TokenService, targets map[string]string, log *slog.Logger
 			},
 			ModifyResponse: func(resp *http.Response) error {
 				resp.Header.Del("Server")
+				// The edge sets these itself (request id, security headers);
+				// copied from the upstream too, every one would appear twice.
+				for _, h := range httpx.OwnedResponseHeaders() {
+					resp.Header.Del(h)
+				}
 				return nil
 			},
 			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {

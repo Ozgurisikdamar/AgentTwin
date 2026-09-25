@@ -15,13 +15,7 @@ from typing import Any
 import httpx
 import pytest
 
-from agenttwin_core.db import transaction
-from agenttwin_core.jobs import JobStatus
-from agenttwin_simulation.cases import initial_state
-from agenttwin_simulation.twin.definition import load_twin
-from agenttwin_simulation.twin.engine import CaseState
-from agenttwin_simulation.twin_http import token_hash
-from sim_testutil import AGENT, PROJECT, Stack, simulation_stack
+from sim_testutil import AGENT, PROJECT, Stack, running_cases, simulation_stack
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -53,22 +47,6 @@ WIRE: dict[str, Any] = {
         "expectations": [{"type": "toolCalled", "tool": "lookup_order"}],
     },
 }
-
-
-async def running_cases(s: Stack, run_id: str, tokens: dict[str, str]) -> dict[str, str]:
-    """Claims the run like a worker would and opens its cases with known
-    tokens (scenario name -> token); returns scenario name -> case id."""
-    claimed = await s.store.claim_next_run("test-worker", 60)
-    assert claimed is not None and claimed["id"] == run_id
-    async with transaction(s.pool) as conn:
-        assert await s.store.transition(conn, run_id, JobStatus.RUNNING, "test", owner="test-worker")
-    ids = {}
-    for case in await s.store.pending_cases(run_id):
-        definition = load_twin(case["twin_document"])
-        state = CaseState.fresh(initial_state(definition, case["scenario_document"]))
-        await s.store.start_case(case["id"], token_hash(tokens[case["scenario_name"]]), state.to_json())
-        ids[case["scenario_name"]] = str(case["id"])
-    return ids
 
 
 def auth(token: str) -> dict[str, str]:

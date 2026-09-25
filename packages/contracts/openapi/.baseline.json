@@ -1,0 +1,4061 @@
+{
+  "simulation-service": {
+    "GET /api/v1/scenarios": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:agent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:include_archived": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"0\"",
+                "\"1\"",
+                "\"false\"",
+                "\"true\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:name": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:q": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:severity": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"critical\"",
+                "\"high\"",
+                "\"low\"",
+                "\"medium\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:tag": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/items/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy_derived\"",
+              "\"production_regression\"",
+              "\"production_replay\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "agent",
+              "archived",
+              "created_at",
+              "created_by",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "project_id",
+              "severity",
+              "source",
+              "tags",
+              "twin",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent": [
+              "null",
+              "string"
+            ],
+            "/items/[]/archived": [
+              "boolean"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/description": [
+              "string"
+            ],
+            "/items/[]/expectation_count": [
+              "integer"
+            ],
+            "/items/[]/fault_count": [
+              "integer"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/latest_version": [
+              "integer"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/severity": [
+              "string"
+            ],
+            "/items/[]/source": [
+              "string"
+            ],
+            "/items/[]/spec_hash": [
+              "string"
+            ],
+            "/items/[]/tags": [
+              "array"
+            ],
+            "/items/[]/tags/[]": [
+              "string"
+            ],
+            "/items/[]/twin": [
+              "null",
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/items/[]/version_id": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/scenarios/{scenario_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:scenario_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:version": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/scenario/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/scenario/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy_derived\"",
+              "\"production_regression\"",
+              "\"production_replay\""
+            ]
+          },
+          "required": {
+            "/": [
+              "document",
+              "scenario",
+              "version",
+              "version_created_at",
+              "version_created_by",
+              "versions",
+              "yaml"
+            ],
+            "/scenario": [
+              "agent",
+              "archived",
+              "created_at",
+              "created_by",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "project_id",
+              "severity",
+              "source",
+              "tags",
+              "twin",
+              "updated_at"
+            ],
+            "/versions/[]": [
+              "created_at",
+              "created_by",
+              "id",
+              "spec_hash",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "object"
+            ],
+            "/scenario": [
+              "object"
+            ],
+            "/scenario/agent": [
+              "null",
+              "string"
+            ],
+            "/scenario/archived": [
+              "boolean"
+            ],
+            "/scenario/created_at": [
+              "string"
+            ],
+            "/scenario/created_by": [
+              "string"
+            ],
+            "/scenario/description": [
+              "string"
+            ],
+            "/scenario/expectation_count": [
+              "integer"
+            ],
+            "/scenario/fault_count": [
+              "integer"
+            ],
+            "/scenario/id": [
+              "string"
+            ],
+            "/scenario/latest_version": [
+              "integer"
+            ],
+            "/scenario/name": [
+              "string"
+            ],
+            "/scenario/organization_id": [
+              "string"
+            ],
+            "/scenario/project_id": [
+              "string"
+            ],
+            "/scenario/severity": [
+              "string"
+            ],
+            "/scenario/source": [
+              "string"
+            ],
+            "/scenario/spec_hash": [
+              "string"
+            ],
+            "/scenario/tags": [
+              "array"
+            ],
+            "/scenario/tags/[]": [
+              "string"
+            ],
+            "/scenario/twin": [
+              "null",
+              "string"
+            ],
+            "/scenario/updated_at": [
+              "string"
+            ],
+            "/scenario/version_id": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ],
+            "/version_created_at": [
+              "string"
+            ],
+            "/version_created_by": [
+              "string"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/id": [
+              "string"
+            ],
+            "/versions/[]/spec_hash": [
+              "string"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ],
+            "/yaml": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/simulations": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:agent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:eval_run_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:status": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"CANCELLED\"",
+                "\"COMPLETED\"",
+                "\"EVALUATING\"",
+                "\"FAILED\"",
+                "\"PREPARING\"",
+                "\"QUEUED\"",
+                "\"RUNNING\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/items/[]/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent_name": [
+              "string"
+            ],
+            "/items/[]/agent_version": [
+              "string"
+            ],
+            "/items/[]/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/attempts": [
+              "integer"
+            ],
+            "/items/[]/cancel_requested": [
+              "boolean"
+            ],
+            "/items/[]/cancelled": [
+              "integer"
+            ],
+            "/items/[]/case_count": [
+              "integer"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/critical_failures": [
+              "integer"
+            ],
+            "/items/[]/error": [
+              "null",
+              "string"
+            ],
+            "/items/[]/errored": [
+              "integer"
+            ],
+            "/items/[]/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/failed": [
+              "integer"
+            ],
+            "/items/[]/finished_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/finished_cases": [
+              "integer"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/passed": [
+              "integer"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/release_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/requested_by": [
+              "string"
+            ],
+            "/items/[]/side": [
+              "string"
+            ],
+            "/items/[]/started_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/status": [
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/simulations/capabilities": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/fault_types/[]": [
+              "\"auth_denied\"",
+              "\"delay\"",
+              "\"dropped_connection\"",
+              "\"duplicate_response\"",
+              "\"http_429\"",
+              "\"http_500\"",
+              "\"http_503\"",
+              "\"inconsistent_state\"",
+              "\"malformed_json\"",
+              "\"message_duplication\"",
+              "\"non_retryable_error\"",
+              "\"partial_response\"",
+              "\"permanent_unavailable\"",
+              "\"rate_limit\"",
+              "\"semantic_bad_response\"",
+              "\"stale_response\"",
+              "\"success_without_mutation\"",
+              "\"timeout_after_mutation\"",
+              "\"timeout_before_mutation\"",
+              "\"transient_unavailable\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agents",
+              "engine",
+              "evaluators",
+              "expectation_types",
+              "fault_types",
+              "limits"
+            ],
+            "/limits": [
+              "case_timeout_seconds",
+              "max_calls_per_case",
+              "max_cases",
+              "max_fault_delay_ms"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agents": [
+              "array"
+            ],
+            "/agents/[]": [
+              "string"
+            ],
+            "/engine": [
+              "string"
+            ],
+            "/evaluators": [
+              "object"
+            ],
+            "/expectation_types": [
+              "array"
+            ],
+            "/expectation_types/[]": [
+              "string"
+            ],
+            "/fault_types": [
+              "array"
+            ],
+            "/fault_types/[]": [
+              "string"
+            ],
+            "/limits": [
+              "object"
+            ],
+            "/limits/case_timeout_seconds": [
+              "number"
+            ],
+            "/limits/max_calls_per_case": [
+              "integer"
+            ],
+            "/limits/max_cases": [
+              "integer"
+            ],
+            "/limits/max_fault_delay_ms": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/simulations/{run_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:run_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/cases/[]/outcome_status": [
+              "\"failed\"",
+              "\"none\"",
+              "\"pending\"",
+              "\"posted\""
+            ],
+            "/cases/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/cases/[]/status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/run/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/transitions/[]/from_status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/transitions/[]/to_status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "cases",
+              "run",
+              "transitions"
+            ],
+            "/cases/[]": [
+              "call_count",
+              "error",
+              "finished_at",
+              "id",
+              "labels",
+              "latency_ms",
+              "outcome_status",
+              "position",
+              "reason",
+              "run_id",
+              "scenario_id",
+              "scenario_name",
+              "scenario_version_id",
+              "score",
+              "seed",
+              "severity",
+              "started_at",
+              "status",
+              "tenant",
+              "trace_id",
+              "twin_definition_id"
+            ],
+            "/run": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/run/pinning": [
+              "agent",
+              "correlation_id",
+              "engine",
+              "evaluators",
+              "scenarios",
+              "seed",
+              "selection"
+            ],
+            "/run/pinning/agent": [
+              "commit_sha",
+              "manifest_sha256",
+              "model_name",
+              "model_provider",
+              "name",
+              "prompt_sha256",
+              "version",
+              "version_id"
+            ],
+            "/run/pinning/scenarios/[]": [
+              "scenario",
+              "scenario_version_id",
+              "seed",
+              "spec_hash",
+              "twin",
+              "twin_definition_id",
+              "twin_spec_hash",
+              "twin_version"
+            ],
+            "/run/pinning/selection": [
+              "scenarios",
+              "tags"
+            ],
+            "/transitions/[]": [
+              "at",
+              "from_status",
+              "reason",
+              "seq",
+              "to_status"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/call_count": [
+              "integer"
+            ],
+            "/cases/[]/error": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/finished_at": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/id": [
+              "string"
+            ],
+            "/cases/[]/labels": [
+              "array"
+            ],
+            "/cases/[]/labels/[]": [
+              "string"
+            ],
+            "/cases/[]/latency_ms": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/outcome_status": [
+              "string"
+            ],
+            "/cases/[]/position": [
+              "integer"
+            ],
+            "/cases/[]/reason": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/run_id": [
+              "string"
+            ],
+            "/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/cases/[]/scenario_version_id": [
+              "string"
+            ],
+            "/cases/[]/score": [
+              "null",
+              "number"
+            ],
+            "/cases/[]/seed": [
+              "integer"
+            ],
+            "/cases/[]/severity": [
+              "string"
+            ],
+            "/cases/[]/started_at": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/status": [
+              "string"
+            ],
+            "/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/twin_definition_id": [
+              "string"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/agent_version": [
+              "string"
+            ],
+            "/run/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/cancelled": [
+              "integer"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/critical_failures": [
+              "integer"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/errored": [
+              "integer"
+            ],
+            "/run/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/failed": [
+              "integer"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/finished_cases": [
+              "integer"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/passed": [
+              "integer"
+            ],
+            "/run/pinning": [
+              "object"
+            ],
+            "/run/pinning/agent": [
+              "object"
+            ],
+            "/run/pinning/agent/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/manifest_sha256": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/model_name": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/model_provider": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/name": [
+              "string"
+            ],
+            "/run/pinning/agent/prompt_sha256": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/version": [
+              "string"
+            ],
+            "/run/pinning/agent/version_id": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/correlation_id": [
+              "string"
+            ],
+            "/run/pinning/engine": [
+              "string"
+            ],
+            "/run/pinning/evaluators": [
+              "object"
+            ],
+            "/run/pinning/scenarios": [
+              "array"
+            ],
+            "/run/pinning/scenarios/[]": [
+              "object"
+            ],
+            "/run/pinning/scenarios/[]/scenario": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/scenario_version_id": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/seed": [
+              "integer"
+            ],
+            "/run/pinning/scenarios/[]/spec_hash": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin_definition_id": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin_spec_hash": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin_version": [
+              "integer"
+            ],
+            "/run/pinning/seed": [
+              "integer"
+            ],
+            "/run/pinning/selection": [
+              "object"
+            ],
+            "/run/pinning/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/run/pinning/selection/scenarios/[]": [
+              "string"
+            ],
+            "/run/pinning/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/run/pinning/selection/tags/[]": [
+              "string"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/side": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ],
+            "/transitions": [
+              "array"
+            ],
+            "/transitions/[]": [
+              "object"
+            ],
+            "/transitions/[]/at": [
+              "string"
+            ],
+            "/transitions/[]/from_status": [
+              "null",
+              "string"
+            ],
+            "/transitions/[]/reason": [
+              "null",
+              "string"
+            ],
+            "/transitions/[]/seq": [
+              "integer"
+            ],
+            "/transitions/[]/to_status": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/simulations/{run_id}/cases/{case_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:case_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:run_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/case/agent_result/kind": [
+              "\"http_error\"",
+              "\"invalid_response\"",
+              "\"ok\"",
+              "\"timeout\"",
+              "\"unreachable\""
+            ],
+            "/case/outcome_status": [
+              "\"failed\"",
+              "\"none\"",
+              "\"pending\"",
+              "\"posted\""
+            ],
+            "/case/results/[]/evidence/[]/kind": [
+              "\"agent\"",
+              "\"config\"",
+              "\"output\"",
+              "\"state\"",
+              "\"tool_call\""
+            ],
+            "/case/results/[]/status": [
+              "\"ERROR\"",
+              "\"FAIL\"",
+              "\"PASS\"",
+              "\"SKIPPED\""
+            ],
+            "/case/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/case/state_diff/[]/op": [
+              "\"added\"",
+              "\"changed\"",
+              "\"removed\""
+            ],
+            "/case/status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/case/verdict/status": [
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"PASSED\""
+            ],
+            "/steps/[]/kind": [
+              "\"retrieval\"",
+              "\"tool_call\""
+            ],
+            "/steps/[]/record/anyOf[0]/changes/[]/op": [
+              "\"added\"",
+              "\"changed\"",
+              "\"removed\""
+            ],
+            "/steps/[]/record/anyOf[0]/status": [
+              "\"denied\"",
+              "\"dropped\"",
+              "\"error\"",
+              "\"invalid\"",
+              "\"malformed\"",
+              "\"not_found\"",
+              "\"ok\"",
+              "\"partial\"",
+              "\"rate_limited\"",
+              "\"timeout\"",
+              "\"unknown_tool\""
+            ]
+          },
+          "required": {
+            "/": [
+              "case",
+              "scenario",
+              "state",
+              "steps",
+              "twin"
+            ],
+            "/case": [
+              "agent_result",
+              "call_count",
+              "error",
+              "finished_at",
+              "id",
+              "labels",
+              "latency_ms",
+              "outcome_status",
+              "position",
+              "reason",
+              "results",
+              "run_id",
+              "scenario_id",
+              "scenario_name",
+              "scenario_version_id",
+              "score",
+              "seed",
+              "severity",
+              "started_at",
+              "state_diff",
+              "status",
+              "tenant",
+              "trace_id",
+              "twin_definition_id",
+              "verdict"
+            ],
+            "/case/agent_result": [
+              "elapsed_ms",
+              "http_status",
+              "kind"
+            ],
+            "/case/agent_result/agent_error": [
+              "code",
+              "message"
+            ],
+            "/case/results/[]": [
+              "critical",
+              "evaluator",
+              "evaluator_version",
+              "evidence",
+              "expectation",
+              "label",
+              "reason",
+              "score",
+              "status"
+            ],
+            "/case/results/[]/evidence/[]": [
+              "detail",
+              "kind"
+            ],
+            "/case/state_diff/[]": [
+              "op",
+              "path"
+            ],
+            "/case/verdict": [
+              "critical_failures",
+              "errored",
+              "failed",
+              "labels",
+              "passed",
+              "reason",
+              "score",
+              "skipped",
+              "status"
+            ],
+            "/scenario": [
+              "document",
+              "faults"
+            ],
+            "/state": [
+              "final",
+              "initial"
+            ],
+            "/steps/[]": [
+              "created_at",
+              "kind",
+              "latency_ms",
+              "record",
+              "seq",
+              "tool"
+            ],
+            "/steps/[]/record/anyOf[0]": [
+              "arguments",
+              "call_number",
+              "changes",
+              "cross_tenant",
+              "delay_ms",
+              "effect_key",
+              "error_code",
+              "expects_mutation",
+              "fault",
+              "http_status",
+              "mutated",
+              "policy_violation",
+              "redelivered",
+              "replayed",
+              "response",
+              "risk",
+              "seq",
+              "status",
+              "tool"
+            ],
+            "/steps/[]/record/anyOf[0]/changes/[]": [
+              "op",
+              "path"
+            ],
+            "/steps/[]/record/anyOf[1]": [
+              "documents",
+              "kind",
+              "limit",
+              "query",
+              "seq"
+            ],
+            "/steps/[]/record/anyOf[1]/documents/[]": [
+              "id",
+              "trusted"
+            ],
+            "/twin": [
+              "id",
+              "name",
+              "spec_hash",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/case": [
+              "object"
+            ],
+            "/case/agent_result": [
+              "null",
+              "object"
+            ],
+            "/case/agent_result/agent_error": [
+              "object"
+            ],
+            "/case/agent_result/agent_error/code": [
+              "string"
+            ],
+            "/case/agent_result/agent_error/message": [
+              "string"
+            ],
+            "/case/agent_result/agent_version": [
+              "string"
+            ],
+            "/case/agent_result/business_outcome": [
+              "null",
+              "string"
+            ],
+            "/case/agent_result/claimed_outcome": [
+              "string"
+            ],
+            "/case/agent_result/elapsed_ms": [
+              "number"
+            ],
+            "/case/agent_result/error": [
+              "string"
+            ],
+            "/case/agent_result/http_status": [
+              "integer",
+              "null"
+            ],
+            "/case/agent_result/kind": [
+              "string"
+            ],
+            "/case/agent_result/model": [
+              "string"
+            ],
+            "/case/agent_result/model_kind": [
+              "string"
+            ],
+            "/case/agent_result/output": [
+              "string"
+            ],
+            "/case/agent_result/status": [
+              "string"
+            ],
+            "/case/agent_result/steps": [
+              "integer"
+            ],
+            "/case/agent_result/tool_calls": [
+              "array"
+            ],
+            "/case/agent_result/tool_calls/[]": [
+              "object"
+            ],
+            "/case/agent_result/trace_id": [
+              "string"
+            ],
+            "/case/call_count": [
+              "integer"
+            ],
+            "/case/error": [
+              "null",
+              "string"
+            ],
+            "/case/finished_at": [
+              "null",
+              "string"
+            ],
+            "/case/id": [
+              "string"
+            ],
+            "/case/labels": [
+              "array"
+            ],
+            "/case/labels/[]": [
+              "string"
+            ],
+            "/case/latency_ms": [
+              "null",
+              "number"
+            ],
+            "/case/outcome_status": [
+              "string"
+            ],
+            "/case/position": [
+              "integer"
+            ],
+            "/case/reason": [
+              "null",
+              "string"
+            ],
+            "/case/results": [
+              "array"
+            ],
+            "/case/results/[]": [
+              "object"
+            ],
+            "/case/results/[]/critical": [
+              "boolean"
+            ],
+            "/case/results/[]/evaluator": [
+              "string"
+            ],
+            "/case/results/[]/evaluator_version": [
+              "string"
+            ],
+            "/case/results/[]/evidence": [
+              "array"
+            ],
+            "/case/results/[]/evidence/[]": [
+              "object"
+            ],
+            "/case/results/[]/evidence/[]/detail": [
+              "string"
+            ],
+            "/case/results/[]/evidence/[]/kind": [
+              "string"
+            ],
+            "/case/results/[]/evidence/[]/ref": [
+              "string"
+            ],
+            "/case/results/[]/expectation": [
+              "object"
+            ],
+            "/case/results/[]/expectation/id": [
+              "string"
+            ],
+            "/case/results/[]/expectation/type": [
+              "string"
+            ],
+            "/case/results/[]/label": [
+              "null",
+              "string"
+            ],
+            "/case/results/[]/reason": [
+              "string"
+            ],
+            "/case/results/[]/score": [
+              "null",
+              "number"
+            ],
+            "/case/results/[]/status": [
+              "string"
+            ],
+            "/case/run_id": [
+              "string"
+            ],
+            "/case/scenario_id": [
+              "string"
+            ],
+            "/case/scenario_name": [
+              "string"
+            ],
+            "/case/scenario_version_id": [
+              "string"
+            ],
+            "/case/score": [
+              "null",
+              "number"
+            ],
+            "/case/seed": [
+              "integer"
+            ],
+            "/case/severity": [
+              "string"
+            ],
+            "/case/started_at": [
+              "null",
+              "string"
+            ],
+            "/case/state_diff": [
+              "array"
+            ],
+            "/case/state_diff/[]": [
+              "object"
+            ],
+            "/case/state_diff/[]/op": [
+              "string"
+            ],
+            "/case/state_diff/[]/path": [
+              "string"
+            ],
+            "/case/status": [
+              "string"
+            ],
+            "/case/tenant": [
+              "null",
+              "string"
+            ],
+            "/case/trace_id": [
+              "null",
+              "string"
+            ],
+            "/case/twin_definition_id": [
+              "string"
+            ],
+            "/case/verdict": [
+              "null",
+              "object"
+            ],
+            "/case/verdict/critical_failures": [
+              "integer"
+            ],
+            "/case/verdict/errored": [
+              "integer"
+            ],
+            "/case/verdict/failed": [
+              "integer"
+            ],
+            "/case/verdict/labels": [
+              "array"
+            ],
+            "/case/verdict/labels/[]": [
+              "string"
+            ],
+            "/case/verdict/passed": [
+              "integer"
+            ],
+            "/case/verdict/reason": [
+              "string"
+            ],
+            "/case/verdict/score": [
+              "null",
+              "number"
+            ],
+            "/case/verdict/skipped": [
+              "integer"
+            ],
+            "/case/verdict/status": [
+              "string"
+            ],
+            "/scenario": [
+              "object"
+            ],
+            "/scenario/document": [
+              "object"
+            ],
+            "/scenario/faults": [
+              "array"
+            ],
+            "/scenario/faults/[]": [
+              "object"
+            ],
+            "/state": [
+              "object"
+            ],
+            "/state/final": [
+              "null",
+              "object"
+            ],
+            "/state/initial": [
+              "null",
+              "object"
+            ],
+            "/steps": [
+              "array"
+            ],
+            "/steps/[]": [
+              "object"
+            ],
+            "/steps/[]/created_at": [
+              "string"
+            ],
+            "/steps/[]/kind": [
+              "string"
+            ],
+            "/steps/[]/latency_ms": [
+              "null",
+              "number"
+            ],
+            "/steps/[]/record/anyOf[0]": [
+              "object"
+            ],
+            "/steps/[]/record/anyOf[0]/arguments": [
+              "object"
+            ],
+            "/steps/[]/record/anyOf[0]/call_number": [
+              "integer"
+            ],
+            "/steps/[]/record/anyOf[0]/changes": [
+              "array"
+            ],
+            "/steps/[]/record/anyOf[0]/changes/[]": [
+              "object"
+            ],
+            "/steps/[]/record/anyOf[0]/changes/[]/op": [
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/changes/[]/path": [
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/cross_tenant": [
+              "null",
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/delay_ms": [
+              "integer"
+            ],
+            "/steps/[]/record/anyOf[0]/effect_key": [
+              "null",
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/error_code": [
+              "null",
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/expects_mutation": [
+              "boolean"
+            ],
+            "/steps/[]/record/anyOf[0]/fault": [
+              "null",
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/http_status": [
+              "integer"
+            ],
+            "/steps/[]/record/anyOf[0]/mutated": [
+              "boolean"
+            ],
+            "/steps/[]/record/anyOf[0]/policy_violation": [
+              "null",
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/redelivered": [
+              "boolean"
+            ],
+            "/steps/[]/record/anyOf[0]/replayed": [
+              "boolean"
+            ],
+            "/steps/[]/record/anyOf[0]/risk": [
+              "null",
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/seq": [
+              "integer"
+            ],
+            "/steps/[]/record/anyOf[0]/status": [
+              "string"
+            ],
+            "/steps/[]/record/anyOf[0]/tool": [
+              "string"
+            ],
+            "/steps/[]/record/anyOf[1]": [
+              "object"
+            ],
+            "/steps/[]/record/anyOf[1]/documents": [
+              "array"
+            ],
+            "/steps/[]/record/anyOf[1]/documents/[]": [
+              "object"
+            ],
+            "/steps/[]/record/anyOf[1]/documents/[]/id": [
+              "string"
+            ],
+            "/steps/[]/record/anyOf[1]/documents/[]/trusted": [
+              "boolean"
+            ],
+            "/steps/[]/record/anyOf[1]/limit": [
+              "integer"
+            ],
+            "/steps/[]/record/anyOf[1]/query": [
+              "string"
+            ],
+            "/steps/[]/record/anyOf[1]/seq": [
+              "integer"
+            ],
+            "/steps/[]/seq": [
+              "integer"
+            ],
+            "/steps/[]/tool": [
+              "null",
+              "string"
+            ],
+            "/twin": [
+              "null",
+              "object"
+            ],
+            "/twin/id": [
+              "string"
+            ],
+            "/twin/name": [
+              "string"
+            ],
+            "/twin/spec_hash": [
+              "string"
+            ],
+            "/twin/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/twins": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "spec_hash",
+              "tool_count",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/description": [
+              "null",
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/spec_hash": [
+              "string"
+            ],
+            "/items/[]/tool_count": [
+              "integer"
+            ],
+            "/items/[]/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/twins/{twin_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:twin_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/twin/tools/[]/handler": [
+              "\"custom\"",
+              "\"echo\"",
+              "\"mutate\"",
+              "\"read\"",
+              "\"recorded\"",
+              "\"static\""
+            ],
+            "/twin/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "document",
+              "twin",
+              "versions",
+              "yaml"
+            ],
+            "/twin": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "spec_hash",
+              "tenant_key",
+              "tool_count",
+              "tools",
+              "version"
+            ],
+            "/twin/tools/[]": [
+              "description",
+              "handler",
+              "idempotency",
+              "mutates",
+              "name",
+              "risk",
+              "tenant_scoped"
+            ],
+            "/versions/[]": [
+              "created_at",
+              "created_by",
+              "id",
+              "spec_hash",
+              "tool_count",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "object"
+            ],
+            "/twin": [
+              "object"
+            ],
+            "/twin/created_at": [
+              "string"
+            ],
+            "/twin/created_by": [
+              "string"
+            ],
+            "/twin/description": [
+              "null",
+              "string"
+            ],
+            "/twin/id": [
+              "string"
+            ],
+            "/twin/name": [
+              "string"
+            ],
+            "/twin/organization_id": [
+              "string"
+            ],
+            "/twin/project_id": [
+              "string"
+            ],
+            "/twin/spec_hash": [
+              "string"
+            ],
+            "/twin/tenant_key": [
+              "null",
+              "string"
+            ],
+            "/twin/tool_count": [
+              "integer"
+            ],
+            "/twin/tools": [
+              "array"
+            ],
+            "/twin/tools/[]": [
+              "object"
+            ],
+            "/twin/tools/[]/description": [
+              "string"
+            ],
+            "/twin/tools/[]/handler": [
+              "string"
+            ],
+            "/twin/tools/[]/idempotency": [
+              "null",
+              "string"
+            ],
+            "/twin/tools/[]/mutates": [
+              "boolean"
+            ],
+            "/twin/tools/[]/name": [
+              "string"
+            ],
+            "/twin/tools/[]/risk": [
+              "string"
+            ],
+            "/twin/tools/[]/tenant_scoped": [
+              "boolean"
+            ],
+            "/twin/version": [
+              "integer"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/id": [
+              "string"
+            ],
+            "/versions/[]/spec_hash": [
+              "string"
+            ],
+            "/versions/[]/tool_count": [
+              "integer"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ],
+            "/yaml": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /twin/v1/kb/search": {
+      "parameters": {
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:q": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "documents"
+            ],
+            "/documents/[]": [
+              "id",
+              "text",
+              "title"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/documents": [
+              "array"
+            ],
+            "/documents/[]": [
+              "object"
+            ],
+            "/documents/[]/id": [
+              "string"
+            ],
+            "/documents/[]/text": [
+              "string"
+            ],
+            "/documents/[]/title": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/scenarios": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "project_id"
+            ],
+            "/oneOf[0]": [
+              "yaml"
+            ],
+            "/oneOf[1]": [
+              "document"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/yaml": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/scenario/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/scenario/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy_derived\"",
+              "\"production_regression\"",
+              "\"production_replay\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created",
+              "scenario",
+              "version",
+              "warnings"
+            ],
+            "/scenario": [
+              "agent",
+              "archived",
+              "created_at",
+              "created_by",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "project_id",
+              "severity",
+              "source",
+              "tags",
+              "twin",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/scenario": [
+              "object"
+            ],
+            "/scenario/agent": [
+              "null",
+              "string"
+            ],
+            "/scenario/archived": [
+              "boolean"
+            ],
+            "/scenario/created_at": [
+              "string"
+            ],
+            "/scenario/created_by": [
+              "string"
+            ],
+            "/scenario/description": [
+              "string"
+            ],
+            "/scenario/expectation_count": [
+              "integer"
+            ],
+            "/scenario/fault_count": [
+              "integer"
+            ],
+            "/scenario/id": [
+              "string"
+            ],
+            "/scenario/latest_version": [
+              "integer"
+            ],
+            "/scenario/name": [
+              "string"
+            ],
+            "/scenario/organization_id": [
+              "string"
+            ],
+            "/scenario/project_id": [
+              "string"
+            ],
+            "/scenario/severity": [
+              "string"
+            ],
+            "/scenario/source": [
+              "string"
+            ],
+            "/scenario/spec_hash": [
+              "string"
+            ],
+            "/scenario/tags": [
+              "array"
+            ],
+            "/scenario/tags/[]": [
+              "string"
+            ],
+            "/scenario/twin": [
+              "null",
+              "string"
+            ],
+            "/scenario/updated_at": [
+              "string"
+            ],
+            "/scenario/version_id": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
+              "string"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/scenario/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/scenario/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy_derived\"",
+              "\"production_regression\"",
+              "\"production_replay\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created",
+              "scenario",
+              "version",
+              "warnings"
+            ],
+            "/scenario": [
+              "agent",
+              "archived",
+              "created_at",
+              "created_by",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "project_id",
+              "severity",
+              "source",
+              "tags",
+              "twin",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/scenario": [
+              "object"
+            ],
+            "/scenario/agent": [
+              "null",
+              "string"
+            ],
+            "/scenario/archived": [
+              "boolean"
+            ],
+            "/scenario/created_at": [
+              "string"
+            ],
+            "/scenario/created_by": [
+              "string"
+            ],
+            "/scenario/description": [
+              "string"
+            ],
+            "/scenario/expectation_count": [
+              "integer"
+            ],
+            "/scenario/fault_count": [
+              "integer"
+            ],
+            "/scenario/id": [
+              "string"
+            ],
+            "/scenario/latest_version": [
+              "integer"
+            ],
+            "/scenario/name": [
+              "string"
+            ],
+            "/scenario/organization_id": [
+              "string"
+            ],
+            "/scenario/project_id": [
+              "string"
+            ],
+            "/scenario/severity": [
+              "string"
+            ],
+            "/scenario/source": [
+              "string"
+            ],
+            "/scenario/spec_hash": [
+              "string"
+            ],
+            "/scenario/tags": [
+              "array"
+            ],
+            "/scenario/tags/[]": [
+              "string"
+            ],
+            "/scenario/twin": [
+              "null",
+              "string"
+            ],
+            "/scenario/updated_at": [
+              "string"
+            ],
+            "/scenario/version_id": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/scenarios/validate": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "project_id"
+            ],
+            "/oneOf[0]": [
+              "yaml"
+            ],
+            "/oneOf[1]": [
+              "document"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/yaml": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "problems",
+              "spec_hash",
+              "twin",
+              "valid",
+              "warnings"
+            ],
+            "/twin": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "spec_hash",
+              "tool_count",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/problems": [
+              "array"
+            ],
+            "/problems/[]": [
+              "string"
+            ],
+            "/spec_hash": [
+              "null",
+              "string"
+            ],
+            "/twin": [
+              "null",
+              "object"
+            ],
+            "/twin/created_at": [
+              "string"
+            ],
+            "/twin/created_by": [
+              "string"
+            ],
+            "/twin/description": [
+              "null",
+              "string"
+            ],
+            "/twin/id": [
+              "string"
+            ],
+            "/twin/name": [
+              "string"
+            ],
+            "/twin/organization_id": [
+              "string"
+            ],
+            "/twin/project_id": [
+              "string"
+            ],
+            "/twin/spec_hash": [
+              "string"
+            ],
+            "/twin/tool_count": [
+              "integer"
+            ],
+            "/twin/version": [
+              "integer"
+            ],
+            "/valid": [
+              "boolean"
+            ],
+            "/warnings": [
+              "array"
+            ],
+            "/warnings/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/scenarios/{scenario_id}/archive": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:scenario_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/scenario/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/scenario/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy_derived\"",
+              "\"production_regression\"",
+              "\"production_replay\""
+            ]
+          },
+          "required": {
+            "/": [
+              "scenario"
+            ],
+            "/scenario": [
+              "agent",
+              "archived",
+              "created_at",
+              "created_by",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "project_id",
+              "severity",
+              "source",
+              "tags",
+              "twin",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/scenario": [
+              "object"
+            ],
+            "/scenario/agent": [
+              "null",
+              "string"
+            ],
+            "/scenario/archived": [
+              "boolean"
+            ],
+            "/scenario/created_at": [
+              "string"
+            ],
+            "/scenario/created_by": [
+              "string"
+            ],
+            "/scenario/description": [
+              "string"
+            ],
+            "/scenario/expectation_count": [
+              "integer"
+            ],
+            "/scenario/fault_count": [
+              "integer"
+            ],
+            "/scenario/id": [
+              "string"
+            ],
+            "/scenario/latest_version": [
+              "integer"
+            ],
+            "/scenario/name": [
+              "string"
+            ],
+            "/scenario/organization_id": [
+              "string"
+            ],
+            "/scenario/project_id": [
+              "string"
+            ],
+            "/scenario/severity": [
+              "string"
+            ],
+            "/scenario/source": [
+              "string"
+            ],
+            "/scenario/spec_hash": [
+              "string"
+            ],
+            "/scenario/tags": [
+              "array"
+            ],
+            "/scenario/tags/[]": [
+              "string"
+            ],
+            "/scenario/twin": [
+              "null",
+              "string"
+            ],
+            "/scenario/updated_at": [
+              "string"
+            ],
+            "/scenario/version_id": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/simulations": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "agent_version",
+              "project_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/release_id": [
+              "null",
+              "string"
+            ],
+            "/scenarios": [
+              "array",
+              "null"
+            ],
+            "/scenarios/[]": [
+              "string"
+            ],
+            "/seed": [
+              "integer",
+              "null"
+            ],
+            "/side": [
+              "string"
+            ],
+            "/tags": [
+              "array",
+              "null"
+            ],
+            "/tags/[]": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "202": {
+          "enums": {
+            "/cases/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/run/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "cases",
+              "run"
+            ],
+            "/cases/[]": [
+              "id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ],
+            "/run": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/run/pinning": [
+              "agent",
+              "correlation_id",
+              "engine",
+              "evaluators",
+              "scenarios",
+              "seed",
+              "selection"
+            ],
+            "/run/pinning/agent": [
+              "commit_sha",
+              "manifest_sha256",
+              "model_name",
+              "model_provider",
+              "name",
+              "prompt_sha256",
+              "version",
+              "version_id"
+            ],
+            "/run/pinning/scenarios/[]": [
+              "scenario",
+              "scenario_version_id",
+              "seed",
+              "spec_hash",
+              "twin",
+              "twin_definition_id",
+              "twin_spec_hash",
+              "twin_version"
+            ],
+            "/run/pinning/selection": [
+              "scenarios",
+              "tags"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/id": [
+              "string"
+            ],
+            "/cases/[]/position": [
+              "integer"
+            ],
+            "/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/cases/[]/seed": [
+              "integer"
+            ],
+            "/cases/[]/severity": [
+              "string"
+            ],
+            "/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/agent_version": [
+              "string"
+            ],
+            "/run/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/cancelled": [
+              "integer"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/critical_failures": [
+              "integer"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/errored": [
+              "integer"
+            ],
+            "/run/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/failed": [
+              "integer"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/finished_cases": [
+              "integer"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/passed": [
+              "integer"
+            ],
+            "/run/pinning": [
+              "object"
+            ],
+            "/run/pinning/agent": [
+              "object"
+            ],
+            "/run/pinning/agent/commit_sha": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/manifest_sha256": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/model_name": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/model_provider": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/name": [
+              "string"
+            ],
+            "/run/pinning/agent/prompt_sha256": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/agent/version": [
+              "string"
+            ],
+            "/run/pinning/agent/version_id": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/correlation_id": [
+              "string"
+            ],
+            "/run/pinning/engine": [
+              "string"
+            ],
+            "/run/pinning/evaluators": [
+              "object"
+            ],
+            "/run/pinning/scenarios": [
+              "array"
+            ],
+            "/run/pinning/scenarios/[]": [
+              "object"
+            ],
+            "/run/pinning/scenarios/[]/scenario": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/scenario_version_id": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/seed": [
+              "integer"
+            ],
+            "/run/pinning/scenarios/[]/spec_hash": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin_definition_id": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin_spec_hash": [
+              "string"
+            ],
+            "/run/pinning/scenarios/[]/twin_version": [
+              "integer"
+            ],
+            "/run/pinning/seed": [
+              "integer"
+            ],
+            "/run/pinning/selection": [
+              "object"
+            ],
+            "/run/pinning/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/run/pinning/selection/scenarios/[]": [
+              "string"
+            ],
+            "/run/pinning/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/run/pinning/selection/tags/[]": [
+              "string"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/side": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/simulations/{run_id}/cancel": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:run_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/run/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "run"
+            ],
+            "/run": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/agent_version": [
+              "string"
+            ],
+            "/run/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/cancelled": [
+              "integer"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/critical_failures": [
+              "integer"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/errored": [
+              "integer"
+            ],
+            "/run/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/failed": [
+              "integer"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/finished_cases": [
+              "integer"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/passed": [
+              "integer"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/side": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ]
+          }
+        },
+        "202": {
+          "enums": {
+            "/run/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\"",
+              "\"SINGLE\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "run"
+            ],
+            "/run": [
+              "agent_name",
+              "agent_version",
+              "agent_version_id",
+              "attempts",
+              "cancel_requested",
+              "cancelled",
+              "case_count",
+              "created_at",
+              "critical_failures",
+              "error",
+              "errored",
+              "eval_run_id",
+              "failed",
+              "finished_at",
+              "finished_cases",
+              "id",
+              "organization_id",
+              "passed",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "side",
+              "started_at",
+              "status",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/agent_version": [
+              "string"
+            ],
+            "/run/agent_version_id": [
+              "null",
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/cancelled": [
+              "integer"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/critical_failures": [
+              "integer"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/errored": [
+              "integer"
+            ],
+            "/run/eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/failed": [
+              "integer"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/finished_cases": [
+              "integer"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/passed": [
+              "integer"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/side": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/twins": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "project_id"
+            ],
+            "/oneOf[0]": [
+              "yaml"
+            ],
+            "/oneOf[1]": [
+              "document"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "object"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/yaml": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/twin/tools/[]/handler": [
+              "\"custom\"",
+              "\"echo\"",
+              "\"mutate\"",
+              "\"read\"",
+              "\"recorded\"",
+              "\"static\""
+            ],
+            "/twin/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created",
+              "twin"
+            ],
+            "/twin": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "spec_hash",
+              "tool_count",
+              "tools",
+              "version"
+            ],
+            "/twin/tools/[]": [
+              "description",
+              "handler",
+              "idempotency",
+              "mutates",
+              "name",
+              "risk",
+              "tenant_scoped"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/twin": [
+              "object"
+            ],
+            "/twin/created_at": [
+              "string"
+            ],
+            "/twin/created_by": [
+              "string"
+            ],
+            "/twin/description": [
+              "null",
+              "string"
+            ],
+            "/twin/id": [
+              "string"
+            ],
+            "/twin/name": [
+              "string"
+            ],
+            "/twin/organization_id": [
+              "string"
+            ],
+            "/twin/project_id": [
+              "string"
+            ],
+            "/twin/spec_hash": [
+              "string"
+            ],
+            "/twin/tool_count": [
+              "integer"
+            ],
+            "/twin/tools": [
+              "array"
+            ],
+            "/twin/tools/[]": [
+              "object"
+            ],
+            "/twin/tools/[]/description": [
+              "string"
+            ],
+            "/twin/tools/[]/handler": [
+              "string"
+            ],
+            "/twin/tools/[]/idempotency": [
+              "null",
+              "string"
+            ],
+            "/twin/tools/[]/mutates": [
+              "boolean"
+            ],
+            "/twin/tools/[]/name": [
+              "string"
+            ],
+            "/twin/tools/[]/risk": [
+              "string"
+            ],
+            "/twin/tools/[]/tenant_scoped": [
+              "boolean"
+            ],
+            "/twin/version": [
+              "integer"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/twin/tools/[]/handler": [
+              "\"custom\"",
+              "\"echo\"",
+              "\"mutate\"",
+              "\"read\"",
+              "\"recorded\"",
+              "\"static\""
+            ],
+            "/twin/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created",
+              "twin"
+            ],
+            "/twin": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "spec_hash",
+              "tool_count",
+              "tools",
+              "version"
+            ],
+            "/twin/tools/[]": [
+              "description",
+              "handler",
+              "idempotency",
+              "mutates",
+              "name",
+              "risk",
+              "tenant_scoped"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/twin": [
+              "object"
+            ],
+            "/twin/created_at": [
+              "string"
+            ],
+            "/twin/created_by": [
+              "string"
+            ],
+            "/twin/description": [
+              "null",
+              "string"
+            ],
+            "/twin/id": [
+              "string"
+            ],
+            "/twin/name": [
+              "string"
+            ],
+            "/twin/organization_id": [
+              "string"
+            ],
+            "/twin/project_id": [
+              "string"
+            ],
+            "/twin/spec_hash": [
+              "string"
+            ],
+            "/twin/tool_count": [
+              "integer"
+            ],
+            "/twin/tools": [
+              "array"
+            ],
+            "/twin/tools/[]": [
+              "object"
+            ],
+            "/twin/tools/[]/description": [
+              "string"
+            ],
+            "/twin/tools/[]/handler": [
+              "string"
+            ],
+            "/twin/tools/[]/idempotency": [
+              "null",
+              "string"
+            ],
+            "/twin/tools/[]/mutates": [
+              "boolean"
+            ],
+            "/twin/tools/[]/name": [
+              "string"
+            ],
+            "/twin/tools/[]/risk": [
+              "string"
+            ],
+            "/twin/tools/[]/tenant_scoped": [
+              "boolean"
+            ],
+            "/twin/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /twin/v1/tools/{tool}": {
+      "parameters": {
+        "path:tool": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": false,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ]
+          }
+        }
+      },
+      "responses": {}
+    },
+    "WEBHOOK agentRun": {
+      "parameters": {},
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "agent_version",
+              "input",
+              "run_context",
+              "session_id",
+              "tool_headers",
+              "tools_base_url"
+            ],
+            "/run_context": [
+              "case_id",
+              "release_id",
+              "scenario_id",
+              "scenario_name",
+              "simulation_run_id",
+              "source"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/context": [
+              "object"
+            ],
+            "/customer_id": [
+              "string"
+            ],
+            "/input": [
+              "string"
+            ],
+            "/run_context": [
+              "object"
+            ],
+            "/run_context/case_id": [
+              "string"
+            ],
+            "/run_context/release_id": [
+              "null",
+              "string"
+            ],
+            "/run_context/scenario_id": [
+              "string"
+            ],
+            "/run_context/scenario_name": [
+              "string"
+            ],
+            "/run_context/simulation_run_id": [
+              "string"
+            ],
+            "/session_id": [
+              "string"
+            ],
+            "/tenant": [
+              "string"
+            ],
+            "/tool_headers": [
+              "object"
+            ],
+            "/tools_base_url": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_version": [
+              "string"
+            ],
+            "/business_outcome": [
+              "null",
+              "string"
+            ],
+            "/claimed_outcome": [
+              "string"
+            ],
+            "/model": [
+              "string"
+            ],
+            "/model_kind": [
+              "string"
+            ],
+            "/output": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ],
+            "/steps": [
+              "integer"
+            ],
+            "/tool_calls": [
+              "array"
+            ],
+            "/tool_calls/[]": [
+              "object"
+            ],
+            "/trace_id": [
+              "string"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

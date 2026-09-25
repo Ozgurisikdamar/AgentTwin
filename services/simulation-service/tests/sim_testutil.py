@@ -9,7 +9,10 @@ infrastructure). One stack per test:
   a background thread, calling the twin endpoint with ``urllib``;
 * a worker driven step by step by the test (``process_next``);
 * fakes of the control plane and the trace service that verify the
-  internal JWT (audience included) of every call they receive.
+  internal JWT (audience included) of every call they receive;
+* the service's contract (ADR-0021): every response of the API and the twin
+  endpoint, every request the service accepts and every call the worker makes
+  to the agent is checked against ``simulation-service.openapi.yaml``.
 """
 
 from __future__ import annotations
@@ -29,17 +32,22 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from agenttwin import AgentTwin, Config
 from agenttwin_core.auth import Principal, Role, TokenService
-from agenttwin_core.db import Migrator, Pool, connect, load_migrations
+from agenttwin_core.db import Migrator, Pool, connect, load_migrations, transaction
 from agenttwin_core.evaluators import default_registry
+from agenttwin_core.jobs import JobStatus
 from agenttwin_core.logx import get_logger
+from agenttwin_core.openapi_contract import Contract, ContractTransport, ContractViolation, contract_path
 from agenttwin_core.testing import temp_database
 from agenttwin_core.web import Health, build_app
 from agenttwin_simulation.api import SimulationAPI
+from agenttwin_simulation.cases import initial_state
 from agenttwin_simulation.clients import AgentClient, ControlPlaneClient, TraceServiceClient
 from agenttwin_simulation.config import AgentEndpoint, SimulationConfig
 from agenttwin_simulation.runner import Worker
 from agenttwin_simulation.store import SCHEMA, Store
-from agenttwin_simulation.twin_http import TwinEndpoint
+from agenttwin_simulation.twin.definition import load_twin
+from agenttwin_simulation.twin.engine import CaseState
+from agenttwin_simulation.twin_http import TwinEndpoint, token_hash
 from support_refund_agent.agent import Agent, ManifestStore, scripted_model_factory
 from support_refund_agent.server import AgentServer
 from support_refund_agent.world import INTERNAL_API_KEY
@@ -54,6 +62,18 @@ OTHER_PROJECT = "0190f3b4-0000-7000-8000-0000000000b2"
 AGENT = "support-refund-agent"
 AGENT_TOKEN = "agent-token-for-tests-0123456789"
 VERSIONS = ("1.2.3", "1.2.4", "1.3.0", "1.3.1")
+
+
+_CONTRACT: Contract | None = None
+
+
+def contract() -> Contract:
+    """A fresh contract checker (its coverage is per stack) over the parsed
+    document (parsed once)."""
+    global _CONTRACT
+    if _CONTRACT is None:
+        _CONTRACT = Contract.load(contract_path("simulation-service"))
+    return Contract(_CONTRACT.document, _CONTRACT.name)
 
 
 def twin_yaml() -> str:
@@ -225,6 +245,7 @@ class Stack:
     traces: FakeTraceService
     exporter: InMemorySpanExporter
     client: httpx.AsyncClient
+    contract: Contract
     principal: Principal = field(
         default_factory=lambda: Principal(
             org_id=ORG, actor="user:engineer", role=Role.ENGINEER, project_ids=(PROJECT,)
@@ -278,6 +299,22 @@ class Stack:
         return [r["envelope"] for r in rows]
 
 
+async def running_cases(s: Stack, run_id: str, tokens: dict[str, str]) -> dict[str, str]:
+    """Claims the run like a worker would and opens its cases with known
+    tokens (scenario name -> token); returns scenario name -> case id."""
+    claimed = await s.store.claim_next_run("test-worker", 60)
+    assert claimed is not None and claimed["id"] == run_id
+    async with transaction(s.pool) as conn:
+        assert await s.store.transition(conn, run_id, JobStatus.RUNNING, "test", owner="test-worker")
+    ids = {}
+    for case in await s.store.pending_cases(run_id):
+        definition = load_twin(case["twin_document"])
+        state = CaseState.fresh(initial_state(definition, case["scenario_document"]))
+        await s.store.start_case(case["id"], token_hash(tokens[case["scenario_name"]]), state.to_json())
+        ids[case["scenario_name"]] = str(case["id"])
+    return ids
+
+
 @asynccontextmanager
 async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
     async with temp_database() as url:
@@ -308,7 +345,8 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
             cp, ts = FakeControlPlane(tokens, versions), FakeTraceService(tokens)
             control = ControlPlaneClient(cfg.control_plane_url, tokens, transport=httpx.MockTransport(cp))
             traces = TraceServiceClient(cfg.trace_service_url, tokens, transport=httpx.MockTransport(ts))
-            agents = AgentClient()
+            checker = contract()
+            agents = AgentClient(transport=ContractTransport(checker, "agentRun"))
             app = build_app(
                 service="simulation-service",
                 version="test",
@@ -323,7 +361,12 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
             try:
                 async with (
                     serve_app(app, sock) as base,
-                    httpx.AsyncClient(base_url=base, trust_env=False, timeout=60) as client,
+                    httpx.AsyncClient(
+                        base_url=base,
+                        trust_env=False,
+                        timeout=60,
+                        event_hooks={"response": [checker.response_hook()]},
+                    ) as client,
                 ):
                     worker = Worker(
                         store=store,
@@ -333,18 +376,26 @@ async def simulation_stack(**overrides: Any) -> AsyncIterator[Stack]:
                         registry=registry,
                         log=get_logger("worker"),
                     )
-                    yield Stack(
-                        url=base,
-                        pool=pool,
-                        store=store,
-                        cfg=cfg,
-                        tokens=tokens,
-                        worker=worker,
-                        control_plane=cp,
-                        traces=ts,
-                        exporter=exporter,
-                        client=client,
-                    )
+                    try:
+                        yield Stack(
+                            url=base,
+                            pool=pool,
+                            store=store,
+                            cfg=cfg,
+                            tokens=tokens,
+                            worker=worker,
+                            control_plane=cp,
+                            traces=ts,
+                            exporter=exporter,
+                            client=client,
+                            contract=checker,
+                        )
+                    finally:
+                        # The worker turns what its agent call raises into a
+                        # failed run; a contract violation there is the root
+                        # cause of whatever the test saw, so it is reported.
+                        if checker.violations:
+                            raise ContractViolation("\n".join(checker.violations))
             finally:
                 await agents.close()
                 await control.close()

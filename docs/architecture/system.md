@@ -277,7 +277,7 @@ automatically on local startup (`MIGRATE_ON_START=true`) and explicitly in
 production (`<binary> migrate`). The migration ledger lives in
 `<schema>.schema_migrations`.
 
-## 5. Events
+## 5. Events and API contracts
 
 Topic exchange `agenttwin.events`, envelope defined in
 [`packages/contracts/events/envelope.v1.schema.json`](../../packages/contracts/events/envelope.v1.schema.json).
@@ -289,6 +289,11 @@ Delivery semantics: at-least-once, publisher confirms, idempotent consumers
 transaction), bounded retry through a TTL retry queue, then a parking DLQ.
 Events whose loss would corrupt state (audit, run requests, run completions)
 are written through a **transactional outbox**.
+
+HTTP APIs are documented by hand-written OpenAPI 3.1 documents in
+[`packages/contracts/openapi`](../../packages/contracts/openapi), held to the
+services by route parity, strict traffic checks in the integration tests and a
+compatibility baseline ([ADR-0021](../adr/0021-http-contracts-checked-openapi.md)).
 
 ## 6. Key cross-cutting mechanisms
 

@@ -24,6 +24,7 @@ dev = [
   "types-PyYAML>=6.0.12",
   "types-jsonschema>=4.26",
   "types-regex>=2026.9",
+  "openapi-spec-validator>=0.8,<0.9",
 ]
 
 [tool.ruff]

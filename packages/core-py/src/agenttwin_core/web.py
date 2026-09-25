@@ -185,7 +185,11 @@ def build_app(
     authenticated_prefixes: tuple[str, ...] = ("/api/", "/internal/"),
 ) -> FastAPI:
     """A FastAPI app with the standard behavior; routes are added by the caller."""
-    app = FastAPI(title=service, version=version, docs_url=None, redoc_url=None, openapi_url="/openapi.json")
+    # The API contracts are the documents in packages/contracts/openapi,
+    # checked against the running service (ADR-0021); FastAPI's generated
+    # schema would describe handlers that read their bodies themselves as
+    # taking no input, so it is not served.
+    app = FastAPI(title=service, version=version, docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.exception_handler(APIError)
     async def _api_error(_: Request, exc: APIError) -> JSONResponse:

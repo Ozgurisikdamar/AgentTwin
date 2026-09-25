@@ -6,6 +6,8 @@ Versioned, language-neutral contracts shared by Go, Python and TypeScript code.
 * `events/<type>.schema.json` — one payload schema per event type.
 * `../scenario-schema/schemas/*.schema.json` — agent manifest, scenario, runtime
   policy and tool-twin definition schemas (user-authored YAML).
+* `openapi/<service>.openapi.yaml` — the HTTP API of a service (OpenAPI 3.1,
+  written by hand, checked against the service; see below).
 
 ## Compatibility rules
 
@@ -16,7 +18,45 @@ Versioned, language-neutral contracts shared by Go, Python and TypeScript code.
 * **Removing or renaming a required field, or changing its type, is breaking** and
   requires a new version (`.v2`) published side by side until consumers migrate.
   `make contracts-check` fails when a required field disappears from a published
-  schema compared with the committed baseline (`events/.baseline.json`).
+  schema compared with the committed baseline (`events/.baseline.json`); the
+  same command checks the HTTP APIs (below).
+
+## HTTP APIs (OpenAPI)
+
+| Document | Operations | Covers |
+|---|---|---|
+| `openapi/simulation-service.openapi.yaml` | 17 | twins, scenarios, simulation runs (public, via the control plane); the twin endpoint agents call; the agent adapter contract (`webhooks.agentRun`) |
+
+Each document describes the API as clients reach it: through the control plane
+with its credentials (`Authorization: Bearer`, `X-AgentTwin-Api-Key`),
+`Idempotency-Key` on mutations and the edge's errors. The document is held to
+the service in four ways (ADR-0021):
+
+1. **Document** — valid OpenAPI 3.1 that follows the API conventions (the
+   service's `test_contract.py`).
+2. **Routes** — the service's routes and the documented operations are the same
+   set, both ways.
+3. **Traffic** — the integration tests check every response strictly
+   (undocumented fields fail), every request the service accepts and every call
+   it makes to a webhook; a contract walk requires a checked success response
+   for every operation (`agenttwin_core.openapi_contract`).
+4. **Compatibility** — `make contracts-check` compares every operation with the
+   committed `openapi/.baseline.json`:
+
+| Part | Breaking | Compatible |
+|---|---|---|
+| Request (parameters, body) | operation, parameter or body field removed (bodies are strict: unknown fields are rejected); new required parameter or field; body newly required; type changed; allowed enum value removed | new optional parameter or field; new enum value |
+| Response (success statuses) | success status removed; required field removed or made optional; type changed | new field; new enum value; new status |
+| Webhook | the same rules with the roles reversed: the service sends the request and reads the answer (ignoring unknown fields) | |
+
+Clients must ignore response fields and enum values they do not know. Error
+responses (`{"error": {"code", "message", "request_id", "details"?}}`) are
+documented but not versioned by shape: their `code` values are the contract.
+
+To change an API: edit the document with the code, run the service's tests
+(route parity and traffic), then `make contracts-check`. A breaking change needs
+a new operation or version; after a reviewed, compatible change record the
+baseline with `python scripts/contracts_check.py --update`.
 
 ## Canonical JSON and content hashes
 

@@ -23,6 +23,7 @@ export const liveEvalRun = {
     candidate_version: "1.3.0",
     seed: 42,
     release_id: null,
+    release_evaluation_id: null,
     status: "COMPLETED",
     requested_by: "apikey:01a0d777-e387-77f5-9df5-7763df46169e",
     cancel_requested: false,
@@ -53,6 +54,7 @@ export const liveEvalRun = {
         name: "refund-regression-suite",
         version: 1,
       },
+      scenario_versions: null,
     },
     counts: {
       NEW_CRITICAL_FAILURE: 2,

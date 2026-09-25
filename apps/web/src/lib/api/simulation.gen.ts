@@ -617,6 +617,8 @@ export interface components {
             tags: string[];
             source: components["schemas"]["ScenarioSource"];
             latest_version: number;
+            /** @description The latest version's id, which a release pins (`scenario_versions` of a pair). */
+            latest_version_id: components["schemas"]["Uuid"];
             description: string;
             matched: components["schemas"]["MatchReasons"];
         };
@@ -702,6 +704,14 @@ export interface components {
             scenarios?: string[] | null;
             /** @description Scenarios with any of these tags. */
             tags?: string[] | null;
+            /**
+             * @description Exactly these scenario versions (one per scenario), instead of
+             *     `scenarios` and `tags`: a release runs the versions its impact
+             *     selected, not whatever is latest when the pair is made. A version
+             *     that is not of an active scenario of the project for the agent is
+             *     `400 SCENARIO_NOT_FOUND` (`details.missing_versions`).
+             */
+            scenario_versions?: components["schemas"]["Uuid"][] | null;
             /** @description The seed of both runs (default random); it is pinned either way. */
             seed?: number | null;
             release_id?: string | null;
@@ -796,6 +806,8 @@ export interface components {
             selection: {
                 scenarios: string[] | null;
                 tags: string[] | null;
+                /** @description The exact scenario versions asked for (pairs of a release). */
+                scenario_versions?: components["schemas"]["Uuid"][] | null;
             };
             /** @description The evaluation this run is one side of (runs created in pairs only). */
             pair?: {

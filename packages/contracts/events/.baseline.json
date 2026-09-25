@@ -306,6 +306,12 @@
       "/release_id": [
         "string"
       ],
+      "/requested_by": [
+        "string"
+      ],
+      "/seed": [
+        "integer"
+      ],
       "/suite": [
         "array"
       ],

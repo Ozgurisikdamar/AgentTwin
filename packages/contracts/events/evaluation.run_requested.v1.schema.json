@@ -24,7 +24,9 @@
         }
       }
     },
-    "budget": {"type": "object", "properties": {"max_gate_cost_usd": {"type": "number"}}},
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "requested_by": {"type": "string", "maxLength": 200},
+    "budget": {"type": "object", "properties": {"max_gate_cost_usd": {"type": "number", "minimum": 0}}},
     "judge_policy": {"type": "object"}
   },
   "$defs": {

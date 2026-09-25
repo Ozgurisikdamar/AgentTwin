@@ -92,14 +92,21 @@ describe("classifications", () => {
   });
 
   it("names the suite a run evaluated", () => {
+    const ids = ["01a0d7b0-77fb-709b-b8fe-000000000001", "01a0d7b0-77fb-709b-b8fe-000000000002"];
     expect(suiteLabel(liveEvalRun.run.selection)).toBe("refund-regression-suite v1");
-    expect(suiteLabel({ scenarios: ["refund-happy-path"], tags: null, dataset: null })).toBe(
-      "refund-happy-path",
-    );
-    expect(suiteLabel({ scenarios: ["a", "b"], tags: ["faults"], dataset: null })).toBe(
+    const none = { tags: null, dataset: null, scenario_versions: null };
+    expect(suiteLabel({ ...none, scenarios: ["refund-happy-path"] })).toBe("refund-happy-path");
+    expect(suiteLabel({ ...none, scenarios: ["a", "b"], tags: ["faults"] })).toBe(
       "2 scenarios + tagged faults",
     );
-    expect(suiteLabel({ scenarios: null, tags: null, dataset: null })).toBe("every scenario of the agent");
+    expect(suiteLabel({ ...none, scenarios: null })).toBe("every scenario of the agent");
+    // A release's run names the versions it pinned.
+    expect(suiteLabel({ ...none, scenarios: ["a", "b"], scenario_versions: [ids[0]!, ids[1]!] })).toBe(
+      "2 scenarios, versions pinned by a release",
+    );
+    expect(suiteLabel({ ...none, scenarios: ["a"], scenario_versions: [ids[0]!] })).toBe(
+      "a, version pinned by a release",
+    );
   });
 });
 

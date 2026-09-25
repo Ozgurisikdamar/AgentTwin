@@ -113,9 +113,18 @@ export function evalRunVerdict(
   return { tone: "success", text: `No regressions against ${base}` };
 }
 
-/** What a run evaluated: its dataset version, scenario names, tags, or every scenario. */
+/**
+ * What a run evaluated: its dataset version, scenario names, tags, or every
+ * scenario; a release's run says its scenario versions were pinned.
+ */
 export function suiteLabel(selection: EvalRun["selection"]): string {
   if (selection.dataset) return `${selection.dataset.name} v${selection.dataset.version}`;
+  const pinned = selection.scenario_versions?.length;
+  if (pinned) {
+    const names = selection.scenarios ?? [];
+    const what = names.length === 1 ? names[0]! : `${formatNumber(names.length)} scenarios`;
+    return `${what}, ${pinned === 1 ? "version" : "versions"} pinned by a release`;
+  }
   const parts: string[] = [];
   if (selection.scenarios?.length) {
     parts.push(

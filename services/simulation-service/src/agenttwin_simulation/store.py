@@ -298,6 +298,24 @@ class Store:
             params,
         )
 
+    async def scenario_versions_for_run(
+        self, project: str, agent: str, version_ids: Sequence[str]
+    ) -> list[Row]:
+        """Exactly these versions of the project's active scenarios that apply
+        to ``agent`` (a release pins the versions it selected), in the order
+        :meth:`scenarios_for_run` uses."""
+        return await self.all(
+            """SELECT s.id, s.name, s.severity, s.twin, v.id AS version_id, v.document, v.spec_hash
+               FROM scenario_version v
+               JOIN scenario s ON s.id = v.scenario_id
+               WHERE v.id = ANY(%s::uuid[]) AND s.project_id = %s AND NOT s.archived
+                 AND (s.agent = %s OR s.agent IS NULL)
+               ORDER BY CASE s.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1
+                                        WHEN 'medium' THEN 2 ELSE 3 END,
+                        s.name""",
+            (list(version_ids), project, agent),
+        )
+
     # ------------------------------------------------------------ scenario embeddings
 
     async def stale_embeddings(
@@ -413,7 +431,7 @@ class Store:
         a wide tag or source never pushes out a scenario asked for by name."""
         return await self.all(
             """SELECT s.id, s.name, s.agent, s.twin, s.severity, s.tags, s.source, s.latest_version,
-                      v.document->'metadata'->>'description' AS description
+                      v.id AS latest_version_id, v.document->'metadata'->>'description' AS description
                FROM scenario s
                JOIN scenario_version v ON v.scenario_id = s.id AND v.version = s.latest_version
                WHERE s.organization_id = %s AND s.project_id = %s AND NOT s.archived

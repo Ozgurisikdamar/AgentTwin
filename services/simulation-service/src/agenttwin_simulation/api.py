@@ -134,6 +134,10 @@ class PairBody(_Strict):
     candidate_version: str = Field(min_length=1, max_length=100)
     scenarios: list[str] | None = Field(default=None, max_length=MAX_CASES)
     tags: list[str] | None = Field(default=None, max_length=50)
+    # Exact scenario versions to run instead of a selection by name or tag:
+    # a release runs the versions its impact selected, not whatever is
+    # latest when the pair is made.
+    scenario_versions: list[str] | None = Field(default=None, min_length=1, max_length=MAX_CASES)
     seed: int | None = Field(default=None, ge=0, le=4_294_967_295)
     release_id: str | None = Field(default=None, max_length=200)
     # Who asked for the evaluation (the runs are attributed to them); the
@@ -151,6 +155,11 @@ class PairBody(_Strict):
                 "candidate_version": self.candidate_version,
                 "scenarios": sorted(set(self.scenarios)) if self.scenarios is not None else None,
                 "tags": sorted(set(self.tags)) if self.tags is not None else None,
+                "scenario_versions": (
+                    sorted({v.lower() for v in self.scenario_versions})
+                    if self.scenario_versions is not None
+                    else None
+                ),
                 "seed": self.seed,
                 "release_id": self.release_id,
             }
@@ -981,6 +990,7 @@ class SimulationAPI:
                     "tags": list(r["tags"]),
                     "source": r["source"],
                     "latest_version": r["latest_version"],
+                    "latest_version_id": str(r["latest_version_id"]),
                     "description": (r["description"] or "").strip(),
                     "matched": {
                         "name": r["name"] in names,
@@ -1060,6 +1070,35 @@ class SimulationAPI:
             )
         if len(rows) > MAX_CASES:
             raise errors.invalid("TOO_MANY_SCENARIOS", f"A run holds at most {MAX_CASES} scenarios.")
+        return rows, await self._twins_of(project, rows)
+
+    async def _suite_of_versions(
+        self, project: str, agent: str, version_ids: list[str]
+    ) -> tuple[list[Row], dict[str, Row]]:
+        """Exactly the scenario versions asked for (one per scenario), with the
+        twin each runs against, checked like a selection by name."""
+        wanted = {v.lower() for v in version_ids}
+        rows = await self.store.scenario_versions_for_run(project, agent, sorted(wanted))
+        missing = sorted(wanted - {str(r["version_id"]) for r in rows})
+        if missing:
+            raise errors.invalid(
+                "SCENARIO_NOT_FOUND",
+                "Some requested scenario versions do not exist for this agent "
+                "(or their scenario is archived).",
+                {"missing_versions": missing},
+            )
+        names = [r["name"] for r in rows]
+        repeated = sorted({n for n in names if names.count(n) > 1})
+        if repeated:
+            raise errors.invalid(
+                "INVALID_REQUEST",
+                "A run holds one version of each scenario.",
+                {"field": "scenario_versions", "scenarios": repeated},
+            )
+        return rows, await self._twins_of(project, rows)
+
+    async def _twins_of(self, project: str, rows: list[Row]) -> dict[str, Row]:
+        """The twin of each scenario, the scenarios checked against their twins."""
         twins: dict[str, Row | None] = {}
         definitions: dict[str, TwinDefinition] = {}
         problems: dict[str, list[str]] = {}
@@ -1084,7 +1123,7 @@ class SimulationAPI:
                 "Some scenarios cannot run against their twins.",
                 {"scenarios": problems},
             )
-        return rows, {name: twin for name, twin in twins.items() if twin is not None}
+        return {name: twin for name, twin in twins.items() if twin is not None}
 
     def _pinning(
         self,
@@ -1179,6 +1218,15 @@ class SimulationAPI:
         if existing is not None:
             return await self._existing_pair(p, existing, request_sha)
         self._check_selection(body.agent, body.scenarios, body.tags)
+        if body.scenario_versions is not None:
+            if body.scenarios is not None or body.tags is not None:
+                raise errors.invalid(
+                    "INVALID_REQUEST",
+                    "Give scenario versions, or scenarios and tags, not both.",
+                    {"field": "scenario_versions"},
+                )
+            for v in body.scenario_versions:
+                _check_uuid(v, "scenario_versions")
         found = {
             "BASELINE": await self._agent_version(p, project, body.agent, body.baseline_version, "baseline"),
             "CANDIDATE": await self._agent_version(
@@ -1186,7 +1234,10 @@ class SimulationAPI:
             ),
         }
         versions = {"BASELINE": body.baseline_version, "CANDIDATE": body.candidate_version}
-        rows, twins = await self._suite(project, body.agent, body.scenarios, body.tags)
+        if body.scenario_versions is not None:
+            rows, twins = await self._suite_of_versions(project, body.agent, body.scenario_versions)
+        else:
+            rows, twins = await self._suite(project, body.agent, body.scenarios, body.tags)
         run_seed = body.seed if body.seed is not None else secrets.randbits(32)
         suite, pinned = _plan_cases(rows, twins, run_seed)
         ids = {"BASELINE": new_id(), "CANDIDATE": new_id()}
@@ -1212,7 +1263,15 @@ class SimulationAPI:
                     version=versions[side],
                     found=found[side],
                     pinned=pinned,
-                    selection={"scenarios": body.scenarios, "tags": body.tags},
+                    selection={
+                        "scenarios": body.scenarios,
+                        "tags": body.tags,
+                        "scenario_versions": (
+                            sorted({v.lower() for v in body.scenario_versions})
+                            if body.scenario_versions is not None
+                            else None
+                        ),
+                    },
                     pair={"eval_run_id": eval_run, "side": side, "counterpart_run_id": ids[other]},
                 ),
             }

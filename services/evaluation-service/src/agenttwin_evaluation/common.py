@@ -21,6 +21,7 @@ from agenttwin_core.logx import request_id_var
 from agenttwin_evaluation.store import SCHEMA, Scope
 
 __all__ = [
+    "AGENT",
     "MAX_CASES",
     "NAME",
     "PRODUCER",
@@ -38,6 +39,7 @@ __all__ = [
 
 PRODUCER = "evaluation-service"
 MAX_CASES = 500
+AGENT = r"^[a-z0-9][a-z0-9_-]{0,62}$"
 NAME = r"^[a-z0-9][a-z0-9_-]{0,98}$"
 TAG = re.compile(r"^[a-z0-9][a-z0-9_:.-]{0,62}$")
 

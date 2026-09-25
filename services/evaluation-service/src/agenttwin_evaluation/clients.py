@@ -43,8 +43,20 @@ class PairRefused(Exception):
         self.details = dict(details or {})
 
     def describe(self) -> str:
+        """The refusal in one line, naming what it is about: the side, and
+        the scenarios or scenario versions that could not be found (at most
+        ten, then how many more)."""
+        text = f"{self.code}: {self}"
         side = self.details.get("side")
-        return f"{self.code}: {self} ({side})" if side else f"{self.code}: {self}"
+        if side:
+            text += f" ({side})"
+        for key, label in (("missing", "missing scenarios"), ("missing_versions", "missing versions")):
+            missing = self.details.get(key)
+            if isinstance(missing, list) and missing:
+                shown = ", ".join(str(m) for m in missing[:10])
+                more = f" and {len(missing) - 10} more" if len(missing) > 10 else ""
+                text += f" [{label}: {shown}{more}]"
+        return text
 
 
 class _Client:

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from agenttwin_core.auth import Principal, Role, service_principal
-from sim_testutil import AGENT, ORG, OTHER_PROJECT, PROJECT, Stack, simulation_stack
+from sim_testutil import AGENT, ORG, OTHER_PROJECT, PROJECT, Stack, scenario_yaml, simulation_stack
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -239,3 +239,132 @@ async def test_public_runs_cannot_join_an_evaluation() -> None:
         single = await s.ok("POST", "/api/v1/simulations", base | {"side": "SINGLE"}, status=202)
         assert (single["run"]["side"], single["run"]["eval_run_id"]) == ("SINGLE", None)
         assert "pair" not in single["run"]["pinning"]
+
+
+async def _versions(s: Stack, name: str) -> list[str]:
+    """The ids of a scenario's versions, oldest first."""
+    listed = await s.ok("GET", "/api/v1/scenarios", project_id=PROJECT)
+    sid = next(sc["id"] for sc in listed["items"] if sc["name"] == name)
+    detail = await s.ok("GET", f"/api/v1/scenarios/{sid}")
+    return [v["id"] for v in sorted(detail["versions"], key=lambda v: v["version"])]
+
+
+async def test_a_release_runs_exactly_the_versions_it_selected() -> None:
+    async with simulation_stack() as s:
+        await s.register_suite()
+        happy_v1 = (await _versions(s, "refund-happy-path"))[0]
+        timeout = (await _versions(s, "refund-timeout-after-mutation"))[0]
+        # The scenario gets a new version after the release selected v1.
+        edited = scenario_yaml("refund-happy-path").replace(
+            "description: >", "description: >\n    Edited after the release selected it.", 1
+        )
+        await s.ok("POST", "/api/v1/scenarios", {"project_id": PROJECT, "yaml": edited}, status=201)
+        happy_v2 = (await _versions(s, "refund-happy-path"))[1]
+        assert happy_v2 != happy_v1
+
+        eval_run = str(uuid.uuid4())
+        body = pair_body(eval_run, scenarios=None, scenario_versions=[timeout, happy_v1.upper()])
+        resp = await ask(s, body)
+        assert resp.status_code == 201, resp.text
+        pair = resp.json()
+        for run in (pair["baseline"], pair["candidate"]):
+            pinned = {p["scenario"]: p["scenario_version_id"] for p in run["pinning"]["scenarios"]}
+            assert pinned == {"refund-happy-path": happy_v1, "refund-timeout-after-mutation": timeout}
+            assert run["pinning"]["selection"] == {
+                "scenarios": None,
+                "tags": None,
+                "scenario_versions": sorted([happy_v1, timeout]),
+            }
+            detail = await s.ok("GET", f"/api/v1/simulations/{run['id']}")
+            assert {c["scenario_name"]: c["scenario_version_id"] for c in detail["cases"]} == pinned
+        # The same versions in any order and case answer the same pair; other versions conflict.
+        again = await ask(s, pair_body(eval_run, scenarios=None, scenario_versions=[happy_v1, timeout]))
+        assert (again.status_code, again.json()["created"]) == (200, False)
+        other = await ask(s, pair_body(eval_run, scenarios=None, scenario_versions=[happy_v2, timeout]))
+        assert (other.status_code, other.json()["error"]["code"]) == (409, "PAIR_CONFLICT")
+
+
+async def test_pinned_versions_are_checked() -> None:
+    async with simulation_stack() as s:
+        await s.register_suite()
+        happy = await _versions(s, "refund-happy-path")
+        lie = (await _versions(s, "refund-tool-success-lie"))[0]
+        edited = scenario_yaml("refund-happy-path").replace("description: >", "description: >\n    v2", 1)
+        await s.ok("POST", "/api/v1/scenarios", {"project_id": PROJECT, "yaml": edited}, status=201)
+        happy = await _versions(s, "refund-happy-path")
+        unknown = str(uuid.uuid4())
+        eval_run = str(uuid.uuid4())
+
+        def fails(resp: Any, code: str, details: Any) -> None:
+            assert resp.status_code == 400, resp.text
+            assert (resp.json()["error"]["code"], resp.json()["error"]["details"]) == (code, details)
+
+        fails(
+            await ask(s, pair_body(eval_run, scenarios=None, scenario_versions=[happy[0], unknown])),
+            "SCENARIO_NOT_FOUND",
+            {"missing_versions": [unknown]},
+        )
+        fails(
+            await ask(s, pair_body(eval_run, scenarios=None, scenario_versions=happy)),
+            "INVALID_REQUEST",
+            {"field": "scenario_versions", "scenarios": ["refund-happy-path"]},
+        )
+        fails(
+            await ask(s, pair_body(eval_run, scenario_versions=[happy[0]])),
+            "INVALID_REQUEST",
+            {"field": "scenario_versions"},
+        )
+        fails(
+            await ask(s, pair_body(eval_run, scenarios=None, tags=["refunds"], scenario_versions=[happy[0]])),
+            "INVALID_REQUEST",
+            {"field": "scenario_versions"},
+        )
+        fails(
+            await ask(s, pair_body(eval_run, scenarios=None, scenario_versions=["not-a-uuid"])),
+            "INVALID_PARAMETER",
+            {"field": "scenario_versions"},
+        )
+        # An archived scenario's version is not runnable.
+        listed = await s.ok("GET", "/api/v1/scenarios", project_id=PROJECT)
+        lie_id = next(sc["id"] for sc in listed["items"] if sc["name"] == "refund-tool-success-lie")
+        await s.ok("POST", f"/api/v1/scenarios/{lie_id}/archive")
+        fails(
+            await ask(s, pair_body(eval_run, scenarios=None, scenario_versions=[lie])),
+            "SCENARIO_NOT_FOUND",
+            {"missing_versions": [lie]},
+        )
+        # Another project's service cannot name this project's versions.
+        elsewhere = await ask(
+            s,
+            pair_body(eval_run, project_id=OTHER_PROJECT, scenarios=None, scenario_versions=[happy[0]]),
+            as_=service_principal("evaluation-service", ORG, OTHER_PROJECT),
+        )
+        assert elsewhere.status_code == 400, elsewhere.text
+        assert elsewhere.json()["error"]["code"] in {"SCENARIO_NOT_FOUND", "AGENT_VERSION_NOT_FOUND"}
+        assert await runs_of(s, eval_run) == []
+
+
+async def test_pinned_versions_stay_in_their_project_and_agent() -> None:
+    async with simulation_stack() as s:
+        await s.register_suite()
+        happy = (await _versions(s, "refund-happy-path"))[0]
+        # A scenario for another agent, and one for any agent.
+        other = scenario_yaml("refund-happy-path").replace("name: refund-happy-path", "name: other-agents", 1)
+        other = other.replace("agent: support-refund-agent", "agent: other-agent", 1)
+        anyone = scenario_yaml("refund-happy-path").replace("name: refund-happy-path", "name: any-agent", 1)
+        anyone = anyone.replace("  agent: support-refund-agent\n", "", 1)
+        for doc in (other, anyone):
+            await s.ok("POST", "/api/v1/scenarios", {"project_id": PROJECT, "yaml": doc}, status=201)
+        others = (await _versions(s, "other-agents"))[0]
+        general = (await _versions(s, "any-agent"))[0]
+
+        found = await s.store.scenario_versions_for_run(PROJECT, AGENT, [happy, others, general])
+        assert sorted(str(r["version_id"]) for r in found) == sorted([happy, general])
+        assert await s.store.scenario_versions_for_run(OTHER_PROJECT, AGENT, [happy, general]) == []
+
+        resp = await ask(s, pair_body(str(uuid.uuid4()), scenarios=None, scenario_versions=[happy, others]))
+        assert resp.status_code == 400, resp.text
+        assert (resp.json()["error"]["code"], resp.json()["error"]["details"]) == (
+            "SCENARIO_NOT_FOUND",
+            {"missing_versions": [others]},
+        )

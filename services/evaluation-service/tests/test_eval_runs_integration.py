@@ -59,7 +59,13 @@ async def test_the_candidate_is_compared_with_its_baseline_case_by_case() -> Non
             "user:engineer",
             None,
         )
-        assert run["selection"] == {"scenarios": None, "tags": None, "dataset": None}
+        assert run["selection"] == {
+            "scenarios": None,
+            "tags": None,
+            "dataset": None,
+            "scenario_versions": None,
+        }
+        assert run["release_evaluation_id"] is None
 
         # PREPARING: the pair of runs, one pinned suite, attributed to the requester.
         assert await ev.worker.process_next() == run["id"]
@@ -365,6 +371,7 @@ async def test_a_dataset_pins_the_suite() -> None:
             "scenarios": ["refund-happy-path", "refund-over-limit"],
             "tags": None,
             "dataset": {"id": dataset_id, "name": "refunds", "version": 1},
+            "scenario_versions": None,
         }
         # A later version does not change what the run evaluates.
         await ev.ok(

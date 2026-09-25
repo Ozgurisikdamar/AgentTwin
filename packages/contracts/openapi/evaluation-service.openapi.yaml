@@ -416,6 +416,11 @@ paths:
           in: query
           schema:
             $ref: '#/components/schemas/Uuid'
+        - name: release_evaluation_id
+          in: query
+          description: The run a release evaluation asked for (at most one).
+          schema:
+            $ref: '#/components/schemas/Uuid'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1415,9 +1420,9 @@ components:
     EvalRun:
       type: object
       required: [id, organization_id, project_id, agent_name, baseline_version, candidate_version, seed,
-                 release_id, status, requested_by, cancel_requested, attempts, baseline_run_id,
-                 candidate_run_id, case_count, error, created_at, started_at, finished_at, updated_at,
-                 selection, counts, pinning, judge, budget]
+                 release_id, release_evaluation_id, status, requested_by, cancel_requested, attempts,
+                 baseline_run_id, candidate_run_id, case_count, error, created_at, started_at, finished_at,
+                 updated_at, selection, counts, pinning, judge, budget]
       properties:
         id:
           $ref: '#/components/schemas/Uuid'
@@ -1435,6 +1440,13 @@ components:
           type: [integer, 'null']
         release_id:
           type: [string, 'null']
+        release_evaluation_id:
+          description: >-
+            The release evaluation that asked for this run (`evaluation.run_requested.v1`); such a run
+            is created once per release evaluation.
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
         status:
           $ref: '#/components/schemas/EvalRunStatus'
         requested_by:
@@ -1473,9 +1485,17 @@ components:
           $ref: '#/components/schemas/Timestamp'
         selection:
           type: object
-          description: What was asked for; a dataset's scenario names are resolved when the run is requested.
-          required: [scenarios, tags, dataset]
+          description: >-
+            What was asked for; a dataset's scenario names are resolved when the run is requested. A
+            release's run names the scenario versions it runs (`scenario_versions`, with their names in
+            `scenarios`).
+          required: [scenarios, tags, dataset, scenario_versions]
           properties:
+            scenario_versions:
+              type: [array, 'null']
+              description: The pinned scenario versions of a release's run; null otherwise.
+              items:
+                $ref: '#/components/schemas/Uuid'
             scenarios:
               type: [array, 'null']
               items:

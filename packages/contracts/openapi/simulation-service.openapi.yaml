@@ -1577,7 +1577,8 @@ components:
           description: The queries it is similar to, closest first.
     ScenarioMatch:
       type: object
-      required: [id, name, agent, twin, severity, tags, source, latest_version, description, matched]
+      required: [id, name, agent, twin, severity, tags, source, latest_version, latest_version_id, description,
+                 matched]
       properties:
         id:
           $ref: '#/components/schemas/Uuid'
@@ -1598,6 +1599,9 @@ components:
         latest_version:
           type: integer
           minimum: 1
+        latest_version_id:
+          $ref: '#/components/schemas/Uuid'
+          description: The latest version's id, which a release pins (`scenario_versions` of a pair).
         description:
           type: string
         matched:
@@ -1814,6 +1818,18 @@ components:
           items:
             type: string
             pattern: ^[a-z0-9][a-z0-9_:.-]{0,62}$
+        scenario_versions:
+          type: [array, 'null']
+          minItems: 1
+          maxItems: 500
+          description: |
+            Exactly these scenario versions (one per scenario), instead of
+            `scenarios` and `tags`: a release runs the versions its impact
+            selected, not whatever is latest when the pair is made. A version
+            that is not of an active scenario of the project for the agent is
+            `400 SCENARIO_NOT_FOUND` (`details.missing_versions`).
+          items:
+            $ref: '#/components/schemas/Uuid'
         seed:
           type: [integer, 'null']
           minimum: 0
@@ -2043,6 +2059,11 @@ components:
               type: [array, 'null']
               items:
                 type: string
+            scenario_versions:
+              type: [array, 'null']
+              description: The exact scenario versions asked for (pairs of a release).
+              items:
+                $ref: '#/components/schemas/Uuid'
         pair:
           type: object
           description: The evaluation this run is one side of (runs created in pairs only).

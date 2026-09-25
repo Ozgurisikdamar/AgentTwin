@@ -10014,6 +10014,18 @@
             }
           }
         },
+        "query:release_evaluation_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
         "query:status": {
           "required": false,
           "schema": {
@@ -10079,6 +10091,7 @@
               "organization_id",
               "pinning",
               "project_id",
+              "release_evaluation_id",
               "release_id",
               "requested_by",
               "seed",
@@ -10128,6 +10141,7 @@
             ],
             "/items/[]/selection": [
               "dataset",
+              "scenario_versions",
               "scenarios",
               "tags"
             ],
@@ -10300,6 +10314,10 @@
             "/items/[]/project_id": [
               "string"
             ],
+            "/items/[]/release_evaluation_id": [
+              "null",
+              "string"
+            ],
             "/items/[]/release_id": [
               "null",
               "string"
@@ -10326,6 +10344,13 @@
             ],
             "/items/[]/selection/dataset/version": [
               "integer"
+            ],
+            "/items/[]/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/items/[]/selection/scenario_versions/[]": [
+              "string"
             ],
             "/items/[]/selection/scenarios": [
               "array",
@@ -10532,6 +10557,7 @@
               "organization_id",
               "pinning",
               "project_id",
+              "release_evaluation_id",
               "release_id",
               "requested_by",
               "seed",
@@ -10581,6 +10607,7 @@
             ],
             "/run/selection": [
               "dataset",
+              "scenario_versions",
               "scenarios",
               "tags"
             ],
@@ -11002,6 +11029,10 @@
             "/run/project_id": [
               "string"
             ],
+            "/run/release_evaluation_id": [
+              "null",
+              "string"
+            ],
             "/run/release_id": [
               "null",
               "string"
@@ -11028,6 +11059,13 @@
             ],
             "/run/selection/dataset/version": [
               "integer"
+            ],
+            "/run/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenario_versions/[]": [
+              "string"
             ],
             "/run/selection/scenarios": [
               "array",
@@ -14725,6 +14763,7 @@
               "organization_id",
               "pinning",
               "project_id",
+              "release_evaluation_id",
               "release_id",
               "requested_by",
               "seed",
@@ -14774,6 +14813,7 @@
             ],
             "/run/selection": [
               "dataset",
+              "scenario_versions",
               "scenarios",
               "tags"
             ],
@@ -14943,6 +14983,10 @@
             "/run/project_id": [
               "string"
             ],
+            "/run/release_evaluation_id": [
+              "null",
+              "string"
+            ],
             "/run/release_id": [
               "null",
               "string"
@@ -14969,6 +15013,13 @@
             ],
             "/run/selection/dataset/version": [
               "integer"
+            ],
+            "/run/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenario_versions/[]": [
+              "string"
             ],
             "/run/selection/scenarios": [
               "array",
@@ -15078,6 +15129,7 @@
               "organization_id",
               "pinning",
               "project_id",
+              "release_evaluation_id",
               "release_id",
               "requested_by",
               "seed",
@@ -15127,6 +15179,7 @@
             ],
             "/run/selection": [
               "dataset",
+              "scenario_versions",
               "scenarios",
               "tags"
             ],
@@ -15296,6 +15349,10 @@
             "/run/project_id": [
               "string"
             ],
+            "/run/release_evaluation_id": [
+              "null",
+              "string"
+            ],
             "/run/release_id": [
               "null",
               "string"
@@ -15322,6 +15379,13 @@
             ],
             "/run/selection/dataset/version": [
               "integer"
+            ],
+            "/run/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenario_versions/[]": [
+              "string"
             ],
             "/run/selection/scenarios": [
               "array",
@@ -15388,6 +15452,7 @@
               "organization_id",
               "pinning",
               "project_id",
+              "release_evaluation_id",
               "release_id",
               "requested_by",
               "seed",
@@ -15437,6 +15502,7 @@
             ],
             "/run/selection": [
               "dataset",
+              "scenario_versions",
               "scenarios",
               "tags"
             ],
@@ -15606,6 +15672,10 @@
             "/run/project_id": [
               "string"
             ],
+            "/run/release_evaluation_id": [
+              "null",
+              "string"
+            ],
             "/run/release_id": [
               "null",
               "string"
@@ -15632,6 +15702,13 @@
             ],
             "/run/selection/dataset/version": [
               "integer"
+            ],
+            "/run/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenario_versions/[]": [
+              "string"
             ],
             "/run/selection/scenarios": [
               "array",
@@ -15830,6 +15907,7 @@
               "organization_id",
               "pinning",
               "project_id",
+              "release_evaluation_id",
               "release_id",
               "requested_by",
               "seed",
@@ -15879,6 +15957,7 @@
             ],
             "/run/selection": [
               "dataset",
+              "scenario_versions",
               "scenarios",
               "tags"
             ],
@@ -16091,6 +16170,10 @@
             "/run/project_id": [
               "string"
             ],
+            "/run/release_evaluation_id": [
+              "null",
+              "string"
+            ],
             "/run/release_id": [
               "null",
               "string"
@@ -16117,6 +16200,13 @@
             ],
             "/run/selection/dataset/version": [
               "integer"
+            ],
+            "/run/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenario_versions/[]": [
+              "string"
             ],
             "/run/selection/scenarios": [
               "array",
@@ -19963,6 +20053,13 @@
             "/run/pinning/selection": [
               "object"
             ],
+            "/run/pinning/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/run/pinning/selection/scenario_versions/[]": [
+              "string"
+            ],
             "/run/pinning/selection/scenarios": [
               "array",
               "null"
@@ -21501,6 +21598,7 @@
               "description",
               "id",
               "latest_version",
+              "latest_version_id",
               "matched",
               "name",
               "severity",
@@ -21554,6 +21652,9 @@
             ],
             "/scenarios/[]/latest_version": [
               "integer"
+            ],
+            "/scenarios/[]/latest_version_id": [
+              "string"
             ],
             "/scenarios/[]/matched": [
               "object"
@@ -22300,6 +22401,13 @@
             "/run/pinning/selection": [
               "object"
             ],
+            "/run/pinning/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/run/pinning/selection/scenario_versions/[]": [
+              "string"
+            ],
             "/run/pinning/selection/scenarios": [
               "array",
               "null"
@@ -22999,6 +23107,13 @@
               "null",
               "string"
             ],
+            "/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/scenario_versions/[]": [
+              "string"
+            ],
             "/scenarios": [
               "array",
               "null"
@@ -23376,6 +23491,13 @@
             "/baseline/pinning/selection": [
               "object"
             ],
+            "/baseline/pinning/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/baseline/pinning/selection/scenario_versions/[]": [
+              "string"
+            ],
             "/baseline/pinning/selection/scenarios": [
               "array",
               "null"
@@ -23566,6 +23688,13 @@
             ],
             "/candidate/pinning/selection": [
               "object"
+            ],
+            "/candidate/pinning/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/candidate/pinning/selection/scenario_versions/[]": [
+              "string"
             ],
             "/candidate/pinning/selection/scenarios": [
               "array",
@@ -24001,6 +24130,13 @@
             "/baseline/pinning/selection": [
               "object"
             ],
+            "/baseline/pinning/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/baseline/pinning/selection/scenario_versions/[]": [
+              "string"
+            ],
             "/baseline/pinning/selection/scenarios": [
               "array",
               "null"
@@ -24191,6 +24327,13 @@
             ],
             "/candidate/pinning/selection": [
               "object"
+            ],
+            "/candidate/pinning/selection/scenario_versions": [
+              "array",
+              "null"
+            ],
+            "/candidate/pinning/selection/scenario_versions/[]": [
+              "string"
             ],
             "/candidate/pinning/selection/scenarios": [
               "array",

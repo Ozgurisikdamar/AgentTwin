@@ -115,11 +115,13 @@ func matchedScenario(name, severity, source string, tags []string, nameMatch boo
 	if similar == nil {
 		similar = []map[string]any{}
 	}
+	suffix := strings.Repeat("0", 12-len(name)%10) + strings.Repeat("1", len(name)%10)
 	return map[string]any{
-		"id":   "01a0d7b0-77fb-709b-b8ff-" + strings.Repeat("0", 12-len(name)%10) + strings.Repeat("1", len(name)%10),
+		"id":   "01a0d7b0-77fb-709b-b8ff-" + suffix,
 		"name": name, "agent": "support-refund-agent", "twin": "demo-co-support", "severity": severity, "tags": tags,
-		"source": source, "latest_version": 1, "description": name + " description",
-		"matched": map[string]any{"name": nameMatch, "tags": matchedTags, "source": sourceMatch, "similar": similar},
+		"source": source, "latest_version": 1, "latest_version_id": "01a0d7b0-77fb-709b-b8fe-" + suffix,
+		"description": name + " description",
+		"matched":     map[string]any{"name": nameMatch, "tags": matchedTags, "source": sourceMatch, "similar": similar},
 	}
 }
 

@@ -192,9 +192,14 @@ async def test_similarity_follows_the_latest_version_and_archiving() -> None:
         # A new version is embedded again when it is next matched.
         await save(s, scenario("balance-question", "The customer wants to change the shipping address."))
         assert (await match(s, queries=gift))["scenarios"] == []
-        assert [m["id"] for m in (await match(s, queries=ship))["scenarios"]] == [sid]
+        matched = (await match(s, queries=ship))["scenarios"]
+        assert [m["id"] for m in matched] == [sid]
         row = await s.store.one("SELECT version FROM scenario_embedding WHERE scenario_id = %s", (sid,))
         assert row == {"version": 2}
+        # The answer names the version a release would pin: the latest.
+        detail = await s.ok("GET", f"/api/v1/scenarios/{sid}")
+        latest = next(v["id"] for v in detail["versions"] if v["version"] == 2)
+        assert (matched[0]["latest_version"], matched[0]["latest_version_id"]) == (2, latest)
 
         # An archived scenario is selected for nothing, not even by name.
         await s.ok("POST", f"/api/v1/scenarios/{sid}/archive")

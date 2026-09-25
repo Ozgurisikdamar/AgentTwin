@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import socket
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
@@ -32,13 +33,13 @@ from typing import Any
 
 from agenttwin_core.db import Conn, transaction
 from agenttwin_core.evaluators import ToolCall
-from agenttwin_core.events import Envelope, write_outbox
-from agenttwin_core.ids import new_id
+from agenttwin_core.events import Envelope, Permanent, write_outbox
+from agenttwin_core.ids import new_id, valid_uuid
 from agenttwin_core.jobs import JobStatus
 from agenttwin_core.logx import Log
 from agenttwin_evaluation.calibrations import run_calibration
 from agenttwin_evaluation.clients import PairRefused, SimulationClient, TraceClient, TraceUsage, UpstreamError
-from agenttwin_evaluation.common import PRODUCER
+from agenttwin_evaluation.common import AGENT, NAME, PRODUCER
 from agenttwin_evaluation.comparison import EVALUATED, CaseComparison, Side, compare_case, summarize
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.judges import JudgeProvider, judge_identity
@@ -46,7 +47,15 @@ from agenttwin_evaluation.reviewing import needs_review
 from agenttwin_evaluation.semantic import JudgeBudget, Judged, SemanticJudging
 from agenttwin_evaluation.store import SCHEMA, JudgmentCache, Row, Store
 
-__all__ = ["QUEUE", "EvalWorker", "judgeable", "judged_side"]
+__all__ = [
+    "EMPTY_SUITE",
+    "QUEUE",
+    "EvalWorker",
+    "judge_spend_limit",
+    "judgeable",
+    "judged_side",
+    "release_run",
+]
 
 QUEUE = "evaluation-service.events"
 FINAL = frozenset({"COMPLETED", "FAILED", "CANCELLED"})
@@ -127,14 +136,92 @@ async def judged_side(
 
 
 def completed_event(run: Mapping[str, Any], status: JobStatus, error: str | None) -> Envelope:
+    release_evaluation = run.get("release_evaluation_id")
     return Envelope.new(
         "evaluation.run_completed.v1",
         PRODUCER,
         str(run["organization_id"]),
         str(run["project_id"]),
         str(run["id"]),
-        {"eval_run_id": str(run["id"]), "release_evaluation_id": None, "status": str(status), "error": error},
+        {
+            "eval_run_id": str(run["id"]),
+            "release_evaluation_id": str(release_evaluation) if release_evaluation is not None else None,
+            "status": str(status),
+            "error": error,
+        },
     )
+
+
+EMPTY_SUITE = "The release selected no scenarios to evaluate."
+
+
+def release_run(env: Envelope) -> dict[str, Any]:
+    """The evaluation run a release asks for (``evaluation.run_requested.v1``,
+    spec §28): the candidate against its baseline on exactly the scenario
+    versions the release selected, pinned by id so a scenario edited after
+    the release was cut cannot change what it is judged on. Raises
+    :class:`ValueError` when the event cannot describe a run (a producer's
+    bug: retrying would not help)."""
+    payload = env.payload
+    project = env.project_id
+    if project is None or not valid_uuid(str(project)):
+        raise ValueError("the event names no project")
+    release_evaluation = str(payload["release_evaluation_id"])
+    if not valid_uuid(release_evaluation):
+        raise ValueError("release_evaluation_id is not a UUID")
+    baseline, candidate = payload["baseline"], payload["candidate"]
+    agent = str(baseline["agent"])
+    if str(candidate["agent"]) != agent:
+        raise ValueError(f"the baseline is {agent!r} and the candidate {candidate['agent']!r}")
+    if not re.match(AGENT, agent):
+        raise ValueError(f"{agent!r} is not an agent name")
+    for side in (baseline, candidate):
+        if not 0 < len(str(side["version"])) <= 100:
+            raise ValueError(f"{side['version']!r} is not a version")
+    versions: dict[str, str] = {}
+    for entry in payload["suite"]:
+        version_id, name = str(entry["scenario_version_id"]).lower(), str(entry["scenario_name"])
+        if not valid_uuid(version_id):
+            raise ValueError(f"scenario_version_id {version_id!r} is not a UUID")
+        if not re.match(NAME, name):
+            raise ValueError(f"{name!r} is not a scenario name")
+        versions[version_id] = name
+    seed = payload.get("seed")
+    if seed is not None and (
+        isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 2**32 - 1
+    ):
+        raise ValueError(f"{seed!r} is not a seed")
+    requested_by = str(payload.get("requested_by") or "service:control-plane")
+    budget = (payload.get("budget") or {}).get("max_gate_cost_usd")
+    if budget is not None and (isinstance(budget, bool) or not isinstance(budget, int | float) or budget < 0):
+        raise ValueError(f"{budget!r} is not a budget")
+    release_id = payload.get("release_id")
+    return {
+        "id": new_id(),
+        "organization_id": env.organization_id,
+        "project_id": str(project),
+        "agent_name": agent,
+        "baseline_version": str(baseline["version"]),
+        "candidate_version": str(candidate["version"]),
+        "selection": {
+            "scenarios": sorted(set(versions.values())),
+            "tags": None,
+            "dataset": None,
+            "scenario_versions": sorted(versions),
+        },
+        "seed": seed,
+        "release_id": str(release_id) if release_id is not None else None,
+        "requested_by": requested_by,
+        "release_evaluation_id": release_evaluation,
+        "max_judge_cost_usd": float(budget) if budget is not None else None,
+    }
+
+
+def judge_spend_limit(configured: float | None, requested: float | None) -> float | None:
+    """What the judge may spend on one run: the service's limit, lowered by
+    the release's gate budget when it asks for less (None: no limit)."""
+    limits = [v for v in (configured, requested) if v is not None]
+    return min(limits) if limits else None
 
 
 @dataclass
@@ -160,14 +247,18 @@ class EvalWorker:
     async def prepare(self, run: Row) -> None:
         run_id, org, project = str(run["id"]), str(run["organization_id"]), str(run["project_id"])
         selection = run["selection"] or {}
+        pinned = selection.get("scenario_versions")
         body = {
             "project_id": project,
             "eval_run_id": run_id,
             "agent": run["agent_name"],
             "baseline_version": run["baseline_version"],
             "candidate_version": run["candidate_version"],
-            "scenarios": selection.get("scenarios"),
-            "tags": selection.get("tags"),
+            # A release's run names scenario versions; the names beside them
+            # are for people, the versions are what runs.
+            "scenarios": None if pinned else selection.get("scenarios"),
+            "tags": None if pinned else selection.get("tags"),
+            "scenario_versions": pinned or None,
             "seed": run["seed"],
             "release_id": run["release_id"],
             "requested_by": run["requested_by"],
@@ -300,7 +391,10 @@ class EvalWorker:
         latest = await self.store.latest_calibrations(org, project, judge_identity(self.judge))
         judging = SemanticJudging(
             judge=self.judge,
-            budget=JudgeBudget(max_cost_usd=self.cfg.judge_budget_usd, max_calls=self.cfg.judge_max_calls),
+            budget=JudgeBudget(
+                max_cost_usd=judge_spend_limit(self.cfg.judge_budget_usd, run.get("max_judge_cost_usd")),
+                max_calls=self.cfg.judge_max_calls,
+            ),
             cache=JudgmentCache(self.store),
             calibrated=frozenset(name for name, row in latest.items() if row["calibrated"]),
             timeout_s=self.cfg.judge_call_timeout_s,
@@ -479,7 +573,11 @@ class EvalWorker:
 
     async def on_event(self, env: Envelope) -> None:
         """``simulation.run_completed.v1`` makes the waiting run due at once;
-        the other events of the queue are for later phases."""
+        ``evaluation.run_requested.v1`` queues a release's run. The other
+        events of the queue are for later phases."""
+        if env.type == "evaluation.run_requested.v1":
+            await self.release_requested(env)
+            return
         if env.type != "simulation.run_completed.v1":
             return
         payload = env.payload
@@ -487,6 +585,33 @@ class EvalWorker:
             await self.store.wake(
                 conn, eval_run_id=payload.get("eval_run_id"), simulation_run_id=str(payload["run_id"])
             )
+
+    async def release_requested(self, env: Envelope) -> Row | None:
+        """Queues the run a release evaluation asks for, once: a redelivered
+        or repeated request finds its run and changes nothing. A release that
+        selected no scenarios gets a failed run and its completion event, so
+        it is answered rather than left waiting. Returns the new run."""
+        try:
+            run = release_run(env)
+        except (ValueError, KeyError, TypeError) as err:
+            raise Permanent(f"not a release evaluation run: {err}") from err
+        async with transaction(self.store.pool) as conn:
+            row = await self.store.insert_release_run(conn, run)
+            if row is None:
+                self.log.info(
+                    "release evaluation already has its run",
+                    release_evaluation_id=run["release_evaluation_id"],
+                )
+                return None
+            if not run["selection"]["scenario_versions"]:
+                await self._finish_in(conn, row, JobStatus.FAILED, EMPTY_SUITE)
+        self.log.info(
+            "release eval run requested",
+            eval_run_id=run["id"],
+            release_evaluation_id=run["release_evaluation_id"],
+            cases=len(run["selection"]["scenario_versions"]),
+        )
+        return row
 
     async def claim_loop(self, stop: asyncio.Event) -> None:
         while not stop.is_set():

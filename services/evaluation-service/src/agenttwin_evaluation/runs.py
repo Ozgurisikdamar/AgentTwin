@@ -30,14 +30,24 @@ from agenttwin_core.ids import new_id
 from agenttwin_core.jobs import JobStatus
 from agenttwin_core.logx import Log
 from agenttwin_core.web import query_int, read_model, require, require_project
-from agenttwin_evaluation.common import NAME, TAG, Strict, accessible, audit, check_uuid, pick, scope_of, ts
+from agenttwin_evaluation.common import (
+    AGENT,
+    NAME,
+    TAG,
+    Strict,
+    accessible,
+    audit,
+    check_uuid,
+    pick,
+    scope_of,
+    ts,
+)
 from agenttwin_evaluation.reviewing import review_json
 from agenttwin_evaluation.store import SCHEMA, Row, Store, decode_cursor, encode_cursor
 from agenttwin_evaluation.worker import completed_event
 
 __all__ = ["EvalRunsAPI", "eval_run_json"]
 
-AGENT = r"^[a-z0-9][a-z0-9_-]{0,62}$"
 STATUSES = tuple(str(s) for s in JobStatus)
 
 
@@ -77,6 +87,7 @@ _RUN_KEYS = (
     "candidate_version",
     "seed",
     "release_id",
+    "release_evaluation_id",
     "status",
     "requested_by",
     "cancel_requested",
@@ -99,6 +110,7 @@ def eval_run_json(row: Mapping[str, Any]) -> dict[str, Any]:
         "scenarios": selection.get("scenarios"),
         "tags": selection.get("tags"),
         "dataset": selection.get("dataset"),
+        "scenario_versions": selection.get("scenario_versions"),
     }
     out["counts"] = {
         "NEW_CRITICAL_FAILURE": int(row.get("new_critical_failures") or 0),
@@ -229,13 +241,21 @@ class EvalRunsAPI:
                 raise errors.invalid("INVALID_PARAMETER", "agent is not an agent name.", {"field": "agent"})
             dataset_id = q.get("dataset_id") or None
             check_uuid(dataset_id, "dataset_id")
+            release_evaluation_id = q.get("release_evaluation_id") or None
+            check_uuid(release_evaluation_id, "release_evaluation_id")
             try:
                 after = decode_cursor(q.get("cursor") or "")
             except ValueError:
                 raise errors.invalid("INVALID_CURSOR", "Cursor is malformed.") from None
             limit = query_int(q, "limit", 50, 1, 200)
             rows = await self.store.list_eval_runs(
-                scope, status=status, agent=agent, dataset_id=dataset_id, after=after, limit=limit + 1
+                scope,
+                status=status,
+                agent=agent,
+                dataset_id=dataset_id,
+                release_evaluation_id=release_evaluation_id,
+                after=after,
+                limit=limit + 1,
             )
             items = rows[:limit]
             nxt = encode_cursor(items[-1]["created_at"], str(items[-1]["id"])) if len(rows) > limit else None

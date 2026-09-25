@@ -528,6 +528,8 @@ export interface components {
             candidate_version: string;
             seed: number | null;
             release_id: string | null;
+            /** @description The release evaluation that asked for this run (`evaluation.run_requested.v1`); such a run is created once per release evaluation. */
+            release_evaluation_id: components["schemas"]["Uuid"] | null;
             status: components["schemas"]["EvalRunStatus"];
             requested_by: string;
             cancel_requested: boolean;
@@ -542,8 +544,10 @@ export interface components {
             started_at: components["schemas"]["Timestamp"] | null;
             finished_at: components["schemas"]["Timestamp"] | null;
             updated_at: components["schemas"]["Timestamp"];
-            /** @description What was asked for; a dataset's scenario names are resolved when the run is requested. */
+            /** @description What was asked for; a dataset's scenario names are resolved when the run is requested. A release's run names the scenario versions it runs (`scenario_versions`, with their names in `scenarios`). */
             selection: {
+                /** @description The pinned scenario versions of a release's run; null otherwise. */
+                scenario_versions: components["schemas"]["Uuid"][] | null;
                 scenarios: string[] | null;
                 tags: string[] | null;
                 dataset: {
@@ -1455,6 +1459,8 @@ export interface operations {
                 status?: components["schemas"]["EvalRunStatus"];
                 agent?: string;
                 dataset_id?: components["schemas"]["Uuid"];
+                /** @description The run a release evaluation asked for (at most one). */
+                release_evaluation_id?: components["schemas"]["Uuid"];
                 /** @description The `next_cursor` of the previous page. */
                 cursor?: components["parameters"]["Cursor"];
                 limit?: components["parameters"]["Limit"];

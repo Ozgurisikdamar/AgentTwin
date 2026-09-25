@@ -234,12 +234,27 @@ class Store:
     _JSON_COLUMNS = frozenset({"pinning", "judge", "budget", "summary"})
 
     async def insert_eval_run(self, conn: Conn, run: Mapping[str, Any]) -> Row:
+        row = await self._insert_eval_run(conn, run, "requested")
+        assert row is not None  # noqa: S101 - no release evaluation, nothing to conflict with
+        return row
+
+    async def insert_release_run(self, conn: Conn, run: Mapping[str, Any]) -> Row | None:
+        """The run of one release evaluation, created once however often it is
+        asked for: None when that release evaluation already has its run."""
+        return await self._insert_eval_run(
+            conn, run, f"requested by release evaluation {run['release_evaluation_id']}"
+        )
+
+    async def _insert_eval_run(self, conn: Conn, run: Mapping[str, Any], reason: str) -> Row | None:
         row = await self._one(
             conn,
             """INSERT INTO eval_run (id, organization_id, project_id, agent_name, baseline_version,
                    candidate_version, dataset_id, dataset_version, selection, seed, release_id, status,
-                   requested_by)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'QUEUED', %s) RETURNING *""",
+                   requested_by, release_evaluation_id, max_judge_cost_usd)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'QUEUED', %s, %s, %s)
+               ON CONFLICT (organization_id, release_evaluation_id) WHERE release_evaluation_id IS NOT NULL
+               DO NOTHING
+               RETURNING *""",
             (
                 run["id"],
                 run["organization_id"],
@@ -253,11 +268,19 @@ class Store:
                 run.get("seed"),
                 run.get("release_id"),
                 run["requested_by"],
+                run.get("release_evaluation_id"),
+                run.get("max_judge_cost_usd"),
             ),
         )
-        assert row is not None  # noqa: S101 - INSERT … RETURNING
-        await self.add_transition(conn, str(run["id"]), None, "QUEUED", "requested")
+        if row is not None:
+            await self.add_transition(conn, str(run["id"]), None, "QUEUED", reason)
         return row
+
+    async def eval_run_of_release(self, organization_id: str, release_evaluation_id: str) -> Row | None:
+        return await self.one(
+            "SELECT * FROM eval_run WHERE organization_id = %s AND release_evaluation_id = %s",
+            (organization_id, release_evaluation_id),
+        )
 
     async def add_transition(
         self, conn: Conn, run_id: str, from_status: str | None, to_status: str, reason: str | None
@@ -286,12 +309,18 @@ class Store:
         status: str | None = None,
         agent: str | None = None,
         dataset_id: str | None = None,
+        release_evaluation_id: str | None = None,
         after: Cursor | None = None,
         limit: int = 50,
     ) -> list[Row]:
         clause, params = scope.clause()
         where = [clause]
-        for column, value in (("status", status), ("agent_name", agent), ("dataset_id", dataset_id)):
+        for column, value in (
+            ("status", status),
+            ("agent_name", agent),
+            ("dataset_id", dataset_id),
+            ("release_evaluation_id", release_evaluation_id),
+        ):
             if value is not None:
                 where.append(f"{column} = %s")
                 params.append(value)

@@ -139,7 +139,12 @@ class Stub:
         if h.command == "POST" and h.path == "/api/v1/eval-runs":
             req = json.loads(body)
             dataset = {"id": DATASET, "name": suite["name"], "version": 1} if "dataset_id" in req else None
-            selection = {"scenarios": req.get("scenarios"), "tags": req.get("tags"), "dataset": dataset}
+            selection = {
+                "scenarios": req.get("scenarios"),
+                "tags": req.get("tags"),
+                "dataset": dataset,
+                "scenario_versions": None,
+            }
             return 202, {"run": fake.eval_run(id=EVAL, seed=req.get("seed"), selection=selection)}
         if h.command == "GET" and h.path == f"/api/v1/eval-runs/{EVAL}":
             self.eval_polls += 1

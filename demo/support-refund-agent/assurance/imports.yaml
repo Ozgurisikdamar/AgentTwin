@@ -1,0 +1,25 @@
+# The tool catalogs the demo seed imports (spec §20): the APIs and the MCP
+# server behind the agent's tools. The manifests define the tools the agent
+# uses; the imports describe the interfaces those tools call, so that the
+# dependency graph links refund_payment to the payments API and on to the
+# payments service. Re-importing unchanged documents stores nothing.
+openapi:
+  - name: payments-api
+    service: payments-api
+    document: apis/payments-api.openapi.yaml
+  - name: orders-api
+    service: orders-api
+    document: apis/orders-api.openapi.yaml
+mcp:
+  - server:
+      name: support-desk
+      url: https://desk.demo-co.example/mcp
+      version: 3.2.0
+    protocol_version: "2026-07-28"
+    tools: mcp/support-desk.tools.json
+    # The server's annotations are its own claims (untrusted): the risks are
+    # stated here instead.
+    risk_overrides:
+      escalateToHuman: WRITE_REVERSIBLE
+      sendEmail: WRITE_REVERSIBLE
+      searchKnowledgeBase: READ

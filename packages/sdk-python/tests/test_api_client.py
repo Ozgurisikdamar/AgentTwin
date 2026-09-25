@@ -26,6 +26,7 @@ RUN = fake.uuid(0xA001)
 STUCK = fake.uuid(0xA002)
 EVAL = fake.uuid(0xA003)
 DATASET = fake.uuid(0xA004)
+CHANGE_SET = fake.uuid(0xC101)
 
 
 class Stub:
@@ -98,6 +99,26 @@ class Stub:
                 self.polls += 1
                 status = "COMPLETED" if self.polls >= 3 else "RUNNING"
             return 200, fake.run_detail(fake.run(id=h.path.rsplit("/", 1)[1], status=status), [])
+        return self.changes(h, body)
+
+    def changes(self, h: BaseHTTPRequestHandler, body: bytes) -> tuple[int, Any]:
+        if h.command == "POST" and h.path == f"/api/v1/projects/{PROJECT}/imports/openapi":
+            req = json.loads(body)
+            return 201, fake.imported_catalog(name=req["name"], service=req.get("service"))
+        if h.command == "POST" and h.path == f"/api/v1/projects/{PROJECT}/imports/mcp":
+            req = json.loads(body)
+            return 200, fake.imported_catalog(
+                created=False, source="MCP", name=req["server"]["name"], spec_version="2026-07-28"
+            )
+        if h.command == "POST" and h.path == f"/api/v1/projects/{PROJECT}/change-sets":
+            req = json.loads(body)
+            if req["base_version"] == req["candidate_version"]:
+                return 400, fake.error("VALIDATION_FAILED", "The versions must differ.")
+            return 201, fake.change_set(
+                base_version=req["base_version"], candidate_version=req["candidate_version"]
+            )
+        if h.command == "GET" and h.path == f"/api/v1/change-sets/{CHANGE_SET}/impact":
+            return 200, fake.change_impact([fake.impact_scenario("refund-happy-path")])
         return self.evaluation(h, body)
 
     def evaluation(self, h: BaseHTTPRequestHandler, body: bytes) -> tuple[int, Any]:
@@ -353,6 +374,74 @@ def test_datasets_and_evaluation_runs(stub: tuple[Stub, str]) -> None:
     done = client.wait_for_eval_run(EVAL, timeout_s=10, interval_s=0.01)
     assert done["run"]["status"] == "COMPLETED" and state.eval_polls == 2
     used = {"listDatasets", "createDataset", "addDatasetCases", "getDataset", "startEvalRun", "getEvalRun"}
+    assert used <= state.checker.succeeded()
+
+
+def test_tool_catalogs_and_change_impact(stub: tuple[Stub, str]) -> None:
+    state, url = stub
+    client = Client(url, KEY)
+    document = "openapi: 3.1.0\ninfo: {title: Payments, version: '1'}\npaths: {}\n"
+    imported = client.import_openapi(PROJECT, "payments-api", document, service="payments-api")
+    assert imported["created"] is True and imported["service"] == "payments-api"
+    # The document goes as the text it was read as; unset options are left out.
+    assert json.loads(state.requests[-1]["body"]) == {
+        "name": "payments-api",
+        "document": document,
+        "service": "payments-api",
+    }
+    client.import_openapi(
+        PROJECT,
+        "orders-api",
+        {"openapi": "3.1.0"},
+        risk_overrides={"getOrder": "READ"},
+        names={"getOrder": "lookup_order"},
+    )
+    assert json.loads(state.requests[-1]["body"]) == {
+        "name": "orders-api",
+        "document": {"openapi": "3.1.0"},
+        "risk_overrides": {"getOrder": "READ"},
+        "names": {"getOrder": "lookup_order"},
+    }
+    tools = [{"name": "sendEmail", "inputSchema": {"type": "object"}}]
+    again = client.import_mcp(
+        PROJECT,
+        {"name": "support-desk", "url": "https://desk.example/mcp"},
+        tools,
+        protocol_version="2026-07-28",
+        risk_overrides={"sendEmail": "WRITE_REVERSIBLE"},
+    )
+    assert again["created"] is False and again["source"] == "MCP"
+    assert json.loads(state.requests[-1]["body"]) == {
+        "server": {"name": "support-desk", "url": "https://desk.example/mcp"},
+        "tools": tools,
+        "protocol_version": "2026-07-28",
+        "risk_overrides": {"sendEmail": "WRITE_REVERSIBLE"},
+    }
+    client.import_mcp(PROJECT, {"name": "support-desk"}, tools, trust_annotations=True)
+    assert json.loads(state.requests[-1]["body"])["trust_annotations"] is True
+
+    cs = client.create_change_set(
+        PROJECT,
+        "support-refund-agent",
+        "1.3.1",
+        "1.3.2",
+        title="Refund tool: idempotency key required",
+        git={"changed_files": ["manifests/1.3.2.yaml"]},
+    )
+    assert cs["id"] == CHANGE_SET and cs["candidate"]["version"] == "1.3.2"
+    assert json.loads(state.requests[-1]["body"]) == {
+        "agent": "support-refund-agent",
+        "base_version": "1.3.1",
+        "candidate_version": "1.3.2",
+        "title": "Refund tool: idempotency key required",
+        "git": {"changed_files": ["manifests/1.3.2.yaml"]},
+    }
+    with pytest.raises(APIError) as e:
+        client.create_change_set(PROJECT, "support-refund-agent", "1.3.1", "1.3.1")
+    assert (e.value.status, e.value.code) == (400, "VALIDATION_FAILED")
+    impact = client.change_set_impact(CHANGE_SET)
+    assert impact["complete"] is True and [s["name"] for s in impact["scenarios"]] == ["refund-happy-path"]
+    used = {"importOpenApi", "importMcp", "createChangeSet", "getChangeSetImpact"}
     assert used <= state.checker.succeeded()
 
 

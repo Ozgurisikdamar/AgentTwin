@@ -163,6 +163,106 @@ class Client:
         )
         return result
 
+    # ---------------------------------------------- tool catalogs, changes
+    def import_openapi(
+        self,
+        project_id: str,
+        name: str,
+        document: str | Mapping[str, Any],
+        *,
+        service: str | None = None,
+        risk_overrides: Mapping[str, str] | None = None,
+        names: Mapping[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Imports the operations of an OpenAPI document (YAML or JSON text,
+        or the parsed object) as the tool catalog ``name``. A tool an agent
+        manifest declares keeps the manifest's definition; the graph still
+        links it to the API (and the API to ``service``). An import equal to
+        the latest revision stores nothing (``created`` is false)."""
+        body: dict[str, Any] = {
+            "name": name,
+            "document": document if isinstance(document, str) else dict(document),
+        }
+        optional = (
+            ("service", service),
+            ("risk_overrides", dict(risk_overrides) if risk_overrides is not None else None),
+            ("names", dict(names) if names is not None else None),
+        )
+        body |= {k: v for k, v in optional if v is not None}
+        result: dict[str, Any] = self.request(
+            "POST",
+            f"/api/v1/projects/{urllib.parse.quote(project_id, safe='')}/imports/openapi",
+            json_body=body,
+        )
+        return result
+
+    def import_mcp(
+        self,
+        project_id: str,
+        server: Mapping[str, str],
+        tools: Sequence[Mapping[str, Any]],
+        *,
+        protocol_version: str | None = None,
+        risk_overrides: Mapping[str, str] | None = None,
+        names: Mapping[str, str] | None = None,
+        trust_annotations: bool = False,
+    ) -> dict[str, Any]:
+        """Imports the tools of an MCP server's ``tools/list`` result (every
+        page, in order). The server is not contacted. Its annotations set
+        risk only with ``trust_annotations``; otherwise a tool is
+        ``WRITE_IRREVERSIBLE`` unless ``risk_overrides`` says otherwise."""
+        body: dict[str, Any] = {"server": dict(server), "tools": [dict(t) for t in tools]}
+        optional = (
+            ("protocol_version", protocol_version),
+            ("risk_overrides", dict(risk_overrides) if risk_overrides is not None else None),
+            ("names", dict(names) if names is not None else None),
+            ("trust_annotations", True if trust_annotations else None),
+        )
+        body |= {k: v for k, v in optional if v is not None}
+        result: dict[str, Any] = self.request(
+            "POST", f"/api/v1/projects/{urllib.parse.quote(project_id, safe='')}/imports/mcp", json_body=body
+        )
+        return result
+
+    def create_change_set(
+        self,
+        project_id: str,
+        agent: str,
+        base_version: str,
+        candidate_version: str,
+        *,
+        title: str | None = None,
+        git: Mapping[str, Any] | None = None,
+        declared: Sequence[Mapping[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Compares two registered versions of an agent and stores what
+        changed. The same request answers the stored change set (``created``
+        is false), so a re-run CI job does not store a copy."""
+        body: dict[str, Any] = {
+            "agent": agent,
+            "base_version": base_version,
+            "candidate_version": candidate_version,
+        }
+        optional = (
+            ("title", title),
+            ("git", dict(git) if git is not None else None),
+            ("declared", [dict(d) for d in declared] if declared is not None else None),
+        )
+        body |= {k: v for k, v in optional if v is not None}
+        result: dict[str, Any] = self.request(
+            "POST", f"/api/v1/projects/{urllib.parse.quote(project_id, safe='')}/change-sets", json_body=body
+        )
+        return result
+
+    def change_set_impact(self, change_set_id: str) -> dict[str, Any]:
+        """The scenarios a change set requires, each with why, and what the
+        change reaches. ``complete`` is false when a service could not
+        answer: the impact then says what is missing (``problems``)."""
+        result: dict[str, Any] = self.request(
+            "GET", f"/api/v1/change-sets/{urllib.parse.quote(change_set_id, safe='')}/impact"
+        )
+        return result
+
     def register_twin(self, project_id: str, twin: str) -> dict[str, Any]:
         """Registers a tool-twin definition (YAML or JSON text). Identical
         content is a no-op (``created`` is false); changed content becomes a

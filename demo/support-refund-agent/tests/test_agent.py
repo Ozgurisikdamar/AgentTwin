@@ -80,6 +80,24 @@ def test_directives_differ_between_versions() -> None:
         assert d.max_rate_limit_retries == 2
 
 
+def test_the_tool_change_keeps_the_prompt() -> None:
+    """1.3.2 changes only the refund tool's contract (the change impact's
+    tool-change example): the instructions, so the behavior, are 1.3.1's;
+    idempotency_key becomes required, which 1.3.1 already always passes."""
+    store = ManifestStore()
+    fixed, hardened = store.get(FIXED), store.get("1.3.2")
+    assert hardened.instructions == fixed.instructions and hardened.tool_risks == fixed.tool_risks
+
+    def refund(m: Any) -> dict[str, Any]:
+        [tool] = [t for t in m.raw["spec"]["tools"] if t["name"] == "refund_payment"]
+        return dict(tool)
+
+    before, after = refund(fixed), refund(hardened)
+    assert after["inputSchema"]["required"] == [*before["inputSchema"]["required"], "idempotency_key"]
+    assert "description" in after and "description" not in before
+    assert Directives.parse(hardened.instructions).use_idempotency
+
+
 def test_happy_path_baseline_checks_policy_and_uses_idempotency(telemetry: AgentTwin) -> None:
     result, tools = run(telemetry, BASELINE, "Hi, I'd like a refund of $50 for order ORD-1001.")
     assert result.status == "completed"

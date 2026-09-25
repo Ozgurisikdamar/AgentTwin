@@ -362,10 +362,14 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   driven by a deterministic scripted planner (or Anthropic Claude when
   `DEMO_AGENT_MODEL=anthropic` and a key are set). Version 1.2.4 is good,
   1.3.0 regresses (it refunds before checking the policy and trusts a tool's
-  false success), 1.3.1 fixes it. `make dev` seeds 9 scenarios, simulations
-  of 1.2.4 and 1.3.0, the `refund-regression-suite` dataset and an evaluation
-  of 1.3.0 against 1.2.4 that finds the regression: two new critical failures
-  and one regressed case.
+  false success), 1.3.1 fixes it, and 1.3.2 changes only the refund tool's
+  contract (`idempotency_key` becomes required). `make dev` seeds 9
+  scenarios, simulations of 1.2.4 and 1.3.0, the `refund-regression-suite`
+  dataset, an evaluation of 1.3.0 against 1.2.4 that finds the regression
+  (two new critical failures and one regressed case), the payments and
+  orders APIs (OpenAPI) and the support desk's MCP tools, and two change
+  sets — the prompt change 1.2.4 → 1.3.0 and the tool change 1.3.1 → 1.3.2 —
+  each listing the scenarios it requires and why.
 
 ### Quick start (local)
 

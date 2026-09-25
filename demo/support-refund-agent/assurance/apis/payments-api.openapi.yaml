@@ -1,0 +1,101 @@
+# Demo Co's payments API: the interface behind refund_payment. The seed
+# imports it (the tools it names are the agent's, so the registry keeps the
+# manifests' definitions and the graph links them to this API).
+openapi: 3.1.0
+info:
+  title: Demo Co Payments API
+  version: 2.3.0
+  description: Refunds and the refund policy of Demo Co.
+servers:
+  - url: https://payments.demo-co.example/v2
+security:
+  - bearer: []
+paths:
+  /refund-policy:
+    get:
+      operationId: getRefundPolicy
+      x-agenttwin-tool: get_refund_policy
+      summary: Read the refund policy
+      description: The refund window, the automatic refund limit and whether an order must be delivered.
+      parameters:
+        - name: order_id
+          in: query
+          description: Apply the policy to this order (its eligibility is included).
+          schema: {type: string}
+      responses:
+        "200":
+          description: The policy.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RefundPolicy"}
+  /orders/{order_id}/refunds:
+    post:
+      operationId: createRefund
+      x-agenttwin-tool: refund_payment
+      x-agenttwin-risk: WRITE_IRREVERSIBLE
+      summary: Refund an order
+      description: >-
+        Pays money back to the customer. Cannot be undone. A request with an
+        Idempotency-Key that was used before returns the first refund instead
+        of paying again.
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string}
+        - name: Idempotency-Key
+          in: header
+          description: Reused on retries so that a retry never pays twice.
+          schema: {type: string, minLength: 8}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: {type: number, exclusiveMinimum: 0}
+                reason: {type: string, maxLength: 500}
+      responses:
+        "201":
+          description: The refund.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Refund"}
+        "409":
+          description: The order cannot be refunded (window, status or amount).
+  /refunds/{refund_id}:
+    get:
+      operationId: getRefund
+      summary: Read a refund
+      description: A refund's amount, status and the order it belongs to.
+      parameters:
+        - name: refund_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: The refund.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Refund"}
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer}
+  schemas:
+    RefundPolicy:
+      type: object
+      properties:
+        max_auto_refund: {type: number}
+        currency: {type: string}
+        window_days: {type: integer}
+        requires_delivery: {type: boolean}
+    Refund:
+      type: object
+      properties:
+        refund_id: {type: string}
+        order_id: {type: string}
+        amount: {type: number}
+        status: {type: string, enum: [succeeded, pending, failed]}

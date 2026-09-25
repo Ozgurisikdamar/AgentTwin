@@ -65,7 +65,7 @@ PROJECT = "0190f3b4-0000-7000-8000-0000000000b1"
 OTHER_PROJECT = "0190f3b4-0000-7000-8000-0000000000b2"
 AGENT = "support-refund-agent"
 AGENT_TOKEN = "agent-token-for-tests-0123456789"
-VERSIONS = ("1.2.3", "1.2.4", "1.3.0", "1.3.1")
+VERSIONS = ("1.2.3", "1.2.4", "1.3.0", "1.3.1", "1.3.2")
 
 
 _CONTRACT: Contract | None = None

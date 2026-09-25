@@ -26,6 +26,32 @@ def test_control_plane_and_trace_builders_are_valid_contract_payloads() -> None:
     for created in (True, False):
         control_plane.check_schema("RegisteredVersion", fake.registered_version(created=created))
     control_plane.check_schema("Error", fake.error("UNAUTHENTICATED", "Authentication is required."))
+    for created in (True, False):
+        control_plane.check_schema("ImportedCatalog", fake.imported_catalog(created=created))
+        control_plane.check_schema("CreatedChangeSet", fake.change_set(created=created))
+    tool = fake.change_item("tool", "refund_payment", breaking=True)
+    assert fake.change_set(items=[tool])["summary"]["breaking"] == 1
+    graph_reason = {
+        "from": {"kind": "TOOL", "key": "refund_payment"},
+        "from_label": "refund_payment",
+        "via": {"kind": "TOOL", "key": "refund_payment"},
+        "via_label": "refund_payment",
+        "direct": True,
+        "hops": 1,
+        "score": 1.0,
+        "path": [],
+    }
+    linked = fake.impact_scenario(
+        "refund-happy-path",
+        reasons={"graph": [graph_reason], "similar": [], "always_run_tags": [], "known_regression": False},
+    )
+    impact = fake.change_impact([linked, fake.impact_scenario("cross-tenant-order", tags=["security"])])
+    control_plane.check_schema("ChangeImpact", impact)
+    assert impact["complete"] and impact["counts"]["scenarios"] == 2 and impact["counts"]["graph"] == 1
+    problem = {"service": "graph-service", "code": "NOT_CONFIGURED", "message": "not configured"}
+    incomplete = fake.change_impact(problems=[problem])
+    control_plane.check_schema("ChangeImpact", incomplete)
+    assert incomplete["complete"] is False
     traces = Contract.load(contract_path("trace-service"))
     contradicted = fake.outcome(
         status="FAILURE",

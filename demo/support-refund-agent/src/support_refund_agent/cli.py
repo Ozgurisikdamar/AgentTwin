@@ -5,10 +5,13 @@ support-refund-agent serve-agent   the agent adapter HTTP server
 support-refund-agent run TEXT      one conversation; prints the result and trace id
 support-refund-agent traffic       production-like traffic (optionally verified)
 support-refund-agent seed          load the demo workspace: register the agent
-                                   manifests, the tool twin and the scenarios, run
-                                   simulations, keep the regression suite (a dataset)
-                                   and evaluate a candidate against its baseline on
-                                   it, and send verified production traffic
+                                   manifests, import the tool catalogs, register the
+                                   tool twin and the scenarios, run simulations, keep
+                                   the regression suite (a dataset) and evaluate a
+                                   candidate against its baseline on it, compare
+                                   versions (change sets, with the scenarios each
+                                   change requires) and send verified production
+                                   traffic
 """
 
 from __future__ import annotations
@@ -19,10 +22,13 @@ import logging
 import os
 import signal
 import sys
+import time
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from agenttwin import AgentTwin, APIError, Client, Config
 from support_refund_agent.agent import Agent, ManifestStore, RunRequest, scripted_model_factory
@@ -278,6 +284,149 @@ def _ensure_suite(client: Client, project_id: str, scenarios: Sequence[str]) -> 
     return {"id": dataset.get("id"), "name": dataset.get("name"), "version": version.get("version")}
 
 
+def _import_catalogs(client: Client, project_id: str, directory: Path) -> list[dict[str, Any]]:
+    """Imports the tool catalogs ``imports.yaml`` lists (none without it):
+    the OpenAPI documents and MCP servers behind the agent's tools. The
+    manifests are registered first, so the tools they declare keep the
+    manifests' definitions; the graph links them to the imported APIs. An
+    unchanged document stores nothing."""
+    openapi, mcp = _read_imports(directory)
+    out = [_catalog_summary(client.import_openapi(project_id, **kw)) for kw in openapi]
+    out += [_catalog_summary(client.import_mcp(project_id, **kw)) for kw in mcp]
+    for c in out:
+        logging.info(
+            "tool catalog %s %s r%s %s (%d tools)",
+            c["source"],
+            c["name"],
+            c["revision"],
+            "imported" if c["created"] else "unchanged",
+            c["tools"],
+        )
+    return out
+
+
+def _read_imports(directory: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The import requests of ``imports.yaml``, read before any is sent
+    (a malformed file imports nothing). Raises ValueError or OSError."""
+    path = directory / "imports.yaml"
+    if not path.exists():
+        return [], []
+    try:
+        spec = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        openapi = [
+            {
+                "name": str(api["name"]),
+                "document": (directory / str(api["document"])).read_text(encoding="utf-8"),
+                "service": api.get("service"),
+                "risk_overrides": api.get("risk_overrides"),
+                "names": api.get("names"),
+            }
+            for api in spec.get("openapi") or ()
+        ]
+        mcp = []
+        for server in spec.get("mcp") or ():
+            listed = json.loads((directory / str(server["tools"])).read_text(encoding="utf-8"))
+            mcp.append(
+                {
+                    "server": dict(server["server"]),
+                    "tools": list(listed["tools"]),
+                    "protocol_version": server.get("protocol_version"),
+                    "risk_overrides": server.get("risk_overrides"),
+                    "names": server.get("names"),
+                    "trust_annotations": bool(server.get("trust_annotations", False)),
+                }
+            )
+    except (yaml.YAMLError, json.JSONDecodeError, AttributeError, KeyError, TypeError) as err:
+        raise ValueError(f"{path} is malformed: {err!r}") from None
+    return openapi, mcp
+
+
+def _catalog_summary(res: Mapping[str, Any]) -> dict[str, Any]:
+    counts = res.get("summary") or {}
+    return {
+        "source": res.get("source"),
+        "name": res.get("name"),
+        "revision": res.get("revision"),
+        "created": bool(res.get("created")),
+        "tools": counts.get("tools", 0),
+        "kept": counts.get("kept", 0),
+        "warnings": list(res.get("warnings") or ()),
+    }
+
+
+def _parse_pairs(spec: str, option: str) -> list[tuple[str, str]]:
+    """``BASE:CANDIDATE[,BASE:CANDIDATE...]`` (repeats dropped)."""
+    out: list[tuple[str, str]] = []
+    for part in _parse_list(spec):
+        pair = _parse_pair(part, option)
+        if pair is not None and pair not in out:
+            out.append(pair)
+    return out
+
+
+def _impact_summary(change_set: Mapping[str, Any], impact: Mapping[str, Any]) -> dict[str, Any]:
+    graph = impact.get("graph") or {}
+    return {
+        "change_set_id": change_set.get("id"),
+        "base": (change_set.get("base") or {}).get("version"),
+        "candidate": (change_set.get("candidate") or {}).get("version"),
+        "created": bool(change_set.get("created")),
+        "changes": [_change_line(i) for i in change_set.get("items") or ()],
+        "complete": bool(impact.get("complete")),
+        "problems": [f"{p.get('service')}: {p.get('code')}" for p in impact.get("problems") or ()],
+        "unresolved": [
+            f"{(s.get('component') or {}).get('kind')}:{(s.get('component') or {}).get('key')}"
+            for s in graph.get("unresolved") or ()
+        ],
+        # Each selected scenario with why (the acceptance of spec Phase 4).
+        "scenarios": {str(sc.get("name")): list(sc.get("why") or ()) for sc in impact.get("scenarios") or ()},
+        "irreversible_actions": sorted(str(a.get("label")) for a in impact.get("irreversible_actions") or ()),
+        "new_privileges": [
+            f"{p.get('tool')} ({p.get('change')})" for p in impact.get("new_privileges") or ()
+        ],
+    }
+
+
+def _change_line(item: Mapping[str, Any]) -> str:
+    """A change item as one line: what changed, then how (a prompt's
+    subject is its hash, which says nothing)."""
+    summary, subject = str(item.get("summary") or ""), str(item.get("subject") or "")
+    if item.get("kind") == "prompt" or subject in summary:
+        return summary
+    return f"{item.get('kind')} {subject}: {summary}"
+
+
+def _impact_settled(summary: Mapping[str, Any]) -> bool:
+    """Both services answered in full, and the graph knows every changed
+    component (it ingests registrations asynchronously)."""
+    return bool(summary.get("complete")) and not summary.get("unresolved")
+
+
+def _impacts(
+    client: Client, change_sets: Sequence[Mapping[str, Any]], *, timeout_s: float, interval_s: float = 2.0
+) -> list[dict[str, Any]]:
+    """The impact of each change set, asked again until it has settled or
+    ``timeout_s`` passed: a component registered a moment ago may not be in
+    the dependency graph yet."""
+    deadline = time.monotonic() + timeout_s
+    out: list[dict[str, Any]] = []
+    for cs in change_sets:
+        while True:
+            summary = _impact_summary(cs, client.change_set_impact(str(cs["id"])))
+            if _impact_settled(summary) or time.monotonic() >= deadline:
+                break
+            time.sleep(interval_s)
+        logging.info(
+            "change set %s -> %s: %d scenarios required%s",
+            summary["base"],
+            summary["candidate"],
+            len(summary["scenarios"]),
+            "" if _impact_settled(summary) else " (incomplete)",
+        )
+        out.append(summary)
+    return out
+
+
 def _evaluation_summary(detail: Mapping[str, Any]) -> dict[str, Any]:
     run = detail.get("run") or {}
     summary = detail.get("summary") or {}
@@ -303,13 +452,13 @@ def _evaluation_healthy(evaluation: Mapping[str, Any]) -> bool:
     return evaluation.get("status") == "COMPLETED" and not evaluation.get("incomplete")
 
 
-def _parse_pair(spec: str) -> tuple[str, str] | None:
+def _parse_pair(spec: str, option: str = "--evaluate") -> tuple[str, str] | None:
     """``BASELINE:CANDIDATE`` (``""`` for none)."""
     if not spec.strip():
         return None
     baseline, sep, candidate = spec.partition(":")
-    if not sep or not baseline.strip() or not candidate.strip():
-        raise ValueError(f"--evaluate expects BASELINE:CANDIDATE, got {spec!r}")
+    if not sep or not baseline.strip() or not candidate.strip() or baseline.strip() == candidate.strip():
+        raise ValueError(f"{option} expects BASELINE:CANDIDATE (two different versions), got {spec!r}")
     return baseline.strip(), candidate.strip()
 
 
@@ -349,13 +498,19 @@ def cmd_seed(args: argparse.Namespace) -> int:
         return 2
     try:
         pair = _parse_pair(args.evaluate)
+        changes = _parse_pairs(args.changes, "--changes")
     except ValueError as err:
         logging.error("%s", err)
         return 2
     if pair is not None and any(v not in store.versions for v in pair):
         logging.error("--evaluate: unknown agent version(s) in %s; known: %s", pair, store.versions)
         return 2
+    unknown_pairs = [c for c in changes if any(v not in store.versions for v in c)]
+    if unknown_pairs:
+        logging.error("--changes: unknown agent version(s) in %s; known: %s", unknown_pairs, store.versions)
+        return 2
     started: list[tuple[str, str]] = []
+    change_sets: list[dict[str, Any]] = []
     suite: dict[str, Any] | None = None
     evaluation_id: str | None = None
     try:
@@ -373,7 +528,22 @@ def cmd_seed(args: argparse.Namespace) -> int:
                 version,
                 "registered" if res.get("created") else "already registered",
             )
+        catalogs = _import_catalogs(client, project_id, args.assurance_dir)
         assurance = _register_assurance(client, project_id, args.assurance_dir)
+        # Change sets are computed now; their impact is asked at the end,
+        # once the dependency graph has taken in what was just registered.
+        for base, candidate in changes:
+            cs = client.create_change_set(
+                project_id, store.get(candidate).name, base, candidate, title=f"{base} -> {candidate} (demo)"
+            )
+            change_sets.append(cs)
+            logging.info(
+                "change set %s -> %s %s: %s",
+                base,
+                candidate,
+                "computed" if cs.get("created") else "unchanged",
+                cs.get("id"),
+            )
         # Started before the traffic so that the worker runs them meanwhile.
         for version in simulate:
             res = client.start_simulation(project_id, store.get(version).name, version, seed=args.seed)
@@ -399,7 +569,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
     except APIError as err:
         logging.error("seed failed: %s", err)
         return 1
-    except OSError as err:
+    except (OSError, ValueError) as err:
         logging.error("seed failed: cannot read the assurance assets: %s", err)
         return 1
 
@@ -442,11 +612,30 @@ def cmd_seed(args: argparse.Namespace) -> int:
                 evaluation.get("incomplete") or evaluation.get("error"),
             )
 
+    impacts: list[dict[str, Any]] = []
+    try:
+        impacts = _impacts(client, change_sets, timeout_s=args.impact_timeout)
+    except APIError as err:
+        logging.error("change impact: %s", err)
+        impacts = [
+            {"change_set_id": cs.get("id"), "complete": False, "error": str(err)} for cs in change_sets
+        ]
+    for impact in impacts:
+        if not _impact_settled(impact):
+            logging.error(
+                "the impact of change set %s is incomplete: problems %s, unresolved %s",
+                impact.get("change_set_id"),
+                impact.get("problems") or impact.get("error"),
+                impact.get("unresolved"),
+            )
+
     verified = [r["verified_outcome"] for r in records if r.get("verified_outcome")]
     summary = {
         "project_id": project_id,
         "manifests": registered,
+        "catalogs": catalogs,
         **assurance,
+        "change_sets": impacts,
         "simulations": simulations,
         "dataset": suite,
         "evaluation": evaluation,
@@ -468,6 +657,7 @@ def cmd_seed(args: argparse.Namespace) -> int:
         len(records) == args.count
         and all(_healthy(s) for s in simulations)
         and (evaluation is None or _evaluation_healthy(evaluation))
+        and all(_impact_settled(i) for i in impacts)
     )
     return 0 if ok else 1
 
@@ -550,7 +740,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--assurance-dir",
         type=Path,
         default=default_assurance_dir(),
-        help="the tool twin (twin.yaml) and scenarios/*.yaml to register",
+        help="the tool twin (twin.yaml), scenarios/*.yaml and the tool catalogs (imports.yaml)",
     )
     s.add_argument(
         "--simulate",
@@ -575,6 +765,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         default=900.0,
         help="seconds to wait for the evaluation run to finish",
+    )
+    s.add_argument(
+        "--changes",
+        default="",
+        metavar="BASE:CANDIDATE[,...]",
+        help="compare versions: a change set each, with the scenarios the change requires and why",
+    )
+    s.add_argument(
+        "--impact-timeout",
+        type=float,
+        default=60.0,
+        help="seconds to wait for the dependency graph to know every changed component",
     )
     s.set_defaults(fn=cmd_seed)
 

@@ -98,7 +98,7 @@ def test_agent_adapter_rejects_bad_requests(stack: Any) -> None:
     code, body = post(server.url + "/run", {"input": "hi", "agent_version": "9.9.9"})
     assert code == 404 and body["error"]["code"] == "UNKNOWN_VERSION"
     with urllib.request.urlopen(server.url + "/versions", timeout=5) as resp:
-        assert json.loads(resp.read())["versions"] == ["1.2.3", "1.2.4", "1.3.0", "1.3.1"]
+        assert json.loads(resp.read())["versions"] == ["1.2.3", "1.2.4", "1.3.0", "1.3.1", "1.3.2"]
 
 
 def test_traffic_generator_verifies_outcomes_against_the_ledger(stack: Any) -> None:

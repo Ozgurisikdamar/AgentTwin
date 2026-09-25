@@ -28,9 +28,15 @@ __all__ = [
     "agent_version_detail",
     "case_detail",
     "case_summary",
+    "catalog_entry",
+    "change_impact",
+    "change_item",
+    "change_set",
     "error",
     "expectation_result",
     "expectation_spec",
+    "impact_scenario",
+    "imported_catalog",
     "manifest",
     "outcome",
     "project",
@@ -233,6 +239,160 @@ def registered_version(*, created: bool = True, **over: Any) -> dict[str, Any]:
     """``registerManifest``: 201 when ``created``, 200 for identical content."""
     version = agent_version(**over)
     return {"agent": agent(latest_version=version["version"]), "version": version, "created": created}
+
+
+def catalog_entry(name: str, **over: Any) -> dict[str, Any]:
+    """An imported tool (``CatalogEntry``)."""
+    return {
+        "name": name,
+        "operation": name,
+        "description": "",
+        "risk": "READ",
+        "risk_source": "inferred",
+        "mutating": False,
+        "input_schema": {"type": "object"},
+        "registry": "created",
+    } | over
+
+
+def imported_catalog(
+    *, created: bool = True, entries: Sequence[str] = ("get_refund",), **over: Any
+) -> dict[str, Any]:
+    """``importOpenApi`` / ``importMcp``: a catalog revision (201 when
+    ``created``, 200 for an import equal to the latest revision)."""
+    items = [catalog_entry(n) for n in entries]
+    return {
+        "id": uuid(0xC001),
+        "project_id": PROJECT,
+        "source": "OPENAPI",
+        "name": "payments-api",
+        "revision": 1,
+        "service": None,
+        "title": "Demo Co Payments API",
+        "api_version": "2.3.0",
+        "spec_version": "3.1.0",
+        "summary": {
+            "tools": max(len(items), 1),
+            "created": len(items) if created else 0,
+            "updated": 0,
+            "unchanged": 0 if created else len(items),
+            "kept": 0,
+            "skipped": 0,
+            "warnings": 0,
+            "mutating": 0,
+            "risks": {"READ": len(items)},
+        },
+        "content_sha256": sha256("d"),
+        "document_sha256": sha256("e"),
+        "created_by": ACTOR,
+        "created_at": NOW,
+        "servers": [],
+        "options": {},
+        "entries": items,
+        "skipped": [],
+        "warnings": [],
+        "created": created,
+    } | over
+
+
+def change_item(kind: str, subject: str, **over: Any) -> dict[str, Any]:
+    """A change of a change set (``ChangeItem``)."""
+    return {
+        "kind": kind,
+        "subject": subject,
+        "change": "modified",
+        "summary": f"{kind} {subject} changed",
+        "confidence": "exact",
+        "breaking": False,
+        "detail": {},
+    } | over
+
+
+def change_set(*, created: bool = True, **over: Any) -> dict[str, Any]:
+    """``createChangeSet`` (``created``: 201, else 200) and ``getChangeSet``
+    (drop ``created``)."""
+    base, candidate = over.pop("base_version", "1.2.4"), over.pop("candidate_version", "1.3.0")
+    items = over.pop("items", [change_item("prompt", sha256("c")[:12])])
+    return {
+        "id": uuid(0xC101),
+        "project_id": PROJECT,
+        "agent_id": uuid(0xB101),
+        "agent_name": "support-refund-agent",
+        "base": {"id": uuid(0xB201), "version": base},
+        "candidate": {"id": uuid(0xB202), "version": candidate},
+        "title": "",
+        "summary": {
+            "items": len(items),
+            "breaking": sum(1 for i in items if i["breaking"]),
+            "seeds": len(items),
+            "kinds": {i["kind"]: 1 for i in items},
+            "confidence": {"exact": len(items)},
+        },
+        "content_sha256": sha256("f"),
+        "created_by": ACTOR,
+        "created_at": NOW,
+        "git": None,
+        "declared": [],
+        "items": items,
+        "seeds": [],
+        "scope": {"agent": "support-refund-agent", "version": candidate},
+        "created": created,
+    } | over
+
+
+def impact_scenario(name: str, *, why: Sequence[str] = (), **over: Any) -> dict[str, Any]:
+    """A selected scenario of a change impact (``ImpactScenario``)."""
+    return {
+        "id": uuid(0xC201),
+        "name": name,
+        "agent": "support-refund-agent",
+        "twin": "demo-co-support",
+        "severity": "critical",
+        "tags": [],
+        "source": "library",
+        "latest_version": 1,
+        "description": "",
+        "in_library": True,
+        "reasons": {"graph": [], "similar": [], "always_run_tags": [], "known_regression": False},
+        "why": list(why) or [f"tests refund_payment, which changed ({name})"],
+    } | over
+
+
+def change_impact(scenarios: Sequence[Mapping[str, Any]] = (), **over: Any) -> dict[str, Any]:
+    """``getChangeSetImpact``: complete unless ``problems`` say otherwise."""
+    selected = [dict(s) for s in scenarios]
+    problems = over.get("problems", [])
+    return {
+        "change_set_id": uuid(0xC101),
+        "project_id": PROJECT,
+        "agent": "support-refund-agent",
+        "base_version": "1.2.4",
+        "candidate_version": "1.3.0",
+        "policy": {
+            "always_run_tags": ["critical", "security"],
+            "include_known_regressions": True,
+            "max_depth": 4,
+        },
+        "complete": not problems,
+        "problems": problems,
+        "computed_at": NOW,
+        "scenarios": selected,
+        "counts": {
+            "scenarios": len(selected),
+            "graph": sum(1 for s in selected if s["reasons"]["graph"]),
+            "similar": sum(1 for s in selected if s["reasons"]["similar"]),
+            "always_run": sum(1 for s in selected if s["reasons"]["always_run_tags"]),
+            "known_regression": sum(1 for s in selected if s["reasons"]["known_regression"]),
+        },
+        "unlinked_scenarios": [],
+        "graph": None,
+        "irreversible_actions": [],
+        "new_privileges": [],
+        "embedding_model": "hashing-v1",
+        "min_similarity": 0.2,
+        "truncated": False,
+        "notes": [],
+    } | over
 
 
 # ------------------------------------------------------------ trace service

@@ -1,0 +1,69 @@
+# Demo Co's orders API: orders and customers, and the privacy export.
+openapi: 3.1.0
+info:
+  title: Demo Co Orders API
+  version: 1.8.1
+  description: Orders, customers and customer data exports of Demo Co.
+servers:
+  - url: https://orders.demo-co.example/v1
+security:
+  - bearer: []
+paths:
+  /orders/{order_id}:
+    get:
+      operationId: getOrder
+      x-agenttwin-tool: lookup_order
+      summary: Look up an order
+      description: An order of the requesting tenant, including how much has been refunded.
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: {type: string}
+        - name: X-Tenant
+          in: header
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: The order.
+        "404":
+          description: No such order for this tenant.
+  /customers/{customer_id}:
+    get:
+      operationId: getCustomer
+      x-agenttwin-tool: lookup_customer
+      summary: Look up a customer
+      description: A customer of the requesting tenant.
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema: {type: string}
+        - name: X-Tenant
+          in: header
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: The customer.
+  /customers/{customer_id}/data-exports:
+    post:
+      operationId: createDataExport
+      x-agenttwin-tool: export_customer_data
+      x-agenttwin-risk: ADMIN
+      summary: Export a customer's personal data
+      description: Schedules a full export of a customer's personal data. Administrators only.
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "202":
+          description: The export was scheduled.
+        "403":
+          description: The caller is not an administrator.
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer}

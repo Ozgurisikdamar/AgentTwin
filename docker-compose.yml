@@ -300,11 +300,13 @@ services:
       retries: 30
     <<: *hardening
 
-  # `make seed` — registers the demo agent manifests, the tool twin and the
-  # scenarios, sends a batch of verified production traffic, simulates the
-  # scenario suite for the given versions, keeps the regression suite dataset
-  # and evaluates the candidate against its baseline on it. Idempotent for
-  # manifests, twins, scenarios and the dataset.
+  # `make seed` — registers the demo agent manifests, imports the tool
+  # catalogs (OpenAPI, MCP), registers the tool twin and the scenarios, sends
+  # a batch of verified production traffic, simulates the scenario suite for
+  # the given versions, keeps the regression suite dataset, evaluates the
+  # candidate against its baseline on it, and compares versions (a change set
+  # each, with the scenarios the change requires and why). Idempotent for
+  # manifests, catalogs, twins, scenarios, the dataset and change sets.
   seed:
     build: *demo-build
     image: agenttwin/demo:${AGENTTWIN_VERSION:-dev}
@@ -317,6 +319,8 @@ services:
       - ${SEED_SIMULATE_VERSIONS-1.2.4,1.3.0}
       - --evaluate
       - ${SEED_EVALUATE-1.2.4:1.3.0}
+      - --changes
+      - ${SEED_CHANGES-1.2.4:1.3.0,1.3.1:1.3.2}
     environment:
       <<: *demo-env
       DEMO_AGENT_URL: http://demo-agent:8090
@@ -328,6 +332,7 @@ services:
       simulation-worker: {condition: service_healthy}
       evaluation-service: {condition: service_healthy}
       evaluation-worker: {condition: service_healthy}
+      graph-service: {condition: service_healthy}
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]

@@ -17,7 +17,7 @@ func readDemo(t *testing.T, v string) []byte {
 }
 
 func TestDemoManifestsAreValid(t *testing.T) {
-	for _, v := range []string{"1.2.3", "1.2.4", "1.3.0", "1.3.1"} {
+	for _, v := range []string{"1.2.3", "1.2.4", "1.3.0", "1.3.1", "1.3.2"} {
 		m, err := ParseManifest(readDemo(t, v))
 		if err != nil {
 			t.Fatalf("%s: %v", v, err)

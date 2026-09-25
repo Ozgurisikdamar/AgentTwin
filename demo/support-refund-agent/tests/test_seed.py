@@ -6,6 +6,7 @@ of the fake is held to the contract of the service that owns the path
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,6 +41,12 @@ class FakeAPI:
         self.datasets: dict[str, list[str]] = {}
         self.evaluation: tuple[str, dict[str, Any]] = ("COMPLETED", {})
         self.eval_runs: dict[str, dict[str, Any]] = {}
+        # Change sets (id -> the pair) and how their impact answers: the
+        # first ``impact_lag`` answers still miss the candidate in the graph.
+        self.change_sets: dict[str, tuple[str, str]] = {}
+        self.impact_lag = 0
+        self.impact_calls = 0
+        self.impact_problems: list[dict[str, str]] = []
         self.checker = fake.ExchangeChecker()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -94,6 +101,88 @@ class FakeAPI:
                 **counts,
             )
             return 200, fake.run_detail(run, cases)
+        return self.respond_changes(method, path, body)
+
+    def respond_changes(self, method: str, path: str, body: Any) -> tuple[int, Any]:
+        if method == "POST" and path.startswith(f"/api/v1/projects/{PROJECT}/imports/"):
+            source = path.rsplit("/", 1)[1].upper()
+            name = body["name"] if source == "OPENAPI" else body["server"]["name"]
+            created = self._created(f"catalog:{source}:{name}")
+            tools = [f"{name}-tool-{i}" for i in range(len(body.get("tools") or [1, 2]))]
+            spec = "3.1.0" if source == "OPENAPI" else body.get("protocol_version", "")
+            catalog = fake.imported_catalog(
+                created=created,
+                entries=[t.replace("-", "_") for t in tools],
+                source=source,
+                name=name,
+                service=body.get("service"),
+                spec_version=spec,
+            )
+            return (201 if created else 200), catalog
+        if method == "POST" and path == f"/api/v1/projects/{PROJECT}/change-sets":
+            pair = (body["base_version"], body["candidate_version"])
+            known = [cs for cs, p in self.change_sets.items() if p == pair]
+            cs_id = known[0] if known else fake.uuid(0xC100 + len(self.change_sets) + 1)
+            self.change_sets[cs_id] = pair
+            item = (
+                fake.change_item(
+                    "tool",
+                    "refund_payment",
+                    breaking=True,
+                    summary="description changed; 2 schema changes (2 breaking)",
+                )
+                if pair == ("1.3.1", "1.3.2")
+                else fake.change_item(
+                    "prompt",
+                    fake.sha256("c"),
+                    summary="prompt modified; changed lines mention refund_payment",
+                )
+            )
+            detail = fake.change_set(
+                created=not known, id=cs_id, base_version=pair[0], candidate_version=pair[1], items=[item]
+            )
+            return (200 if known else 201), detail
+        if method == "GET" and path.startswith("/api/v1/change-sets/") and path.endswith("/impact"):
+            cs_id = path.split("/")[4]
+            base, candidate = self.change_sets[cs_id]
+            self.impact_calls += 1
+            lagging = self.impact_calls <= self.impact_lag
+            seed = {
+                "component": {"kind": "AGENT_VERSION", "key": f"support-refund-agent@{candidate}"},
+                "change": "modified",
+            }
+            graph = {
+                "seeds": [seed],
+                "unresolved": [seed] if lagging else [],
+                "affected": [],
+                "affected_count": 0,
+                "policies": [],
+                "evaluators": [],
+                "max_depth": 4,
+                "truncated": False,
+            }
+            scenarios = (
+                []
+                if lagging
+                else [
+                    fake.impact_scenario(
+                        "refund-timeout-after-mutation", why=["tests refund_payment, which changed"]
+                    ),
+                    fake.impact_scenario("cross-tenant-order", why=["always runs (tagged security)"]),
+                ]
+            )
+            impact = fake.change_impact(
+                scenarios,
+                change_set_id=cs_id,
+                base_version=base,
+                candidate_version=candidate,
+                graph=graph,
+                problems=self.impact_problems,
+                new_privileges=[
+                    {"tool": "refund_payment", "change": "escalated", "risk": "ADMIN", "from": "READ"}
+                ],
+            )
+            return 200, impact
         return self.respond_evaluation(method, path, body)
 
     def respond_evaluation(self, method: str, path: str, body: Any) -> tuple[int, Any]:
@@ -196,9 +285,16 @@ def test_seed_registers_the_suite_then_runs_it(api: FakeAPI, capsys: pytest.Capt
     assert summary["twin"] == {"name": "demo-co-support", "version": 1, "created": True}
     assert summary["scenarios"] == {"saved": SCENARIOS, "unchanged": []}
     assert len(SCENARIOS) == 9
-    # The twin first (scenarios name it), then the scenarios, then the runs.
+    # The manifests first (their tools keep the manifests' definitions), the
+    # tool catalogs, the twin (scenarios name it), the scenarios, the runs.
+    assert api.calls.index(f"POST /api/v1/projects/{PROJECT}/imports/openapi") > max(
+        i for i, c in enumerate(api.calls) if "agent-manifests" in c
+    )
     posts = [c for c in api.calls if c.startswith("POST") and "agent-manifests" not in c]
     assert posts == [
+        f"POST /api/v1/projects/{PROJECT}/imports/openapi",
+        f"POST /api/v1/projects/{PROJECT}/imports/openapi",
+        f"POST /api/v1/projects/{PROJECT}/imports/mcp",
         "POST /api/v1/twins",
         *["POST /api/v1/scenarios"] * 9,
         "POST /api/v1/simulations",
@@ -224,14 +320,43 @@ def test_seed_registers_the_suite_then_runs_it(api: FakeAPI, capsys: pytest.Capt
     }
     # A candidate with regressions is what the demo is for, not a seed failure.
     assert candidate["failed_scenarios"] == ["refund-happy-path", "refund-tool-success-lie"]
+    # The catalogs of imports.yaml, sent as the files hold them.
+    assert [(c["source"], c["name"], c["created"]) for c in summary["catalogs"]] == [
+        ("OPENAPI", "payments-api", True),
+        ("OPENAPI", "orders-api", True),
+        ("MCP", "support-desk", True),
+    ]
+    assurance = default_assurance_dir()
+    payments, orders = api.bodies[f"/api/v1/projects/{PROJECT}/imports/openapi"]
+    assert payments == {
+        "name": "payments-api",
+        "service": "payments-api",
+        "document": (assurance / "apis" / "payments-api.openapi.yaml").read_text(),
+    }
+    assert orders["service"] == "orders-api"
+    [desk] = api.bodies[f"/api/v1/projects/{PROJECT}/imports/mcp"]
+    listed = json.loads((assurance / "mcp" / "support-desk.tools.json").read_text())
+    assert desk == {
+        "server": {"name": "support-desk", "url": "https://desk.demo-co.example/mcp", "version": "3.2.0"},
+        "tools": listed["tools"],
+        "protocol_version": "2026-07-28",
+        "risk_overrides": {
+            "escalateToHuman": "WRITE_REVERSIBLE",
+            "sendEmail": "WRITE_REVERSIBLE",
+            "searchKnowledgeBase": "READ",
+        },
+    }
+    # Without --changes, no version is compared.
+    assert summary["change_sets"] == []
     # What the seed sent and read was checked against the services' contracts.
     used = {"listProjects", "registerManifest", "registerTwin", "saveScenario", "startSimulation"}
-    assert used | {"getSimulation"} <= api.checker.succeeded()
+    assert used | {"getSimulation", "importOpenApi", "importMcp"} <= api.checker.succeeded()
 
     # Seeding again changes nothing but starts new runs.
     code, again = seed(capsys, "--simulate", "1.2.4")
     assert code == 0
     assert again["twin"]["created"] is False
+    assert [c["created"] for c in again["catalogs"]] == [False] * 3
     assert again["scenarios"] == {"saved": [], "unchanged": SCENARIOS}
     assert [m["created"] for m in again["manifests"]] == [False] * len(again["manifests"])
     assert again["simulations"][0]["run_id"] == fake.uuid(0xE003)
@@ -357,4 +482,108 @@ def test_seed_fails_on_missing_assurance_assets(
 ) -> None:
     code, _ = seed(capsys, "--assurance-dir", str(tmp_path))
     assert code == 1
+    assert "POST /api/v1/twins" not in api.calls
+
+
+def test_seed_compares_versions_and_says_why_each_scenario_is_required(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The graph takes in the new registrations asynchronously: the first
+    # answer still misses the candidate, and the seed asks again.
+    api.impact_lag = 1
+    code, summary = seed(
+        capsys, "--changes", "1.2.4:1.3.0, 1.3.1:1.3.2, 1.2.4 : 1.3.0", "--impact-timeout", "30"
+    )
+    assert code == 0
+    # One change set per pair (a repeat is dropped), after the scenarios.
+    posts = [c for c in api.calls if c.startswith("POST") and "agent-manifests" not in c]
+    assert posts[-2:] == [f"POST /api/v1/projects/{PROJECT}/change-sets"] * 2
+    assert api.bodies[f"/api/v1/projects/{PROJECT}/change-sets"] == [
+        {
+            "agent": "support-refund-agent",
+            "base_version": base,
+            "candidate_version": candidate,
+            "title": f"{base} -> {candidate} (demo)",
+        }
+        for base, candidate in (("1.2.4", "1.3.0"), ("1.3.1", "1.3.2"))
+    ]
+    prompt, tool = summary["change_sets"]
+    assert (prompt["base"], prompt["candidate"], tool["base"], tool["candidate"]) == (
+        "1.2.4",
+        "1.3.0",
+        "1.3.1",
+        "1.3.2",
+    )
+    # What changed, named (a prompt by the tools its changed lines mention).
+    assert prompt["changes"] == ["prompt modified; changed lines mention refund_payment"]
+    assert tool["changes"] == ["tool refund_payment: description changed; 2 schema changes (2 breaking)"]
+    assert tool == tool | {
+        "change_set_id": fake.uuid(0xC102),
+        "created": True,
+        "complete": True,
+        "problems": [],
+        "unresolved": [],
+        "scenarios": {
+            "refund-timeout-after-mutation": ["tests refund_payment, which changed"],
+            "cross-tenant-order": ["always runs (tagged security)"],
+        },
+        "new_privileges": ["refund_payment (escalated)"],
+    }
+    assert api.impact_calls == 3  # the first answer lagged
+    assert {"createChangeSet", "getChangeSetImpact"} <= api.checker.succeeded()
+
+    # Seeding again finds the stored change sets.
+    code, again = seed(capsys, "--changes", "1.3.1:1.3.2")
+    assert code == 0 and api.calls.count(f"POST /api/v1/projects/{PROJECT}/change-sets") == 3
+    [same] = again["change_sets"]
+    assert (same["change_set_id"], same["created"]) == (fake.uuid(0xC102), False)
+
+
+def test_seed_fails_on_an_incomplete_impact(api: FakeAPI, capsys: pytest.CaptureFixture[str]) -> None:
+    api.impact_problems = [
+        {"service": "graph-service", "code": "NOT_CONFIGURED", "message": "not configured"}
+    ]
+    code, summary = seed(capsys, "--changes", "1.2.4:1.3.0", "--impact-timeout", "0")
+    assert code == 1
+    [impact] = summary["change_sets"]
+    assert (impact["complete"], impact["problems"]) == (False, ["graph-service: NOT_CONFIGURED"])
+    assert api.impact_calls == 1  # no time left to ask again
+
+
+def test_seed_fails_when_the_graph_never_learns_the_change(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str]
+) -> None:
+    api.impact_lag = 1_000
+    code, summary = seed(capsys, "--changes", "1.2.4:1.3.0", "--impact-timeout", "0")
+    assert code == 1
+    [impact] = summary["change_sets"]
+    assert impact["unresolved"] == ["AGENT_VERSION:support-refund-agent@1.3.0"] and impact["scenarios"] == {}
+
+
+@pytest.mark.parametrize("spec", ["1.2.4", "1.3.0:1.3.0", "1.2.4:9.9.9", "1.2.4:1.3.0,:1.3.2"])
+def test_seed_rejects_bad_changes_before_calling_the_api(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], spec: str
+) -> None:
+    assert seed(capsys, "--changes", spec) == (2, {})
+    assert api.calls == []
+
+
+@pytest.mark.parametrize(
+    ("edit", "reason"),
+    [
+        (lambda d: (d / "imports.yaml").write_text("openapi: [\n"), "not YAML"),
+        (lambda d: (d / "imports.yaml").write_text("openapi:\n  - service: x\n"), "a catalog without a name"),
+        (lambda d: (d / "mcp" / "support-desk.tools.json").write_text("{"), "not JSON"),
+        (lambda d: (d / "apis" / "orders-api.openapi.yaml").unlink(), "a missing document"),
+    ],
+)
+def test_seed_imports_nothing_from_a_malformed_imports_file(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], tmp_path: Path, edit: Any, reason: str
+) -> None:
+    directory = tmp_path / "assurance"
+    shutil.copytree(default_assurance_dir(), directory)
+    edit(directory)
+    code, _ = seed(capsys, "--assurance-dir", str(directory))
+    assert code == 1, reason
+    assert not [c for c in api.calls if "/imports/" in c], reason
     assert "POST /api/v1/twins" not in api.calls

@@ -75,6 +75,7 @@ class Scope(StrEnum):
     RUNTIME_INVOKE = "runtime:invoke"
     READ = "read"
     CI = "ci"
+    POLICIES_DEPLOY = "policies:deploy"
 
 
 P = Permission
@@ -139,6 +140,7 @@ SCOPE_PERMISSIONS: dict[Scope, frozenset[Permission]] = {
             P.POLICY_TEST,
         }
     ),
+    Scope.POLICIES_DEPLOY: frozenset({P.READ, P.POLICY_WRITE, P.POLICY_TEST, P.POLICY_ACTIVATE}),
 }
 
 

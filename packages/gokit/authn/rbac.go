@@ -80,6 +80,11 @@ const (
 	ScopeRuntimeInvoke Scope = "runtime:invoke"
 	ScopeRead          Scope = "read"
 	ScopeCI            Scope = "ci"
+	// ScopePoliciesDeploy deploys runtime policies as code (ADR-0033): read,
+	// write, test and activate them, register the tools they guard.
+	// Activation can loosen containment, so it is its own scope, not part of
+	// ci.
+	ScopePoliciesDeploy Scope = "policies:deploy"
 )
 
 // ValidScope reports whether s is a known API key scope.
@@ -89,10 +94,11 @@ func ValidScope(s Scope) bool {
 }
 
 var scopePermissions = map[Scope][]Permission{
-	ScopeTracesWrite:   {PermTraceWrite},
-	ScopeRuntimeInvoke: {PermRuntimeInvoke},
-	ScopeRead:          {PermRead},
-	ScopeCI:            {PermRead, PermAgentWrite, PermScenarioWrite, PermSimulationRun, PermEvalRun, PermReleaseWrite, PermPolicyTest},
+	ScopeTracesWrite:    {PermTraceWrite},
+	ScopeRuntimeInvoke:  {PermRuntimeInvoke},
+	ScopeRead:           {PermRead},
+	ScopeCI:             {PermRead, PermAgentWrite, PermScenarioWrite, PermSimulationRun, PermEvalRun, PermReleaseWrite, PermPolicyTest},
+	ScopePoliciesDeploy: {PermRead, PermPolicyWrite, PermPolicyTest, PermPolicyActivate},
 }
 
 // Principal is an authenticated caller.

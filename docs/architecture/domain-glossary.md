@@ -6,7 +6,7 @@
 | **Membership / Role** | User ↔ organization with one role: OWNER, ADMIN, ENGINEER, REVIEWER, VIEWER. | control-plane |
 | **Project** | A product area inside an organization (e.g. `support`). Holds agents, tools, scenarios, policies, settings (content capture, retention). | control-plane |
 | **Environment** | `dev`, `staging`, `production` or custom label on traces, runs and policies. | control-plane |
-| **API key** | Project-scoped machine credential `atk_<prefix>_<secret>` with scopes (`traces:write`, `releases:check`, `runtime:invoke`, `read`). | control-plane |
+| **API key** | Project-scoped machine credential `atk_<prefix>_<secret>` with scopes (`traces:write`, `runtime:invoke`, `read`, `ci`, `policies:deploy`). | control-plane |
 | **Agent** | A named agent in a project (`support-refund-agent`). | control-plane |
 | **Agent version** | Immutable registration of a manifest (`agenttwin.dev/v1 Agent`) with manifest hash, prompt hash, model config, tool references, commit metadata. | control-plane |
 | **Agent manifest** | Human-readable YAML describing model, limits, tools (+risk, approval), data capture and expected outcomes. | contracts |

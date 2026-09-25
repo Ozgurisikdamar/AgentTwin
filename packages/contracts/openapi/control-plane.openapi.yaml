@@ -2154,8 +2154,10 @@ components:
       description: |
         What an API key may do: `traces:write` (send traces and outcomes),
         `runtime:invoke` (call tools through the runtime gateway), `read`,
-        `ci` (register agents, run simulations and gates).
-      enum: ['traces:write', 'runtime:invoke', read, ci]
+        `ci` (register agents, run simulations and gates), `policies:deploy`
+        (register the runtime gateway's tools, write, test and activate its
+        policies: policy as code).
+      enum: ['traces:write', 'runtime:invoke', read, ci, 'policies:deploy']
     Permission:
       type: string
       enum: [read, settings.read, settings.write, apikey.manage, agent.write, scenario.write, simulation.run,

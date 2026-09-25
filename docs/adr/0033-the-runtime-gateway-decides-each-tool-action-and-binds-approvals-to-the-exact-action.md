@@ -98,6 +98,13 @@ What exists already:
     runs the version's tests, which must all pass. `fail_open` is refused
     unless the tool is registered as `READ`. Activation publishes
     `policy.activated.v1` through the outbox, with an audit entry.
+  - **Policy as code.** People write, test and activate policies in the UI
+    (`policy.write`, `policy.test`, `policy.activate`: owners and admins);
+    a pipeline deploys them from a repository with an API key holding the
+    scope `policies:deploy` (read, write, test, activate; register the
+    tools they guard). Activating can loosen containment, so this is its own
+    scope, not part of `ci`. The demo key holds it in development: `make
+    seed` applies `demo/support-refund-agent/assurance/runtime.yaml`.
   - **Testing** (`policy.test`) runs a version, or a draft not yet saved,
     against its tests and extra cases, and around every numeric threshold
     the rules compare against: `args.amount > 100` is evaluated at 99, 100

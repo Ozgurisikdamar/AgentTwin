@@ -56,7 +56,12 @@ func TestAPIKeyScopes(t *testing.T) {
 	if !ci.Can(PermReleaseWrite) || ci.Can(PermPolicyActivate) || ci.Can(PermApprovalDecide) {
 		t.Fatal("ci key scope wrong")
 	}
-	if ValidScope("admin:*") {
+	deploy := Principal{OrgID: "o", Actor: "apikey:3", Role: RoleAPIKey, Scopes: []Scope{ScopePoliciesDeploy}}
+	if !deploy.Can(PermPolicyWrite) || !deploy.Can(PermPolicyTest) || !deploy.Can(PermPolicyActivate) ||
+		deploy.Can(PermApprovalDecide) || deploy.Can(PermRuntimeInvoke) || deploy.Can(PermReleaseWrite) {
+		t.Fatal("policies:deploy key must read, write, test and activate policies and nothing else")
+	}
+	if !ValidScope(ScopePoliciesDeploy) || ValidScope("admin:*") {
 		t.Fatal("unknown scope must be invalid")
 	}
 }

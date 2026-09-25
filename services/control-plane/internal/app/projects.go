@@ -181,7 +181,7 @@ func validateKeyInput(in CreateAPIKeyInput) error {
 	}
 	for _, s := range in.Scopes {
 		if !authn.ValidScope(s) {
-			return httpx.Invalid("INVALID_API_KEY", fmt.Sprintf("unknown scope %q (allowed: traces:write, runtime:invoke, read, ci).", s), map[string]any{"field": "scopes"})
+			return httpx.Invalid("INVALID_API_KEY", fmt.Sprintf("unknown scope %q (allowed: traces:write, runtime:invoke, read, ci, policies:deploy).", s), map[string]any{"field": "scopes"})
 		}
 	}
 	if in.ExpiresInDays != nil && (*in.ExpiresInDays < 1 || *in.ExpiresInDays > 730) {

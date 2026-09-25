@@ -87,7 +87,7 @@ func (a *App) BootstrapDemo(ctx context.Context, demoKey string) (DemoIdentity, 
 			return a.Store.UpsertDemoAPIKey(ctx, tx, store.APIKey{
 				ID: newID(), OrganizationID: org.ID, ProjectID: proj.ID, Name: "demo agent (development)",
 				Prefix: prefix, SecretHash: auth.HashSecret(a.Pepper, secret),
-				Scopes:    []authn.Scope{authn.ScopeTracesWrite, authn.ScopeRuntimeInvoke, authn.ScopeCI, authn.ScopeRead},
+				Scopes:    []authn.Scope{authn.ScopeTracesWrite, authn.ScopeRuntimeInvoke, authn.ScopeCI, authn.ScopeRead, authn.ScopePoliciesDeploy},
 				CreatedBy: "system:bootstrap",
 			})
 		}

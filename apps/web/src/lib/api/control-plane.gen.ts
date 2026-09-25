@@ -910,10 +910,12 @@ export interface components {
         /**
          * @description What an API key may do: `traces:write` (send traces and outcomes),
          *     `runtime:invoke` (call tools through the runtime gateway), `read`,
-         *     `ci` (register agents, run simulations and gates).
+         *     `ci` (register agents, run simulations and gates), `policies:deploy`
+         *     (register the runtime gateway's tools, write, test and activate its
+         *     policies: policy as code).
          * @enum {string}
          */
-        Scope: "traces:write" | "runtime:invoke" | "read" | "ci";
+        Scope: "traces:write" | "runtime:invoke" | "read" | "ci" | "policies:deploy";
         /** @enum {string} */
         Permission: "read" | "settings.read" | "settings.write" | "apikey.manage" | "agent.write" | "scenario.write" | "simulation.run" | "eval.run" | "release.write" | "release.override" | "review.write" | "regression.promote" | "approval.decide" | "policy.write" | "policy.activate" | "policy.test" | "trace.write" | "runtime.invoke" | "graph.write";
         /**

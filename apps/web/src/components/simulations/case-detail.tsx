@@ -165,7 +165,7 @@ export function CaseDetail({ runId, caseId }: { runId: string; caseId: string })
                 { label: "Skipped", value: counts.SKIPPED },
                 { label: "Errors", value: counts.ERROR },
                 {
-                  label: "Critical failures",
+                  label: "Critical expectations failed",
                   value: c.verdict?.critical_failures ? (
                     <Badge tone="danger">{c.verdict.critical_failures}</Badge>
                   ) : (

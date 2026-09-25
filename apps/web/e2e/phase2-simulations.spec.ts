@@ -51,7 +51,9 @@ test.describe("Phase 2 acceptance: scenarios, tool twins, injected faults and si
 
     // The verdict summary and the pinned inputs that make it reproducible.
     const summary = page.getByTestId("run-summary");
-    await expect(summary).toHaveText(/^\d+ passed · \d+ failed of \d+ scenarios · \d+ critical failures?$/);
+    await expect(summary).toHaveText(
+      /^\d+ passed · \d+ failed of \d+ scenarios · \d+ critical scenarios? failed$/,
+    );
     const verdict = (await summary.textContent()) ?? "";
     const pinning = page.getByTestId("pinning-card");
     await expect(pinning).toContainText("42");

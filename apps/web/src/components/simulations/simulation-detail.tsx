@@ -210,7 +210,7 @@ export function SimulationDetail({ runId }: { runId: string }) {
         description={
           <span data-testid="run-summary">
             {runVerdictSummary(r)} of {countOf(r.case_count, "scenario")}
-            {r.critical_failures > 0 ? ` · ${countOf(r.critical_failures, "critical failure")}` : ""}
+            {r.critical_failures > 0 ? ` · ${countOf(r.critical_failures, "critical scenario")} failed` : ""}
             {r.cancel_requested && active ? " · cancelling…" : ""}
           </span>
         }
@@ -260,7 +260,8 @@ export function SimulationDetail({ runId }: { runId: string }) {
                 { label: "Created", value: formatDateTime(r.created_at) },
                 { label: "Duration", value: formatDuration(runDurationMs(r, now)) },
                 {
-                  label: "Critical failures",
+                  // Failed scenarios of critical severity (a case counts failed critical expectations).
+                  label: "Critical scenarios failed",
                   value:
                     r.critical_failures > 0 ? <Badge tone="danger">{r.critical_failures}</Badge> : "none",
                 },

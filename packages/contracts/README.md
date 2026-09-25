@@ -49,7 +49,7 @@ Exchange: `agenttwin.events` (topic, durable). Routing key = event type.
 | `policy.activated.v1` | runtime-gateway | graph-service | ✓ | POLICY nodes + `GUARDED_BY` edges (policy changes enter blast radius). |
 | `policy.violation_detected.v1` | runtime-gateway | evaluation-service | ✓ | Runtime denials become regression signals. |
 | `evaluation.run_requested.v1` | control-plane | evaluation-service | ✓ | Start a release evaluation for a selected suite. |
-| `simulation.run_requested.v1` | evaluation-service, simulation-service | simulation-service (worker) | ✓ | Execute a simulation run. |
+| `simulation.run_requested.v1` | simulation-service | simulation-service (worker) | ✓ | A run was created (API, including the evaluation service's requests); wakes a worker. The run itself is in the database: a lost event delays it by one poll, never loses it. |
 | `simulation.run_completed.v1` | simulation-service | evaluation-service | ✓ | Run finished (COMPLETED / FAILED / CANCELLED). |
 | `evaluation.run_completed.v1` | evaluation-service | control-plane | ✓ | Comparison ready → compute gate. |
 | `audit.recorded.v1` | trace, evaluation, simulation, runtime | control-plane | ✓ | Governance actions of non-edge services land in the central audit log. |

@@ -166,7 +166,7 @@ export function ScenarioForm(props: ScenarioFormProps) {
               onChange={(e) => edit(["metadata", "name"], e.target.value)}
             />
           </Field>
-          <Field id="f-severity" label="Severity" hint="Critical failures block a release.">
+          <Field id="f-severity" label="Severity" hint="A failed critical scenario blocks a release.">
             <Select
               id="f-severity"
               value={str(["metadata", "severity"])}

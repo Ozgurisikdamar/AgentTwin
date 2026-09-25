@@ -202,7 +202,8 @@ sequenceDiagram
   CP-->>U: 202 {evaluation_id, status: QUEUED}
   CP->>MQ: evaluation.run_requested.v1 (outbox relay, publisher confirms)
   MQ->>ES: consume → create EvalRun (idempotent)
-  ES->>MQ: simulation.run_requested.v1 ×2 (baseline, candidate)
+  ES->>SS: POST /api/v1/simulations ×2 (baseline, candidate; Idempotency-Key)
+  SS->>MQ: simulation.run_requested.v1 (outbox; wakes a worker)
   MQ->>SS: worker claims run (lease), runs cases in isolated twins
   SS->>MQ: simulation.run_completed.v1
   MQ->>ES: both sides done → evaluate expectations, compare, first divergence
@@ -213,7 +214,42 @@ sequenceDiagram
 Any missing mandatory result, failed simulation, evaluator `ERROR` or stale run
 produces **BLOCK (INCOMPLETE)** — infrastructure uncertainty never yields PASS.
 
-### 3.4 Runtime containment (opt-in)
+### 3.4 Simulation run
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as UI / CLI / SDK
+  participant CP as control-plane
+  participant SS as simulation-service
+  participant W as simulation worker
+  participant A as agent under test
+  participant TS as trace-service
+  U->>CP: POST /api/v1/simulations (Idempotency-Key)
+  CP->>SS: forward with an internal JWT
+  SS->>SS: scenarios checked against their twins, versions and seeds pinned,<br/>run + cases + outbox(simulation.run_requested.v1) in one tx
+  SS-->>U: 202 {run, cases}
+  SS->>W: event wakes a worker (or the next poll finds the run)
+  W->>W: claim run (FOR UPDATE SKIP LOCKED, renewable lease)
+  loop every case
+    W->>W: fresh twin state + per-case capability token
+    W->>A: POST /run (input, twin URL, token, run context)
+    A->>SS: POST /twin/v1/tools/{tool} (token)
+    SS-->>A: reply (faults applied); the twin records the call
+    A-->>W: final answer + claimed outcome
+    W->>W: revoke token, evaluate expectations on the recorded state → verdict
+  end
+  W->>SS: run COMPLETED + outbox(simulation.run_completed.v1)
+  W->>TS: verified outcome on each case's trace (retried until ingested)
+```
+
+Design decisions: [ADR-0016](../adr/0016-declarative-tool-twins-and-faults.md)
+(twins and faults), [ADR-0017](../adr/0017-simulation-runs-cancellation-and-verdicts.md)
+(runs, cancellation, verdicts), [ADR-0019](../adr/0019-idempotency-keys-per-user-action.md)
+(idempotency), [ADR-0020](../adr/0020-scenario-documents-stored-as-data.md)
+(scenario documents).
+
+### 3.5 Runtime containment (opt-in)
 
 `agent → POST /gateway/v1/tools/{tool}/invoke → policy (CEL) → allow | allow_with_limits | require_approval | deny → upstream tool`
 
@@ -233,7 +269,7 @@ through REST (synchronous, owner-validated) or events (asynchronous).
 | `trace` | trace-service | trace, span, outcome, trace_flag, outbox |
 | `graph` | graph-service | component, dependency_edge, edge_evidence, processed_event |
 | `eval` | evaluation-service | dataset, eval_case, evaluator_version, eval_run, eval_result, scenario_comparison, human_review, failure, failure_cluster, regression_case, judge_calibration, outbox, processed_event |
-| `simulation` | simulation-service | twin_definition, scenario, scenario_version, simulation_run, simulation_case, simulation_step, artifact, outbox, processed_event |
+| `simulation` | simulation-service | twin_definition, scenario, scenario_version, simulation_run, simulation_run_transition, simulation_case, simulation_step, outbox, processed_event |
 | `runtime` | runtime-gateway | policy, policy_version, policy_decision, approval_request, approval_token, idempotency_record, tool_endpoint, trace_tool_counter, outbox |
 
 Each service ships its own versioned migrations (`<service>/migrations`), applied

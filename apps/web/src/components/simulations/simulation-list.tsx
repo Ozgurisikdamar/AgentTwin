@@ -59,7 +59,9 @@ function RunRow({ run, now, meUserId }: { run: SimulationRun; now: Date; meUserI
       </td>
       <td className="px-3 py-2.5">
         {run.critical_failures > 0 ? (
-          <Badge tone="danger">{run.critical_failures} critical</Badge>
+          <Badge tone="danger" title="Failed scenarios of critical severity">
+            {run.critical_failures} critical
+          </Badge>
         ) : (
           <span className="text-xs text-slate-500">none</span>
         )}
@@ -238,7 +240,7 @@ export function SimulationList() {
                       Scenarios
                     </th>
                     <th scope="col" className="px-3 py-2 font-medium">
-                      Critical failures
+                      Critical scenarios failed
                     </th>
                     <th scope="col" className="px-3 py-2 font-medium">
                       Requested by

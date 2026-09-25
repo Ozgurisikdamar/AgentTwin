@@ -25,7 +25,7 @@ from eval_testutil import (
     evaluation_with_simulation,
     run_simulations,
 )
-from regression_testutil import AGENT, ingested, load, mine, mined, variant
+from regression_testutil import AGENT, capture, ingested, load, mine, mined, variant
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -490,6 +490,10 @@ async def test_a_draft_that_needs_a_person_is_not_promoted_as_it_is() -> None:
         assert error["details"]["problems"][0].startswith(
             "The trace no longer shows what the agent was asked"
         )
+        draft = await ev.ok("GET", f"{BASE}/{dup}/draft")
+        assert draft["draft"]["complete"] is False
+        assert draft["draft"]["problems"] == error["details"]["problems"]
+        capture("regression-draft-incomplete", draft)
         assert (await ev.ok("GET", f"{BASE}/{dup}"))["regression"]["status"] == "CANDIDATE"
 
 
@@ -625,7 +629,24 @@ async def test_a_production_failure_becomes_a_test_the_next_versions_are_held_to
     key, passes it: the regression is fixed in 1.3.1."""
     async with evaluation_with_simulation() as (ev, sim):
         dup, _ = await mined(ev, "duplicate-refund")
+        # The inbox around it: a handled timeout someone triaged, and a
+        # correct refusal someone dismissed.
+        timeout, _ = await mined(ev, "timeout-handled")
+        await ev.ok(
+            "PATCH",
+            f"{BASE}/{timeout}",
+            {"severity": "low", "tags": ["payments"], "assignee": "user:reviewer", "reason": "handled"},
+        )
+        denied, _ = await mined(ev, "cross-tenant-denied")
+        await ev.ok("POST", f"{BASE}/{denied}/dismiss", {"reason": "the agent refused, as it should"})
+        inbox = await ev.ok("GET", f"{BASE}/candidates")
+        assert {r["id"] for r in inbox["items"]} == {denied, timeout, dup}  # most recently seen first
+        capture("regression-inbox", inbox)
+        capture("regression-candidate", await ev.ok("GET", f"{BASE}/{dup}"))
+        capture("regression-draft", await ev.ok("GET", f"{BASE}/{dup}/draft"))
+
         out = await ev.ok("POST", f"{BASE}/{dup}/promote", {}, status=201, as_=REVIEWER)
+        capture("regression-promoted", out)
         name, dataset = out["scenario"]["name"], out["dataset"]["id"]
 
         async def evaluate(baseline: str, candidate: str) -> tuple[str, dict[str, Any]]:
@@ -664,9 +685,12 @@ async def test_a_production_failure_becomes_a_test_the_next_versions_are_held_to
         # 1.3.1 passes it: fixed in 1.3.1, by that run.
         run_id, case = await evaluate("1.3.0", "1.3.1")
         assert (case["baseline"]["status"], case["candidate"]["status"]) == ("FAILED", "PASSED")
-        g = (await ev.ok("GET", f"{BASE}/{dup}"))["regression"]
+        fixed = await ev.ok("GET", f"{BASE}/{dup}")
+        g = fixed["regression"]
         assert (g["status"], g["fixed_version"], g["fixed_eval_run_id"]) == (
             "FIXED",
             "1.3.1",
             run_id,
         )
+        assert [e["action"] for e in fixed["events"]] == ["created", "promote", "fixed"]
+        capture("regression-fixed", fixed)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import uuid
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,16 @@ AGENT = "support-refund-agent"
 def load(name: str) -> dict[str, Any]:
     data: dict[str, Any] = json.loads((DATA / f"{name}.json").read_text())
     return data
+
+
+def capture(name: str, body: Any) -> None:
+    """Writes an answer to ``$AGENTTWIN_CAPTURE_DIR/<name>.json`` when set:
+    the web's regression fixtures are these answers, verbatim."""
+    directory = os.environ.get("AGENTTWIN_CAPTURE_DIR")
+    if directory:
+        path = Path(directory) / f"{name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(body, indent=2, sort_keys=True) + "\n")
 
 
 def trace_id() -> str:

@@ -77,3 +77,18 @@ export type JudgeDescription = S["JudgeDescription"];
 
 /** Review sides as the API spells them. */
 export type ReviewSide = ReviewRequest["side"];
+
+export type FailureLabel = S["FailureLabel"];
+export type Severity = S["Severity"];
+export type Regression = S["Regression"];
+export type RegressionStatus = S["RegressionStatus"];
+export type RegressionPage = S["RegressionPage"];
+export type RegressionDetail = S["RegressionDetail"];
+export type RegressionOccurrence = S["RegressionOccurrence"];
+export type RegressionEvent = S["RegressionEvent"];
+export type RegressionResponse = S["RegressionResponse"];
+export type MergeResponse = S["MergeResponse"];
+export type RegressionDraft = S["RegressionDraft"];
+export type EntityMapping = S["EntityMapping"];
+export type TriageRequest = S["TriageRequest"];
+export type PromoteResponse = S["PromoteResponse"];

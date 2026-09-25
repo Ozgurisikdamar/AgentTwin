@@ -3,6 +3,7 @@
 import {
   Activity,
   Bot,
+  Bug,
   Database,
   FlaskConical,
   GitCompareArrows,
@@ -32,6 +33,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/releases", label: "Releases", icon: Rocket },
+  { href: "/regressions", label: "Regressions", icon: Bug },
   { href: "/changes", label: "Changes", icon: GitPullRequestArrow },
   { href: "/graph", label: "Graph", icon: Network },
   { href: "/simulations", label: "Simulations", icon: FlaskConical },

@@ -4,7 +4,10 @@ evaluation service answers as documented at least once (ADR-0021)."""
 
 from __future__ import annotations
 
+import asyncio
 import json
+import shutil
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -12,7 +15,9 @@ from test_eval_runs_integration import AGENT, OUTSIDER, VIEWER, detail, evaluate
 
 from agenttwin_core.auth import Principal, Role
 from agenttwin_core.yamlsafe import load_yaml
-from eval_testutil import ASSURANCE, ORG, PROJECT, Stack, evaluation_with_simulation
+from agenttwin_evaluation.calibrations import CRITERION_NAMES
+from agenttwin_evaluation.judges import FakeJudge, JudgeRequest, JudgeVerdict
+from eval_testutil import ASSURANCE, ORG, PROJECT, Stack, evaluation_stack, evaluation_with_simulation
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -20,9 +25,9 @@ REVIEWER = Principal(org_id=ORG, actor="user:reviewer", role=Role.REVIEWER, proj
 RUBRIC = "The reply confirms the refund."
 
 
-def judged_scenario(*, critical: bool) -> str:
+def judged_scenario(*, critical: bool, name: str = "refund-judged") -> str:
     doc = load_yaml((ASSURANCE / "scenarios" / "refund-happy-path.yaml").read_text())
-    doc["metadata"]["name"] = "refund-judged"
+    doc["metadata"]["name"] = name
     doc["spec"]["expectations"] += [
         {
             "id": "confirms",
@@ -120,14 +125,23 @@ async def test_a_review_replaces_a_verdict_and_classifies_the_case_again() -> No
 async def test_the_queue_holds_what_an_uncalibrated_judge_decided_alone() -> None:
     async with evaluation_with_simulation() as (ev, sim):
         await register(sim, judged_scenario(critical=True))
-        run = await start(ev, "1.2.4", "1.2.4", scenarios=["refund-judged"])
-        await evaluate(ev, sim, run["id"])
-        case = await ev.ok("GET", f"/api/v1/eval-runs/{run['id']}/cases/refund-judged")
+        first = await start(ev, "1.2.4", "1.2.4", scenarios=["refund-judged"])
+        await evaluate(ev, sim, first["id"])
+        case = await ev.ok("GET", f"/api/v1/eval-runs/{first['id']}/cases/refund-judged")
+        # Only the critical expectation the uncalibrated judge graded alone;
+        # the other one was graded and is not critical.
         assert case["needs_review"] == ["BASELINE:confirms", "CANDIDATE:confirms"]
-        queue = await ev.ok("GET", "/api/v1/reviews", project_id=PROJECT)
-        [item] = queue["items"]
+        second = await start(ev, "1.2.4", "1.2.4", scenarios=["refund-judged"])
+        await evaluate(ev, sim, second["id"])
+
+        # Newest run first, one case per page.
+        page = await ev.ok("GET", "/api/v1/reviews", project_id=PROJECT, limit=1)
+        assert [i["eval_run_id"] for i in page["items"]] == [second["id"]] and page["next_cursor"]
+        rest = await ev.ok("GET", "/api/v1/reviews", limit=1, cursor=page["next_cursor"])
+        [item] = rest["items"]
+        assert rest["next_cursor"] is None
         assert (item["eval_run_id"], item["scenario_name"], item["agent_name"]) == (
-            run["id"],
+            first["id"],
             "refund-judged",
             AGENT,
         )
@@ -135,13 +149,71 @@ async def test_the_queue_holds_what_an_uncalibrated_judge_decided_alone() -> Non
             ("BASELINE", "confirms", True),
             ("CANDIDATE", "confirms", True),
         ]
-        await review(ev, run["id"], "refund-judged", "BASELINE", "confirms", "PASS", as_=REVIEWER)
-        [item] = (await ev.ok("GET", "/api/v1/reviews"))["items"]
-        assert [p["side"] for p in item["pending"]] == ["CANDIDATE"]
-        await review(ev, run["id"], "refund-judged", "CANDIDATE", "confirms", "PASS", as_=REVIEWER)
-        assert (await ev.ok("GET", "/api/v1/reviews"))["items"] == []
+
+        # A review takes its expectation off the queue; the case leaves it
+        # when nothing of it is left.
+        await review(ev, first["id"], "refund-judged", "BASELINE", "confirms", "PASS", as_=REVIEWER)
+        items = (await ev.ok("GET", "/api/v1/reviews"))["items"]
+        pending = {i["eval_run_id"]: [p["side"] for p in i["pending"]] for i in items}
+        assert pending == {second["id"]: ["BASELINE", "CANDIDATE"], first["id"]: ["CANDIDATE"]}
+        await review(ev, first["id"], "refund-judged", "CANDIDATE", "confirms", "PASS", as_=REVIEWER)
+        assert [i["eval_run_id"] for i in (await ev.ok("GET", "/api/v1/reviews"))["items"]] == [second["id"]]
         assert (await ev.ok("GET", "/api/v1/reviews", as_=OUTSIDER))["items"] == []
         await ev.fails("GET", "/api/v1/reviews", status=400, code="INVALID_CURSOR", cursor="!!")
+
+
+async def test_a_review_classifies_its_own_case_only() -> None:
+    async with evaluation_with_simulation() as (ev, sim):
+        # Two cases with the same expectation ids.
+        await register(sim, judged_scenario(critical=True))
+        await register(sim, judged_scenario(critical=True, name="refund-judged-again"))
+        run = await start(ev, "1.2.4", "1.2.4", scenarios=["refund-judged", "refund-judged-again"])
+        out = await evaluate(ev, sim, run["id"])
+        # Judged, the critical semantic expectation the simulation skipped no
+        # longer leaves the cases ERRORED: they are compared (both sides fail
+        # the same non-critical rubric, so nothing changed).
+        assert out["run"]["counts"]["UNCHANGED"] == 2
+        case = await ev.ok("GET", f"/api/v1/eval-runs/{run['id']}/cases/refund-judged")
+        assert [case["comparison"][s]["status"] for s in ("baseline", "candidate")] == ["FAILED", "FAILED"]
+
+        failed = await review(ev, run["id"], "refund-judged", "CANDIDATE", "confirms", "FAIL", as_=REVIEWER)
+        assert failed["classification"] == "NEW_CRITICAL_FAILURE"
+        counts = failed["run"]["counts"]
+        assert (counts["NEW_CRITICAL_FAILURE"], counts["UNCHANGED"]) == (1, 1)
+        other = await ev.ok("GET", f"/api/v1/eval-runs/{run['id']}/cases/refund-judged-again")
+        assert (other["comparison"]["classification"], other["reviewed"]) == ("UNCHANGED", False)
+
+
+async def test_a_side_whose_agent_did_not_run_is_neither_judged_nor_reviewable(tmp_path: Path) -> None:
+    # The agent deployment can run 1.2.4 only: every candidate case is blocked.
+    manifests = ASSURANCE.parent / "manifests"
+    shutil.copy(manifests / "1.2.4.yaml", tmp_path / "1.2.4.yaml")
+    async with evaluation_with_simulation(simulation={"manifest_dir": tmp_path}) as (ev, sim):
+        await register(sim, judged_scenario(critical=True))
+        run = await start(ev, "1.2.4", "1.3.0", scenarios=["refund-judged"])
+        out = await evaluate(ev, sim, run["id"])
+        assert out["run"]["counts"]["INCOMPLETE"] == 1
+        # Only the side that ran was judged (two expectations, no cache hit).
+        assert out["run"]["budget"]["calls"] == 2
+        case = await ev.ok("GET", f"/api/v1/eval-runs/{run['id']}/cases/refund-judged")
+        assert [v["expectation_id"] for v in case["verdicts"]["baseline"]] == ["confirms", "polite"]
+        assert case["verdicts"]["candidate"] == []
+        candidate = {r["expectation"]["id"]: r for r in case["results"]["candidate"]}
+        assert candidate["agent-run"]["status"] == "ERROR"
+        assert {candidate[e]["status"] for e in ("confirms", "polite")} == {"SKIPPED"}
+        assert case["needs_review"] == ["BASELINE:confirms"]
+        await ev.fails(
+            "POST",
+            f"/api/v1/eval-runs/{run['id']}/cases/refund-judged/reviews",
+            {"side": "CANDIDATE", "expectation_id": "agent-run", "status": "PASS", "note": "x"},
+            status=409,
+            code="EXPECTATION_NOT_REVIEWABLE",
+            as_=REVIEWER,
+        )
+        # A person may grade a skipped expectation, but the run it belongs to
+        # still did not happen: the case stays incomplete.
+        out = await review(ev, run["id"], "refund-judged", "CANDIDATE", "confirms", "PASS", as_=REVIEWER)
+        assert out["classification"] == "INCOMPLETE"
 
 
 async def test_a_calibrated_judge_is_recorded_as_calibrated_for_its_criterion() -> None:
@@ -164,13 +236,9 @@ async def test_a_calibrated_judge_is_recorded_as_calibrated_for_its_criterion() 
         assert small["calibrated"] is False and "at least 20" in small["reason"]
 
         judge = await ev.ok("GET", "/api/v1/judges", project_id=PROJECT)
+        assert [c["criterion"] for c in judge["criteria"]] == list(CRITERION_NAMES)  # each once
         states = {c["criterion"]: c["calibrated"] for c in judge["criteria"]}
-        assert states == {
-            "task_completion": True,
-            "intent_fidelity": False,
-            "relevance": False,
-            "rubric": False,
-        }
+        assert states == dict.fromkeys(CRITERION_NAMES, False) | {"task_completion": True}
         assert judge["requirements"] == {"min_examples": 20, "min_agreement": 0.8, "min_kappa": 0.6}
         listed = await ev.ok("GET", "/api/v1/judges/calibrations", criterion="task_completion")
         assert [c["id"] for c in listed["items"]] == [cal["id"]]
@@ -202,6 +270,79 @@ async def test_a_calibrated_judge_is_recorded_as_calibrated_for_its_criterion() 
         await ev.fails(
             "GET", "/api/v1/judges", status=404, code="NOT_FOUND", as_=OUTSIDER, project_id=PROJECT
         )
+
+        # The latest completed calibration of this judge counts: a newer one
+        # that falls short undoes it…
+        redo = body | {"examples": examples(5)}
+        newer = (await ev.ok("POST", "/api/v1/judges/calibrations", redo, status=202))["calibration"]
+        assert await ev.worker.calibrate_next() == newer["id"]
+        assert await is_calibrated(ev) is False
+        # … unless it measured another judge (another model): it says nothing
+        # about this one.
+        await ev.store.one(
+            """UPDATE judge_calibration SET judge = jsonb_set(judge, '{model}', '"another-model"')
+               WHERE id = %s RETURNING id""",
+            (newer["id"],),
+        )
+        assert await is_calibrated(ev) is True
+
+
+async def is_calibrated(ev: Stack, criterion: str = "task_completion") -> bool:
+    judge = await ev.ok("GET", "/api/v1/judges", project_id=PROJECT)
+    return bool(next(c["calibrated"] for c in judge["criteria"] if c["criterion"] == criterion))
+
+
+class SlowJudge(FakeJudge):
+    async def judge(self, request: JudgeRequest) -> JudgeVerdict:
+        await asyncio.sleep(0.05)
+        return await super().judge(request)
+
+
+async def test_a_calibration_keeps_its_lease_and_is_retried_then_failed_when_its_worker_is_lost() -> None:
+    body = {"project_id": PROJECT, "criterion": "task_completion", "examples": examples(20)}
+    async with evaluation_stack(judge=SlowJudge(), lease_seconds=0.3) as ev:
+        cal = (await ev.ok("POST", "/api/v1/judges/calibrations", body, status=202))["calibration"]
+        # A worker takes it and is lost; its lease expires and another worker
+        # takes it over. The lost worker's result is refused.
+        lost = await ev.store.claim_calibration("lost-worker", 60, 3)
+        assert lost is not None and (lost["id"], lost["attempts"]) == (cal["id"], 1)
+        assert await ev.store.claim_calibration("other-worker", 60, 3) is None  # still leased
+        await expire(ev, cal["id"])
+        taken = await ev.store.claim_calibration("other-worker", 60, 3)
+        assert taken is not None and taken["attempts"] == 2
+        assert await ev.store.finish_calibration(cal["id"], "lost-worker", {"status": "COMPLETED"}) is None
+        await expire(ev, cal["id"])
+
+        # The third attempt takes longer than the lease: the worker keeps it.
+        running = asyncio.create_task(ev.worker.calibrate_next())
+        await asyncio.sleep(0.6)
+        row = await ev.store.one(
+            """SELECT status, lease_owner, lease_expires_at > now() AS held
+               FROM judge_calibration WHERE id = %s""",
+            (cal["id"],),
+        )
+        assert row == {"status": "RUNNING", "lease_owner": ev.worker.owner, "held": True}
+        assert await running == cal["id"]
+        done = (await ev.ok("GET", f"/api/v1/judges/calibrations/{cal['id']}"))["calibration"]
+        assert (done["status"], done["calibrated"]) == ("COMPLETED", True)
+
+        # One whose worker lost the lease on every attempt fails with the reason.
+        gone = (await ev.ok("POST", "/api/v1/judges/calibrations", body, status=202))["calibration"]
+        for owner in ("w1", "w2", "w3"):
+            assert (await ev.store.claim_calibration(owner, 60, 3) or {}).get("id") == gone["id"]
+            await expire(ev, gone["id"])
+        assert await ev.worker.calibrate_next() is None
+        failed = (await ev.ok("GET", f"/api/v1/judges/calibrations/{gone['id']}"))["calibration"]
+        assert failed["status"] == "FAILED"
+        assert failed["error"] == "Gave up after 3 attempts (the worker lost its lease each time)."
+
+
+async def expire(ev: Stack, calibration_id: str) -> None:
+    await ev.store.one(
+        """UPDATE judge_calibration SET lease_expires_at = now() - interval '1 second'
+           WHERE id = %s RETURNING id""",
+        (calibration_id,),
+    )
 
 
 async def test_every_operation_answers_as_documented() -> None:

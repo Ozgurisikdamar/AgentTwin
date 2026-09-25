@@ -580,7 +580,9 @@ paths:
         A person's verdict (`PASS`/`FAIL`, with a mandatory note) replaces the
         evaluator's result for one expectation of one side; the case and the
         run's summary are classified again. Only completed runs (`409
-        EVAL_RUN_NOT_COMPLETED`). Reviews are kept whole (the latest one for an
+        EVAL_RUN_NOT_COMPLETED`), and only expectations: the simulation's
+        finding about the run itself (`agentRun`) is not one (`409
+        EXPECTATION_NOT_REVIEWABLE`). Reviews are kept whole (the latest one for an
         expectation counts) and announced to the audit log with the note as
         the reason.
       parameters:
@@ -991,7 +993,10 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     ReviewConflict:
-      description: The run is not completed (`EVAL_RUN_NOT_COMPLETED`), or `IDEMPOTENCY_IN_PROGRESS`.
+      description: |
+        The run is not completed (`EVAL_RUN_NOT_COMPLETED`); the result is the
+        simulation's finding about the run itself, not an expectation
+        (`EXPECTATION_NOT_REVIEWABLE`); or `IDEMPOTENCY_IN_PROGRESS`.
       content:
         application/json:
           schema:
@@ -2231,8 +2236,19 @@ components:
           type: [string, 'null']
     Criterion:
       type: string
-      enum: [task_completion, intent_fidelity, relevance, rubric]
-      description: What the judge grades; `rubric` is a scenario's own rubric.
+      enum:
+        - task_completion
+        - intent_fidelity
+        - relevance
+        - correctness
+        - groundedness
+        - policy_adherence
+        - escalation_appropriateness
+        - rubric
+      description: |
+        What the judge grades: a semantic expectation's `category` when it is
+        one of the fixed criteria, otherwise `rubric` (the expectation's own
+        rubric).
     CalibrationRequest:
       type: object
       additionalProperties: false

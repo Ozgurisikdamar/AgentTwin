@@ -31,6 +31,7 @@ from agenttwin_core.jobs import JobStatus
 from agenttwin_core.logx import Log
 from agenttwin_core.web import query_int, read_model, require, require_project
 from agenttwin_evaluation.common import NAME, TAG, Strict, accessible, audit, check_uuid, pick, scope_of, ts
+from agenttwin_evaluation.reviewing import review_json
 from agenttwin_evaluation.store import SCHEMA, Row, Store, decode_cursor, encode_cursor
 from agenttwin_evaluation.worker import completed_event
 
@@ -256,8 +257,6 @@ class EvalRunsAPI:
 
         @app.get("/api/v1/eval-runs/{eval_run_id}/cases/{scenario}")
         async def get_eval_case(eval_run_id: str, scenario: str, request: Request) -> dict[str, Any]:
-            from agenttwin_evaluation.reviews import review_json
-
             p = require(request, Permission.READ)
             await self._run_or_404(p, eval_run_id)
             if not re.match(NAME, scenario):

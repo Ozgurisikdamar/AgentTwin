@@ -7736,6 +7736,14 @@
               "\"PASS\"",
               "\"SKIPPED\""
             ],
+            "/reviews/[]/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
+            "/reviews/[]/status": [
+              "\"FAIL\"",
+              "\"PASS\""
+            ],
             "/verdicts/baseline/[]/judge/calibrated": [
               "\"false\"",
               "\"true\""
@@ -7757,9 +7765,11 @@
             "/": [
               "comparison",
               "eval_run_id",
+              "needs_review",
               "position",
               "results",
               "reviewed",
+              "reviews",
               "updated_at",
               "verdicts"
             ],
@@ -7937,6 +7947,19 @@
               "critical",
               "id",
               "type"
+            ],
+            "/reviews/[]": [
+              "created_at",
+              "eval_run_id",
+              "expectation_id",
+              "id",
+              "note",
+              "original_label",
+              "original_status",
+              "reviewer",
+              "scenario_name",
+              "side",
+              "status"
             ],
             "/verdicts": [
               "baseline",
@@ -8449,6 +8472,12 @@
             "/eval_run_id": [
               "string"
             ],
+            "/needs_review": [
+              "array"
+            ],
+            "/needs_review/[]": [
+              "string"
+            ],
             "/position": [
               "integer"
             ],
@@ -8593,6 +8622,46 @@
             ],
             "/reviewed": [
               "boolean"
+            ],
+            "/reviews": [
+              "array"
+            ],
+            "/reviews/[]": [
+              "object"
+            ],
+            "/reviews/[]/created_at": [
+              "string"
+            ],
+            "/reviews/[]/eval_run_id": [
+              "string"
+            ],
+            "/reviews/[]/expectation_id": [
+              "string"
+            ],
+            "/reviews/[]/id": [
+              "string"
+            ],
+            "/reviews/[]/note": [
+              "string"
+            ],
+            "/reviews/[]/original_label": [
+              "null",
+              "string"
+            ],
+            "/reviews/[]/original_status": [
+              "string"
+            ],
+            "/reviews/[]/reviewer": [
+              "string"
+            ],
+            "/reviews/[]/scenario_name": [
+              "string"
+            ],
+            "/reviews/[]/side": [
+              "string"
+            ],
+            "/reviews/[]/status": [
+              "string"
             ],
             "/updated_at": [
               "string"
@@ -8751,6 +8820,1017 @@
             ],
             "/verdicts/candidate/[]/verdict/unsupported_quotes": [
               "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/judges": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/criteria/[]/calibration/criterion": [
+              "\"correctness\"",
+              "\"escalation_appropriateness\"",
+              "\"groundedness\"",
+              "\"intent_fidelity\"",
+              "\"policy_adherence\"",
+              "\"relevance\"",
+              "\"rubric\"",
+              "\"task_completion\""
+            ],
+            "/criteria/[]/calibration/disagreements/[]/human": [
+              "\"fail\"",
+              "\"pass\""
+            ],
+            "/criteria/[]/calibration/disagreements/[]/judge": [
+              "\"fail\"",
+              "\"pass\"",
+              "null"
+            ],
+            "/criteria/[]/calibration/status": [
+              "\"COMPLETED\"",
+              "\"FAILED\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ],
+            "/criteria/[]/criterion": [
+              "\"correctness\"",
+              "\"escalation_appropriateness\"",
+              "\"groundedness\"",
+              "\"intent_fidelity\"",
+              "\"policy_adherence\"",
+              "\"relevance\"",
+              "\"rubric\"",
+              "\"task_completion\""
+            ]
+          },
+          "required": {
+            "/": [
+              "criteria",
+              "judge",
+              "requirements"
+            ],
+            "/criteria/[]": [
+              "calibrated",
+              "calibration",
+              "criterion"
+            ],
+            "/criteria/[]/calibration": [
+              "calibrated",
+              "created_at",
+              "criterion",
+              "error",
+              "example_count",
+              "examples_sha256",
+              "finished_at",
+              "id",
+              "judge",
+              "metrics",
+              "organization_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "started_at",
+              "status"
+            ],
+            "/criteria/[]/calibration/disagreements/[]": [
+              "human",
+              "id",
+              "judge"
+            ],
+            "/criteria/[]/calibration/judge": [
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/criteria/[]/calibration/metrics": [
+              "accuracy",
+              "agreed",
+              "confusion",
+              "errors",
+              "examples",
+              "kappa"
+            ],
+            "/criteria/[]/calibration/metrics/confusion": [
+              "false_fail",
+              "false_pass",
+              "true_fail",
+              "true_pass"
+            ],
+            "/judge": [
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/requirements": [
+              "min_agreement",
+              "min_examples",
+              "min_kappa"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/criteria": [
+              "array"
+            ],
+            "/criteria/[]": [
+              "object"
+            ],
+            "/criteria/[]/calibrated": [
+              "boolean"
+            ],
+            "/criteria/[]/calibration": [
+              "null",
+              "object"
+            ],
+            "/criteria/[]/calibration/calibrated": [
+              "boolean",
+              "null"
+            ],
+            "/criteria/[]/calibration/created_at": [
+              "string"
+            ],
+            "/criteria/[]/calibration/criterion": [
+              "string"
+            ],
+            "/criteria/[]/calibration/disagreements": [
+              "array"
+            ],
+            "/criteria/[]/calibration/disagreements/[]": [
+              "object"
+            ],
+            "/criteria/[]/calibration/disagreements/[]/error": [
+              "string"
+            ],
+            "/criteria/[]/calibration/disagreements/[]/human": [
+              "string"
+            ],
+            "/criteria/[]/calibration/disagreements/[]/id": [
+              "string"
+            ],
+            "/criteria/[]/calibration/disagreements/[]/judge": [
+              "null",
+              "string"
+            ],
+            "/criteria/[]/calibration/disagreements/[]/score": [
+              "number"
+            ],
+            "/criteria/[]/calibration/error": [
+              "null",
+              "string"
+            ],
+            "/criteria/[]/calibration/example_count": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/examples_sha256": [
+              "string"
+            ],
+            "/criteria/[]/calibration/finished_at": [
+              "null",
+              "string"
+            ],
+            "/criteria/[]/calibration/id": [
+              "string"
+            ],
+            "/criteria/[]/calibration/judge": [
+              "null",
+              "object"
+            ],
+            "/criteria/[]/calibration/judge/kind": [
+              "string"
+            ],
+            "/criteria/[]/calibration/judge/model": [
+              "string"
+            ],
+            "/criteria/[]/calibration/judge/prompt_sha256": [
+              "string"
+            ],
+            "/criteria/[]/calibration/judge/prompt_version": [
+              "string"
+            ],
+            "/criteria/[]/calibration/judge/provider": [
+              "string"
+            ],
+            "/criteria/[]/calibration/metrics": [
+              "null",
+              "object"
+            ],
+            "/criteria/[]/calibration/metrics/accuracy": [
+              "number"
+            ],
+            "/criteria/[]/calibration/metrics/agreed": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/metrics/confusion": [
+              "object"
+            ],
+            "/criteria/[]/calibration/metrics/confusion/false_fail": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/metrics/confusion/false_pass": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/metrics/confusion/true_fail": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/metrics/confusion/true_pass": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/metrics/errors": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/metrics/examples": [
+              "integer"
+            ],
+            "/criteria/[]/calibration/metrics/kappa": [
+              "null",
+              "number"
+            ],
+            "/criteria/[]/calibration/organization_id": [
+              "string"
+            ],
+            "/criteria/[]/calibration/project_id": [
+              "string"
+            ],
+            "/criteria/[]/calibration/reason": [
+              "null",
+              "string"
+            ],
+            "/criteria/[]/calibration/requested_by": [
+              "string"
+            ],
+            "/criteria/[]/calibration/started_at": [
+              "null",
+              "string"
+            ],
+            "/criteria/[]/calibration/status": [
+              "string"
+            ],
+            "/criteria/[]/criterion": [
+              "string"
+            ],
+            "/judge": [
+              "object"
+            ],
+            "/judge/kind": [
+              "string"
+            ],
+            "/judge/model": [
+              "string"
+            ],
+            "/judge/prompt_sha256": [
+              "string"
+            ],
+            "/judge/prompt_version": [
+              "string"
+            ],
+            "/judge/provider": [
+              "string"
+            ],
+            "/requirements": [
+              "object"
+            ],
+            "/requirements/min_agreement": [
+              "number"
+            ],
+            "/requirements/min_examples": [
+              "integer"
+            ],
+            "/requirements/min_kappa": [
+              "number"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/judges/calibrations": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:criterion": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"correctness\"",
+                "\"escalation_appropriateness\"",
+                "\"groundedness\"",
+                "\"intent_fidelity\"",
+                "\"policy_adherence\"",
+                "\"relevance\"",
+                "\"rubric\"",
+                "\"task_completion\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/criterion": [
+              "\"correctness\"",
+              "\"escalation_appropriateness\"",
+              "\"groundedness\"",
+              "\"intent_fidelity\"",
+              "\"policy_adherence\"",
+              "\"relevance\"",
+              "\"rubric\"",
+              "\"task_completion\""
+            ],
+            "/items/[]/disagreements/[]/human": [
+              "\"fail\"",
+              "\"pass\""
+            ],
+            "/items/[]/disagreements/[]/judge": [
+              "\"fail\"",
+              "\"pass\"",
+              "null"
+            ],
+            "/items/[]/status": [
+              "\"COMPLETED\"",
+              "\"FAILED\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "calibrated",
+              "created_at",
+              "criterion",
+              "error",
+              "example_count",
+              "examples_sha256",
+              "finished_at",
+              "id",
+              "judge",
+              "metrics",
+              "organization_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "started_at",
+              "status"
+            ],
+            "/items/[]/disagreements/[]": [
+              "human",
+              "id",
+              "judge"
+            ],
+            "/items/[]/judge": [
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/items/[]/metrics": [
+              "accuracy",
+              "agreed",
+              "confusion",
+              "errors",
+              "examples",
+              "kappa"
+            ],
+            "/items/[]/metrics/confusion": [
+              "false_fail",
+              "false_pass",
+              "true_fail",
+              "true_pass"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/calibrated": [
+              "boolean",
+              "null"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/criterion": [
+              "string"
+            ],
+            "/items/[]/disagreements": [
+              "array"
+            ],
+            "/items/[]/disagreements/[]": [
+              "object"
+            ],
+            "/items/[]/disagreements/[]/error": [
+              "string"
+            ],
+            "/items/[]/disagreements/[]/human": [
+              "string"
+            ],
+            "/items/[]/disagreements/[]/id": [
+              "string"
+            ],
+            "/items/[]/disagreements/[]/judge": [
+              "null",
+              "string"
+            ],
+            "/items/[]/disagreements/[]/score": [
+              "number"
+            ],
+            "/items/[]/error": [
+              "null",
+              "string"
+            ],
+            "/items/[]/example_count": [
+              "integer"
+            ],
+            "/items/[]/examples_sha256": [
+              "string"
+            ],
+            "/items/[]/finished_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/judge": [
+              "null",
+              "object"
+            ],
+            "/items/[]/judge/kind": [
+              "string"
+            ],
+            "/items/[]/judge/model": [
+              "string"
+            ],
+            "/items/[]/judge/prompt_sha256": [
+              "string"
+            ],
+            "/items/[]/judge/prompt_version": [
+              "string"
+            ],
+            "/items/[]/judge/provider": [
+              "string"
+            ],
+            "/items/[]/metrics": [
+              "null",
+              "object"
+            ],
+            "/items/[]/metrics/accuracy": [
+              "number"
+            ],
+            "/items/[]/metrics/agreed": [
+              "integer"
+            ],
+            "/items/[]/metrics/confusion": [
+              "object"
+            ],
+            "/items/[]/metrics/confusion/false_fail": [
+              "integer"
+            ],
+            "/items/[]/metrics/confusion/false_pass": [
+              "integer"
+            ],
+            "/items/[]/metrics/confusion/true_fail": [
+              "integer"
+            ],
+            "/items/[]/metrics/confusion/true_pass": [
+              "integer"
+            ],
+            "/items/[]/metrics/errors": [
+              "integer"
+            ],
+            "/items/[]/metrics/examples": [
+              "integer"
+            ],
+            "/items/[]/metrics/kappa": [
+              "null",
+              "number"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/reason": [
+              "null",
+              "string"
+            ],
+            "/items/[]/requested_by": [
+              "string"
+            ],
+            "/items/[]/started_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/status": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/judges/calibrations/{calibration_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:calibration_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/calibration/criterion": [
+              "\"correctness\"",
+              "\"escalation_appropriateness\"",
+              "\"groundedness\"",
+              "\"intent_fidelity\"",
+              "\"policy_adherence\"",
+              "\"relevance\"",
+              "\"rubric\"",
+              "\"task_completion\""
+            ],
+            "/calibration/disagreements/[]/human": [
+              "\"fail\"",
+              "\"pass\""
+            ],
+            "/calibration/disagreements/[]/judge": [
+              "\"fail\"",
+              "\"pass\"",
+              "null"
+            ],
+            "/calibration/status": [
+              "\"COMPLETED\"",
+              "\"FAILED\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "calibration"
+            ],
+            "/calibration": [
+              "calibrated",
+              "created_at",
+              "criterion",
+              "error",
+              "example_count",
+              "examples_sha256",
+              "finished_at",
+              "id",
+              "judge",
+              "metrics",
+              "organization_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "started_at",
+              "status"
+            ],
+            "/calibration/disagreements/[]": [
+              "human",
+              "id",
+              "judge"
+            ],
+            "/calibration/judge": [
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/calibration/metrics": [
+              "accuracy",
+              "agreed",
+              "confusion",
+              "errors",
+              "examples",
+              "kappa"
+            ],
+            "/calibration/metrics/confusion": [
+              "false_fail",
+              "false_pass",
+              "true_fail",
+              "true_pass"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/calibration": [
+              "object"
+            ],
+            "/calibration/calibrated": [
+              "boolean",
+              "null"
+            ],
+            "/calibration/created_at": [
+              "string"
+            ],
+            "/calibration/criterion": [
+              "string"
+            ],
+            "/calibration/disagreements": [
+              "array"
+            ],
+            "/calibration/disagreements/[]": [
+              "object"
+            ],
+            "/calibration/disagreements/[]/error": [
+              "string"
+            ],
+            "/calibration/disagreements/[]/human": [
+              "string"
+            ],
+            "/calibration/disagreements/[]/id": [
+              "string"
+            ],
+            "/calibration/disagreements/[]/judge": [
+              "null",
+              "string"
+            ],
+            "/calibration/disagreements/[]/score": [
+              "number"
+            ],
+            "/calibration/error": [
+              "null",
+              "string"
+            ],
+            "/calibration/example_count": [
+              "integer"
+            ],
+            "/calibration/examples_sha256": [
+              "string"
+            ],
+            "/calibration/finished_at": [
+              "null",
+              "string"
+            ],
+            "/calibration/id": [
+              "string"
+            ],
+            "/calibration/judge": [
+              "null",
+              "object"
+            ],
+            "/calibration/judge/kind": [
+              "string"
+            ],
+            "/calibration/judge/model": [
+              "string"
+            ],
+            "/calibration/judge/prompt_sha256": [
+              "string"
+            ],
+            "/calibration/judge/prompt_version": [
+              "string"
+            ],
+            "/calibration/judge/provider": [
+              "string"
+            ],
+            "/calibration/metrics": [
+              "null",
+              "object"
+            ],
+            "/calibration/metrics/accuracy": [
+              "number"
+            ],
+            "/calibration/metrics/agreed": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion": [
+              "object"
+            ],
+            "/calibration/metrics/confusion/false_fail": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion/false_pass": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion/true_fail": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion/true_pass": [
+              "integer"
+            ],
+            "/calibration/metrics/errors": [
+              "integer"
+            ],
+            "/calibration/metrics/examples": [
+              "integer"
+            ],
+            "/calibration/metrics/kappa": [
+              "null",
+              "number"
+            ],
+            "/calibration/organization_id": [
+              "string"
+            ],
+            "/calibration/project_id": [
+              "string"
+            ],
+            "/calibration/reason": [
+              "null",
+              "string"
+            ],
+            "/calibration/requested_by": [
+              "string"
+            ],
+            "/calibration/started_at": [
+              "null",
+              "string"
+            ],
+            "/calibration/status": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/reviews": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/items/[]/pending/[]/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "agent_name",
+              "baseline_version",
+              "candidate_version",
+              "classification",
+              "eval_run_id",
+              "finished_at",
+              "pending",
+              "position",
+              "project_id",
+              "scenario_name",
+              "severity"
+            ],
+            "/items/[]/pending/[]": [
+              "critical",
+              "expectation_id",
+              "reason",
+              "side",
+              "status"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent_name": [
+              "string"
+            ],
+            "/items/[]/baseline_version": [
+              "string"
+            ],
+            "/items/[]/candidate_version": [
+              "string"
+            ],
+            "/items/[]/classification": [
+              "string"
+            ],
+            "/items/[]/eval_run_id": [
+              "string"
+            ],
+            "/items/[]/finished_at": [
+              "string"
+            ],
+            "/items/[]/pending": [
+              "array"
+            ],
+            "/items/[]/pending/[]": [
+              "object"
+            ],
+            "/items/[]/pending/[]/critical": [
+              "boolean"
+            ],
+            "/items/[]/pending/[]/expectation_id": [
+              "string"
+            ],
+            "/items/[]/pending/[]/reason": [
+              "null",
+              "string"
+            ],
+            "/items/[]/pending/[]/side": [
+              "string"
+            ],
+            "/items/[]/pending/[]/status": [
+              "null",
+              "string"
+            ],
+            "/items/[]/position": [
+              "integer"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/scenario_name": [
+              "string"
+            ],
+            "/items/[]/severity": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
             ]
           }
         }
@@ -10838,6 +11918,813 @@
               "string"
             ],
             "/run/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/eval-runs/{eval_run_id}/cases/{scenario}/reviews": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:eval_run_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:scenario": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
+            "/status": [
+              "\"FAIL\"",
+              "\"PASS\""
+            ]
+          },
+          "required": {
+            "/": [
+              "expectation_id",
+              "note",
+              "side",
+              "status"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/expectation_id": [
+              "string"
+            ],
+            "/note": [
+              "string"
+            ],
+            "/side": [
+              "string"
+            ],
+            "/status": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {
+            "/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/previous_classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/review/side": [
+              "\"BASELINE\"",
+              "\"CANDIDATE\""
+            ],
+            "/review/status": [
+              "\"FAIL\"",
+              "\"PASS\""
+            ],
+            "/run/judge/calibrated": [
+              "\"false\"",
+              "\"true\""
+            ],
+            "/run/status": [
+              "\"CANCELLED\"",
+              "\"COMPLETED\"",
+              "\"EVALUATING\"",
+              "\"FAILED\"",
+              "\"PREPARING\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "classification",
+              "previous_classification",
+              "review",
+              "run"
+            ],
+            "/review": [
+              "created_at",
+              "eval_run_id",
+              "expectation_id",
+              "id",
+              "note",
+              "original_label",
+              "original_status",
+              "reviewer",
+              "scenario_name",
+              "side",
+              "status"
+            ],
+            "/run": [
+              "agent_name",
+              "attempts",
+              "baseline_run_id",
+              "baseline_version",
+              "budget",
+              "cancel_requested",
+              "candidate_run_id",
+              "candidate_version",
+              "case_count",
+              "counts",
+              "created_at",
+              "error",
+              "finished_at",
+              "id",
+              "judge",
+              "organization_id",
+              "pinning",
+              "project_id",
+              "release_id",
+              "requested_by",
+              "seed",
+              "selection",
+              "started_at",
+              "status",
+              "updated_at"
+            ],
+            "/run/budget": [
+              "calls",
+              "exhausted",
+              "max_calls",
+              "max_cost_usd",
+              "spent_usd",
+              "unknown_cost_calls"
+            ],
+            "/run/counts": [
+              "IMPROVED",
+              "INCOMPLETE",
+              "NEW_CRITICAL_FAILURE",
+              "REGRESSED",
+              "UNCHANGED"
+            ],
+            "/run/judge": [
+              "calibrated",
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/run/pinning": [
+              "baseline",
+              "candidate",
+              "cases",
+              "seed"
+            ],
+            "/run/pinning/cases/[]": [
+              "baseline_case_id",
+              "candidate_case_id",
+              "position",
+              "scenario_id",
+              "scenario_name",
+              "seed",
+              "severity",
+              "tenant"
+            ],
+            "/run/selection": [
+              "dataset",
+              "scenarios",
+              "tags"
+            ],
+            "/run/selection/dataset": [
+              "id",
+              "name",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/classification": [
+              "string"
+            ],
+            "/previous_classification": [
+              "string"
+            ],
+            "/review": [
+              "object"
+            ],
+            "/review/created_at": [
+              "string"
+            ],
+            "/review/eval_run_id": [
+              "string"
+            ],
+            "/review/expectation_id": [
+              "string"
+            ],
+            "/review/id": [
+              "string"
+            ],
+            "/review/note": [
+              "string"
+            ],
+            "/review/original_label": [
+              "null",
+              "string"
+            ],
+            "/review/original_status": [
+              "string"
+            ],
+            "/review/reviewer": [
+              "string"
+            ],
+            "/review/scenario_name": [
+              "string"
+            ],
+            "/review/side": [
+              "string"
+            ],
+            "/review/status": [
+              "string"
+            ],
+            "/run": [
+              "object"
+            ],
+            "/run/agent_name": [
+              "string"
+            ],
+            "/run/attempts": [
+              "integer"
+            ],
+            "/run/baseline_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/baseline_version": [
+              "string"
+            ],
+            "/run/budget": [
+              "null",
+              "object"
+            ],
+            "/run/budget/calls": [
+              "integer"
+            ],
+            "/run/budget/exhausted": [
+              "boolean"
+            ],
+            "/run/budget/max_calls": [
+              "integer"
+            ],
+            "/run/budget/max_cost_usd": [
+              "null",
+              "number"
+            ],
+            "/run/budget/spent_usd": [
+              "number"
+            ],
+            "/run/budget/unknown_cost_calls": [
+              "integer"
+            ],
+            "/run/cancel_requested": [
+              "boolean"
+            ],
+            "/run/candidate_run_id": [
+              "null",
+              "string"
+            ],
+            "/run/candidate_version": [
+              "string"
+            ],
+            "/run/case_count": [
+              "integer"
+            ],
+            "/run/counts": [
+              "object"
+            ],
+            "/run/counts/IMPROVED": [
+              "integer"
+            ],
+            "/run/counts/INCOMPLETE": [
+              "integer"
+            ],
+            "/run/counts/NEW_CRITICAL_FAILURE": [
+              "integer"
+            ],
+            "/run/counts/REGRESSED": [
+              "integer"
+            ],
+            "/run/counts/UNCHANGED": [
+              "integer"
+            ],
+            "/run/created_at": [
+              "string"
+            ],
+            "/run/error": [
+              "null",
+              "string"
+            ],
+            "/run/finished_at": [
+              "null",
+              "string"
+            ],
+            "/run/id": [
+              "string"
+            ],
+            "/run/judge": [
+              "null",
+              "object"
+            ],
+            "/run/judge/calibrated": [
+              "string"
+            ],
+            "/run/judge/kind": [
+              "string"
+            ],
+            "/run/judge/model": [
+              "string"
+            ],
+            "/run/judge/prompt_sha256": [
+              "string"
+            ],
+            "/run/judge/prompt_version": [
+              "string"
+            ],
+            "/run/judge/provider": [
+              "string"
+            ],
+            "/run/organization_id": [
+              "string"
+            ],
+            "/run/pinning": [
+              "null",
+              "object"
+            ],
+            "/run/pinning/baseline": [
+              "object"
+            ],
+            "/run/pinning/candidate": [
+              "object"
+            ],
+            "/run/pinning/cases": [
+              "array"
+            ],
+            "/run/pinning/cases/[]": [
+              "object"
+            ],
+            "/run/pinning/cases/[]/baseline_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/candidate_case_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/position": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/scenario_id": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/scenario_name": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/seed": [
+              "integer"
+            ],
+            "/run/pinning/cases/[]/severity": [
+              "string"
+            ],
+            "/run/pinning/cases/[]/tenant": [
+              "null",
+              "string"
+            ],
+            "/run/pinning/seed": [
+              "integer"
+            ],
+            "/run/project_id": [
+              "string"
+            ],
+            "/run/release_id": [
+              "null",
+              "string"
+            ],
+            "/run/requested_by": [
+              "string"
+            ],
+            "/run/seed": [
+              "integer",
+              "null"
+            ],
+            "/run/selection": [
+              "object"
+            ],
+            "/run/selection/dataset": [
+              "null",
+              "object"
+            ],
+            "/run/selection/dataset/id": [
+              "string"
+            ],
+            "/run/selection/dataset/name": [
+              "string"
+            ],
+            "/run/selection/dataset/version": [
+              "integer"
+            ],
+            "/run/selection/scenarios": [
+              "array",
+              "null"
+            ],
+            "/run/selection/scenarios/[]": [
+              "string"
+            ],
+            "/run/selection/tags": [
+              "array",
+              "null"
+            ],
+            "/run/selection/tags/[]": [
+              "string"
+            ],
+            "/run/started_at": [
+              "null",
+              "string"
+            ],
+            "/run/status": [
+              "string"
+            ],
+            "/run/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/judges/calibrations": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/criterion": [
+              "\"correctness\"",
+              "\"escalation_appropriateness\"",
+              "\"groundedness\"",
+              "\"intent_fidelity\"",
+              "\"policy_adherence\"",
+              "\"relevance\"",
+              "\"rubric\"",
+              "\"task_completion\""
+            ],
+            "/examples/[]/human_label": [
+              "\"fail\"",
+              "\"pass\""
+            ]
+          },
+          "required": {
+            "/": [
+              "criterion",
+              "examples",
+              "project_id"
+            ],
+            "/examples/[]": [
+              "answer",
+              "customer_message",
+              "human_label",
+              "id",
+              "rubric"
+            ],
+            "/examples/[]/tool_calls/[]": [
+              "ref",
+              "text"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/criterion": [
+              "string"
+            ],
+            "/examples": [
+              "array"
+            ],
+            "/examples/[]": [
+              "object"
+            ],
+            "/examples/[]/answer": [
+              "string"
+            ],
+            "/examples/[]/customer_message": [
+              "string"
+            ],
+            "/examples/[]/human_label": [
+              "string"
+            ],
+            "/examples/[]/id": [
+              "string"
+            ],
+            "/examples/[]/rubric": [
+              "string"
+            ],
+            "/examples/[]/tool_calls": [
+              "array"
+            ],
+            "/examples/[]/tool_calls/[]": [
+              "object"
+            ],
+            "/examples/[]/tool_calls/[]/ref": [
+              "string"
+            ],
+            "/examples/[]/tool_calls/[]/text": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "202": {
+          "enums": {
+            "/calibration/criterion": [
+              "\"correctness\"",
+              "\"escalation_appropriateness\"",
+              "\"groundedness\"",
+              "\"intent_fidelity\"",
+              "\"policy_adherence\"",
+              "\"relevance\"",
+              "\"rubric\"",
+              "\"task_completion\""
+            ],
+            "/calibration/disagreements/[]/human": [
+              "\"fail\"",
+              "\"pass\""
+            ],
+            "/calibration/disagreements/[]/judge": [
+              "\"fail\"",
+              "\"pass\"",
+              "null"
+            ],
+            "/calibration/status": [
+              "\"COMPLETED\"",
+              "\"FAILED\"",
+              "\"QUEUED\"",
+              "\"RUNNING\""
+            ]
+          },
+          "required": {
+            "/": [
+              "calibration"
+            ],
+            "/calibration": [
+              "calibrated",
+              "created_at",
+              "criterion",
+              "error",
+              "example_count",
+              "examples_sha256",
+              "finished_at",
+              "id",
+              "judge",
+              "metrics",
+              "organization_id",
+              "project_id",
+              "reason",
+              "requested_by",
+              "started_at",
+              "status"
+            ],
+            "/calibration/disagreements/[]": [
+              "human",
+              "id",
+              "judge"
+            ],
+            "/calibration/judge": [
+              "kind",
+              "model",
+              "prompt_sha256",
+              "prompt_version",
+              "provider"
+            ],
+            "/calibration/metrics": [
+              "accuracy",
+              "agreed",
+              "confusion",
+              "errors",
+              "examples",
+              "kappa"
+            ],
+            "/calibration/metrics/confusion": [
+              "false_fail",
+              "false_pass",
+              "true_fail",
+              "true_pass"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/calibration": [
+              "object"
+            ],
+            "/calibration/calibrated": [
+              "boolean",
+              "null"
+            ],
+            "/calibration/created_at": [
+              "string"
+            ],
+            "/calibration/criterion": [
+              "string"
+            ],
+            "/calibration/disagreements": [
+              "array"
+            ],
+            "/calibration/disagreements/[]": [
+              "object"
+            ],
+            "/calibration/disagreements/[]/error": [
+              "string"
+            ],
+            "/calibration/disagreements/[]/human": [
+              "string"
+            ],
+            "/calibration/disagreements/[]/id": [
+              "string"
+            ],
+            "/calibration/disagreements/[]/judge": [
+              "null",
+              "string"
+            ],
+            "/calibration/disagreements/[]/score": [
+              "number"
+            ],
+            "/calibration/error": [
+              "null",
+              "string"
+            ],
+            "/calibration/example_count": [
+              "integer"
+            ],
+            "/calibration/examples_sha256": [
+              "string"
+            ],
+            "/calibration/finished_at": [
+              "null",
+              "string"
+            ],
+            "/calibration/id": [
+              "string"
+            ],
+            "/calibration/judge": [
+              "null",
+              "object"
+            ],
+            "/calibration/judge/kind": [
+              "string"
+            ],
+            "/calibration/judge/model": [
+              "string"
+            ],
+            "/calibration/judge/prompt_sha256": [
+              "string"
+            ],
+            "/calibration/judge/prompt_version": [
+              "string"
+            ],
+            "/calibration/judge/provider": [
+              "string"
+            ],
+            "/calibration/metrics": [
+              "null",
+              "object"
+            ],
+            "/calibration/metrics/accuracy": [
+              "number"
+            ],
+            "/calibration/metrics/agreed": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion": [
+              "object"
+            ],
+            "/calibration/metrics/confusion/false_fail": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion/false_pass": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion/true_fail": [
+              "integer"
+            ],
+            "/calibration/metrics/confusion/true_pass": [
+              "integer"
+            ],
+            "/calibration/metrics/errors": [
+              "integer"
+            ],
+            "/calibration/metrics/examples": [
+              "integer"
+            ],
+            "/calibration/metrics/kappa": [
+              "null",
+              "number"
+            ],
+            "/calibration/organization_id": [
+              "string"
+            ],
+            "/calibration/project_id": [
+              "string"
+            ],
+            "/calibration/reason": [
+              "null",
+              "string"
+            ],
+            "/calibration/requested_by": [
+              "string"
+            ],
+            "/calibration/started_at": [
+              "null",
+              "string"
+            ],
+            "/calibration/status": [
               "string"
             ]
           }

@@ -14,7 +14,7 @@ from fastapi.routing import APIRoute
 from agenttwin_core.logx import get_logger
 from agenttwin_core.openapi_contract import Contract, contract_path
 from agenttwin_core.web import Health, build_app
-from agenttwin_evaluation.calibrations import JudgesAPI
+from agenttwin_evaluation.calibrations import CRITERION_NAMES, JudgesAPI
 from agenttwin_evaluation.clients import SimulationClient
 from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import FakeJudge
@@ -70,3 +70,9 @@ def test_the_public_api_uses_the_edge_credentials() -> None:
     for method, path, op in operations():
         assert path.startswith("/api/v1/"), f"{method} {path}: the evaluation service has only a public API"
         assert "security" not in op, f"{method} {path}: the public API uses the edge's credentials"
+
+
+def test_the_criteria_are_the_judges() -> None:
+    # The document's list is what clients may send and what a judge
+    # description returns; a criterion the judge learns must be documented.
+    assert DOC["components"]["schemas"]["Criterion"]["enum"] == list(CRITERION_NAMES)

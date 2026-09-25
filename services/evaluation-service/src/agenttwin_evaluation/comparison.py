@@ -42,6 +42,8 @@ from agenttwin_evaluation.trajectory import Step, align, first_divergence, state
 
 __all__ = [
     "CLASSIFICATIONS",
+    "DONE",
+    "EVALUATED",
     "METRICS",
     "CaseComparison",
     "Side",
@@ -58,6 +60,11 @@ CLASSIFICATIONS: tuple[Classification, ...] = (
     "INCOMPLETE",
 )
 DONE = frozenset({"PASSED", "FAILED"})
+# The statuses the simulation derives from a case's results alone (ERRORED
+# includes a critical expectation it skipped — a semantic one it leaves to
+# the judge): graded results change them. Any other status (CANCELLED, a case
+# not run) is not a verdict, and stays one no result can change.
+EVALUATED = DONE | {"ERRORED"}
 DEFAULT_ESCALATION_TOOLS = ("escalate_to_human",)
 
 # Per metric: which direction is better, and how large a change must be to
@@ -117,7 +124,7 @@ class Side:
     ) -> Side:
         """From the simulation contract's ``CaseDetail``. ``judged`` replaces
         the SKIPPED semantic results of the same expectation id, and the case
-        status is recomputed from the merged results for a finished case."""
+        status is recomputed from the merged results for an evaluated case."""
         case = detail["case"]
         results = [EvaluationResult.from_json(r) for r in case.get("results") or ()]
         by_id = {str(r.expectation.get("id")): r for r in judged}
@@ -125,7 +132,7 @@ class Side:
         merged.extend(by_id.values())
         status = str(case.get("status") or "MISSING")
         reason = case.get("reason")
-        if judged and status in DONE and merged:
+        if judged and status in EVALUATED and merged:
             verdict = case_verdict(merged)
             # A judge that could not evaluate leaves the case ERRORED, which
             # the comparison reports as INCOMPLETE rather than a pass.

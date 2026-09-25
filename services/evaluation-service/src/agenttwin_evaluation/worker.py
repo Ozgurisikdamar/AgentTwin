@@ -36,15 +36,17 @@ from agenttwin_core.events import Envelope, write_outbox
 from agenttwin_core.ids import new_id
 from agenttwin_core.jobs import JobStatus
 from agenttwin_core.logx import Log
+from agenttwin_evaluation.calibrations import run_calibration
 from agenttwin_evaluation.clients import PairRefused, SimulationClient, TraceClient, TraceUsage, UpstreamError
 from agenttwin_evaluation.common import PRODUCER
-from agenttwin_evaluation.comparison import DONE, CaseComparison, Side, compare_case, summarize
+from agenttwin_evaluation.comparison import EVALUATED, CaseComparison, Side, compare_case, summarize
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.judges import JudgeProvider, judge_identity
+from agenttwin_evaluation.reviewing import needs_review
 from agenttwin_evaluation.semantic import JudgeBudget, Judged, SemanticJudging
 from agenttwin_evaluation.store import SCHEMA, JudgmentCache, Row, Store
 
-__all__ = ["QUEUE", "EvalWorker", "judged_side"]
+__all__ = ["QUEUE", "EvalWorker", "judgeable", "judged_side"]
 
 QUEUE = "evaluation-service.events"
 FINAL = frozenset({"COMPLETED", "FAILED", "CANCELLED"})
@@ -56,6 +58,21 @@ class _LeaseLost(Exception):
 
 def _default_owner() -> str:
     return f"{socket.gethostname()}:{os.getpid()}:{new_id()[-8:]}"
+
+
+def judgeable(case: Mapping[str, Any]) -> bool:
+    """Whether the simulation evaluated this case, so its semantic
+    expectations are the judge's to grade: its verdict comes from its results
+    (PASSED, FAILED, or ERRORED — a skipped critical semantic expectation
+    alone makes it ERRORED) and the agent actually ran. When the agent could
+    not be run every expectation was skipped, and grading the reply it never
+    gave would turn an infrastructure problem into a verdict."""
+    if case.get("status") not in EVALUATED:
+        return False
+    return not any(
+        r.get("evaluator") == "simulation.agent_run" and r.get("status") == "ERROR"
+        for r in case.get("results") or ()
+    )
 
 
 async def judged_side(
@@ -70,7 +87,7 @@ async def judged_side(
     service."""
     case = detail.get("case") or {}
     judged: list[Judged] = []
-    if case.get("status") in DONE:
+    if judgeable(case):
         spec = ((detail.get("scenario") or {}).get("document") or {}).get("spec") or {}
         message = str((spec.get("input") or {}).get("message") or "")
         agent = case.get("agent_result") or {}
@@ -290,8 +307,6 @@ class EvalWorker:
         )
         limit = asyncio.Semaphore(self.cfg.fetch_concurrency)
 
-        from agenttwin_evaluation.reviews import needs_review
-
         async def one(pc: Mapping[str, Any]) -> tuple[CaseComparison, dict[str, Any]]:
             async with limit:
                 bd = await self.simulation.case(org, project, baseline_run, str(pc["baseline_case_id"]))
@@ -417,16 +432,37 @@ class EvalWorker:
         return out
 
     async def calibrate_next(self) -> str | None:
-        """Claims one queued judge calibration and runs it."""
-        from agenttwin_evaluation.calibrations import run_calibration
-
-        row = await self.store.claim_calibration(self.owner, max(self.cfg.lease_seconds, 600.0))
+        """Claims one queued judge calibration and runs it, keeping its lease
+        while the judge works (a calibration whose worker lost the lease on
+        every attempt fails first)."""
+        for gone in await self.store.fail_abandoned_calibrations(self.cfg.max_run_attempts):
+            self.log.warn("judge calibration abandoned", calibration_id=str(gone["id"]))
+        row = await self.store.claim_calibration(
+            self.owner, self.cfg.lease_seconds, self.cfg.max_run_attempts
+        )
         if row is None:
             return None
-        done = await run_calibration(self.store, self.judge, row, self.owner)
-        if done is not None:
-            self.log.info("judge calibrated", calibration_id=str(row["id"]), status=done["status"])
-        return str(row["id"])
+        calibration_id = str(row["id"])
+        renewing = asyncio.create_task(self._keep_calibration_lease(calibration_id))
+        try:
+            done = await run_calibration(self.store, self.judge, row, self.owner)
+        finally:
+            renewing.cancel()
+            with suppress(asyncio.CancelledError):
+                await renewing
+        if done is None:
+            self.log.warn("judge calibration lease lost; result discarded", calibration_id=calibration_id)
+        else:
+            self.log.info("judge calibrated", calibration_id=calibration_id, status=done["status"])
+        return calibration_id
+
+    async def _keep_calibration_lease(self, calibration_id: str) -> None:
+        while True:
+            await asyncio.sleep(max(0.05, self.cfg.lease_seconds / 3))
+            if not await self.store.renew_calibration_lease(
+                calibration_id, self.owner, self.cfg.lease_seconds
+            ):
+                return
 
     # ------------------------------------------------------------ loops
 

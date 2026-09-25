@@ -220,6 +220,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eval-runs/{eval_run_id}/cases/{scenario}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review one expectation of a compared case
+         * @description A person's verdict (`PASS`/`FAIL`, with a mandatory note) replaces the
+         *     evaluator's result for one expectation of one side; the case and the
+         *     run's summary are classified again. Only completed runs (`409
+         *     EVAL_RUN_NOT_COMPLETED`), and only expectations: the simulation's
+         *     finding about the run itself (`agentRun`) is not one (`409
+         *     EXPECTATION_NOT_REVIEWABLE`). Reviews are kept whole (the latest one for an
+         *     expectation counts) and announced to the audit log with the note as
+         *     the reason.
+         */
+        post: operations["reviewExpectation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The review queue
+         * @description Cases of completed runs with an expectation a person should look at —
+         *     the judge could not grade it (`ERROR`, `SKIPPED`), or graded a
+         *     critical one without being calibrated — that no one reviewed yet;
+         *     newest run first.
+         */
+        get: operations["listReviewQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/judges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The judge and its calibration
+         * @description The configured judge and, per criterion, its latest completed calibration in the project.
+         */
+        get: operations["describeJudge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/judges/calibrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List judge calibrations */
+        get: operations["listJudgeCalibrations"];
+        put?: never;
+        /**
+         * Calibrate the judge on labeled examples
+         * @description Queues a calibration (`202`): the judge grades every example and is
+         *     compared with the labels people gave. It is calibrated for the
+         *     criterion with at least 20 examples, 80% agreement and Cohen's kappa
+         *     0.6 (a judge error counts as a disagreement). Announced to the audit
+         *     log.
+         */
+        post: operations["startJudgeCalibration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/judges/calibrations/{calibration_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a judge calibration
+         * @description The calibration with its metrics and every disagreement.
+         */
+        get: operations["getJudgeCalibration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -723,11 +838,166 @@ export interface components {
                 baseline: components["schemas"]["ExpectationResult"][];
                 candidate: components["schemas"]["ExpectationResult"][];
             };
+            /** @description Expectations a person should look at (`BASELINE:<id>`, `CANDIDATE:<id>`). */
+            needs_review: string[];
+            /** @description Every review of this case, oldest first. */
+            reviews: components["schemas"]["HumanReview"][];
             verdicts: {
                 baseline: components["schemas"]["JudgedExpectation"][];
                 candidate: components["schemas"]["JudgedExpectation"][];
             };
             updated_at: components["schemas"]["Timestamp"];
+        };
+        ReviewRequest: {
+            /** @enum {string} */
+            side: "BASELINE" | "CANDIDATE";
+            expectation_id: string;
+            /** @enum {string} */
+            status: "PASS" | "FAIL";
+            /** @description Why — kept with the review and in the audit log. */
+            note: string;
+        };
+        HumanReview: {
+            id: components["schemas"]["Uuid"];
+            eval_run_id: components["schemas"]["Uuid"];
+            scenario_name: string;
+            /** @enum {string} */
+            side: "BASELINE" | "CANDIDATE";
+            expectation_id: string;
+            /** @description The result's status when it was reviewed. */
+            original_status: string;
+            original_label: string | null;
+            /** @enum {string} */
+            status: "PASS" | "FAIL";
+            note: string;
+            reviewer: string;
+            created_at: components["schemas"]["Timestamp"];
+        };
+        ReviewResponse: {
+            review: components["schemas"]["HumanReview"];
+            classification: components["schemas"]["Classification"];
+            previous_classification: components["schemas"]["Classification"];
+            run: components["schemas"]["EvalRun"];
+        };
+        ReviewQueuePage: {
+            items: {
+                eval_run_id: components["schemas"]["Uuid"];
+                position: number;
+                scenario_name: string;
+                severity: string;
+                classification: components["schemas"]["Classification"];
+                project_id: components["schemas"]["Uuid"];
+                agent_name: string;
+                baseline_version: string;
+                candidate_version: string;
+                finished_at: components["schemas"]["Timestamp"];
+                pending: {
+                    /** @enum {string} */
+                    side: "BASELINE" | "CANDIDATE";
+                    expectation_id: string;
+                    status: string | null;
+                    reason: string | null;
+                    critical: boolean;
+                }[];
+            }[];
+            next_cursor: string | null;
+        };
+        /**
+         * @description What the judge grades: a semantic expectation's `category` when it is
+         *     one of the fixed criteria, otherwise `rubric` (the expectation's own
+         *     rubric).
+         * @enum {string}
+         */
+        Criterion: "task_completion" | "intent_fidelity" | "relevance" | "correctness" | "groundedness" | "policy_adherence" | "escalation_appropriateness" | "rubric";
+        CalibrationRequest: {
+            project_id: components["schemas"]["Uuid"];
+            criterion: components["schemas"]["Criterion"];
+            examples: {
+                id: string;
+                rubric: string;
+                customer_message: string;
+                answer: string;
+                tool_calls?: {
+                    ref: string;
+                    text: string;
+                }[];
+                /** @enum {string} */
+                human_label: "pass" | "fail";
+            }[];
+        };
+        Calibration: {
+            id: components["schemas"]["Uuid"];
+            organization_id: components["schemas"]["Uuid"];
+            project_id: components["schemas"]["Uuid"];
+            criterion: components["schemas"]["Criterion"];
+            /** @enum {string} */
+            status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+            example_count: number;
+            examples_sha256: string;
+            judge: {
+                provider: string;
+                model: string;
+                kind: string;
+                prompt_version: string;
+                prompt_sha256: string;
+            } | null;
+            metrics: {
+                examples: number;
+                agreed: number;
+                accuracy: number;
+                /** @description Cohen's kappa; `null` when everyone gave every example the same label. */
+                kappa: number | null;
+                confusion: {
+                    true_pass: number;
+                    true_fail: number;
+                    false_pass: number;
+                    false_fail: number;
+                };
+                /** @description Examples the judge could not grade (counted as disagreements). */
+                errors: number;
+            } | null;
+            calibrated: boolean | null;
+            reason: string | null;
+            error: string | null;
+            requested_by: string;
+            created_at: components["schemas"]["Timestamp"];
+            started_at: components["schemas"]["Timestamp"] | null;
+            finished_at: components["schemas"]["Timestamp"] | null;
+            disagreements?: {
+                id: string;
+                /** @enum {string} */
+                human: "pass" | "fail";
+                /** @enum {string|null} */
+                judge: "pass" | "fail" | null;
+                score?: number;
+                error?: string;
+            }[];
+        };
+        CalibrationResponse: {
+            calibration: components["schemas"]["Calibration"];
+        };
+        CalibrationPage: {
+            items: components["schemas"]["Calibration"][];
+            next_cursor: string | null;
+        };
+        JudgeDescription: {
+            judge: {
+                provider: string;
+                model: string;
+                kind: string;
+                prompt_version: string;
+                prompt_sha256: string;
+            };
+            requirements: {
+                min_examples: number;
+                min_agreement: number;
+                min_kappa: number;
+            };
+            criteria: {
+                criterion: components["schemas"]["Criterion"];
+                calibrated: boolean;
+                calibration: components["schemas"]["Calibration"] | null;
+            }[];
         };
     };
     responses: {
@@ -832,6 +1102,19 @@ export interface components {
         };
         /** @description An unexpected error (`INTERNAL`); quote the `request_id`. */
         Internal: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /**
+         * @description The run is not completed (`EVAL_RUN_NOT_COMPLETED`); the result is the
+         *     simulation's finding about the run itself, not an expectation
+         *     (`EXPECTATION_NOT_REVIEWABLE`); or `IDEMPOTENCY_IN_PROGRESS`.
+         */
+        ReviewConflict: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1363,6 +1646,245 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["IdempotencyInProgress"];
             422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    reviewExpectation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                eval_run_id: components["parameters"]["EvalRunId"];
+                /** @description The scenario name of the case. */
+                scenario: components["parameters"]["ScenarioName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The review, and the case's classification after it. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["ReviewConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listReviewQueue: {
+        parameters: {
+            query?: {
+                /** @description Restricts the list to one project (default every project the caller can access). */
+                project_id?: components["parameters"]["ProjectFilter"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the queue. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueuePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    describeJudge: {
+        parameters: {
+            query: {
+                project_id: components["schemas"]["Uuid"];
+            };
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The judge. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JudgeDescription"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listJudgeCalibrations: {
+        parameters: {
+            query?: {
+                /** @description Restricts the list to one project (default every project the caller can access). */
+                project_id?: components["parameters"]["ProjectFilter"];
+                criterion?: components["schemas"]["Criterion"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of calibrations, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    startJudgeCalibration: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalibrationRequest"];
+            };
+        };
+        responses: {
+            /** @description The calibration, queued. */
+            202: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["IdempotencyInProgress"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getJudgeCalibration: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                calibration_id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The calibration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Internal"];
             502: components["responses"]["UpstreamUnavailable"];

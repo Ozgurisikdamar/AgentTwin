@@ -78,3 +78,29 @@ judge is calibrated is recorded with every semantic result.
 * Provider wire formats are tested by replaying their documented request and
   response shapes (`httpx.MockTransport`); a live provider is optional and
   only used when configured.
+
+## Addendum (2026-09-25): which calibration counts, and human review
+* **Which calibration counts.** Calibrations are kept per project and
+  criterion. The judge's verdicts on a criterion count as calibrated when the
+  *latest completed* calibration of that criterion measured *this* judge (same
+  provider, model and prompt hash) and met the thresholds. So a newer
+  calibration that falls short undoes an older one, and a calibration of
+  another model says nothing about this one. A calibration keeps a lease while
+  the judge works; one whose worker lost the lease on every attempt fails with
+  that reason instead of staying `RUNNING`.
+* **Which cases are judged.** A case is judged when the simulation evaluated
+  it — `PASSED`, `FAILED`, or `ERRORED` — and the agent actually ran. A
+  critical semantic expectation the simulation skipped makes the case
+  `ERRORED`; the judge is there to grade it, and the verdict is recomputed from
+  the merged results. When the agent could not be run (the `agentRun`
+  finding), nothing is judged: grading a reply the agent never gave would turn
+  an infrastructure problem into a verdict.
+* **Human review** (spec §16.5). A person's `PASS`/`FAIL`, with a mandatory
+  note, replaces one expectation's result on one side. The case and the run's
+  summary are then classified again from the stored snapshots, without the
+  simulation service. Reviews are append-only (the latest counts) and each is
+  audited. The simulation's `agentRun` finding is not an expectation and cannot
+  be overridden (`409 EXPECTATION_NOT_REVIEWABLE`). The review queue holds
+  semantic results the judge could not grade (`ERROR`, `SKIPPED`), and
+  critical ones it graded while uncalibrated for their criterion, until
+  someone reviews them.

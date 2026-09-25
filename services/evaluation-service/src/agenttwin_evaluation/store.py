@@ -627,17 +627,40 @@ class Store:
         )
         return {str(r["criterion"]): r for r in rows}
 
-    async def claim_calibration(self, owner: str, lease_s: float) -> Row | None:
+    async def claim_calibration(self, owner: str, lease_s: float, max_attempts: int) -> Row | None:
+        """A queued calibration, or one whose worker lost the lease and that
+        has attempts left."""
         return await self.one(
             """UPDATE judge_calibration SET status = 'RUNNING', lease_owner = %s,
                    lease_expires_at = now() + make_interval(secs => %s), attempts = attempts + 1,
                    started_at = COALESCE(started_at, now()), updated_at = now()
                WHERE id = (SELECT id FROM judge_calibration
                            WHERE status = 'QUEUED'
-                              OR (status = 'RUNNING' AND lease_expires_at < now() AND attempts < 3)
+                              OR (status = 'RUNNING' AND lease_expires_at < now() AND attempts < %s)
                            ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
                RETURNING *""",
-            (owner, lease_s),
+            (owner, lease_s, max_attempts),
+        )
+
+    async def renew_calibration_lease(self, calibration_id: str, owner: str, lease_s: float) -> bool:
+        row = await self.one(
+            """UPDATE judge_calibration SET lease_expires_at = now() + make_interval(secs => %s),
+                   updated_at = now()
+               WHERE id = %s AND lease_owner = %s AND status = 'RUNNING' RETURNING id""",
+            (lease_s, calibration_id, owner),
+        )
+        return row is not None
+
+    async def fail_abandoned_calibrations(self, max_attempts: int) -> list[Row]:
+        """Calibrations whose worker lost the lease on every attempt fail
+        (the others are claimed again)."""
+        return await self.all(
+            """UPDATE judge_calibration SET status = 'FAILED', lease_owner = NULL, lease_expires_at = NULL,
+                   error = 'Gave up after ' || attempts || ' attempts (the worker lost its lease each time).',
+                   finished_at = now(), updated_at = now()
+               WHERE status = 'RUNNING' AND lease_expires_at < now() AND attempts >= %s
+               RETURNING id""",
+            (max_attempts,),
         )
 
     async def finish_calibration(

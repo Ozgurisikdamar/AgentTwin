@@ -33,8 +33,8 @@ from agenttwin_evaluation.store import Row, Store, decode_cursor, encode_cursor
 
 __all__ = ["CRITERION_NAMES", "JudgesAPI", "calibration_json", "run_calibration"]
 
-CRITERION_NAMES = (*CRITERIA, "rubric")
-Criterion = Literal["task_completion", "intent_fidelity", "relevance", "rubric"]
+# Every criterion a judge grades; ``rubric`` (a scenario's own rubric) is one.
+CRITERION_NAMES = tuple(CRITERIA)
 
 
 class ToolEvidence(Strict):

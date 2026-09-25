@@ -44,8 +44,12 @@ __all__ = [
     "manifest",
     "outcome",
     "project",
+    "promoted_regression",
     "queued_case",
     "registered_version",
+    "regression",
+    "regression_detail",
+    "regression_draft",
     "release",
     "release_gate",
     "retrieval_step",
@@ -1129,6 +1133,123 @@ def case_detail(
     }
 
 
+def regression(**over: Any) -> dict[str, Any]:
+    """A mined regression group (evaluation API ``Regression``)."""
+    return {
+        "id": uuid(0xE001),
+        "organization_id": ORGANIZATION,
+        "project_id": PROJECT,
+        "agent": "support-refund-agent",
+        "title": "refund_payment took effect twice",
+        "status": "CANDIDATE",
+        "taxonomy": "DUPLICATE_SIDE_EFFECT",
+        "suggested_taxonomy": "DUPLICATE_SIDE_EFFECT",
+        "secondary": ["RETRY_SAFETY", "TIMEOUT"],
+        "severity": "critical",
+        "suggested_severity": "critical",
+        "severity_reason": "DUPLICATE_SIDE_EFFECT is critical",
+        "triaged_by": None,
+        "component": "refund_payment",
+        "assignee": None,
+        "tags": [],
+        "evidence": ["DUPLICATE_SIDE_EFFECT: refund_payment took effect more than once"],
+        "fingerprint": "a" * 32,
+        "representative_trace_id": "f" * 32,
+        "occurrence_count": 1,
+        "first_seen": NOW,
+        "last_seen": NOW,
+        "versions": ["1.3.0"],
+        "environments": ["production"],
+        "merged_into": None,
+        "scenario_id": None,
+        "scenario_name": None,
+        "dataset_id": None,
+        "dataset_version": None,
+        "promoted_by": None,
+        "promoted_at": None,
+        "fixed_version": None,
+        "fixed_eval_run_id": None,
+        "created_at": NOW,
+        "updated_at": NOW,
+    } | over
+
+
+def regression_detail(regression_: Mapping[str, Any]) -> dict[str, Any]:
+    """``getRegression``: the group, its one failure and its creation."""
+    occurrence = {
+        "trace_id": regression_["representative_trace_id"],
+        "agent_version": "1.3.0",
+        "environment": "production",
+        "started_at": NOW,
+        "title": regression_["title"],
+        "component": regression_["component"],
+        "taxonomy": regression_["suggested_taxonomy"],
+        "secondary": list(regression_["secondary"]),
+        "severity": regression_["suggested_severity"],
+        "severity_reason": "DUPLICATE_SIDE_EFFECT is critical",
+        "evidence": list(regression_["evidence"]),
+        "reasons": ["an irreversible write took effect more than once"],
+        "join_kind": "new",
+        "join_reason": "the first failure of its kind",
+        "similarity": None,
+        "created_at": NOW,
+    }
+    created = {
+        "seq": 1,
+        "action": "created",
+        "from_status": None,
+        "to_status": "CANDIDATE",
+        "actor": "system:regression-miner",
+        "reason": "the first failure of its kind",
+        "detail": {},
+        "at": NOW,
+    }
+    return {"regression": dict(regression_), "occurrences": [occurrence], "events": [created]}
+
+
+def regression_draft(regression_: Mapping[str, Any], *, problems: Sequence[str] = ()) -> dict[str, Any]:
+    """``draftRegressionScenario``: a scenario document and its YAML."""
+    name = "regression-refund-payment-took-effect-twice"
+    document = {
+        "apiVersion": "agenttwin.dev/v1",
+        "kind": "Scenario",
+        "metadata": {"name": name, "source": "production_regression"},
+        "spec": {"agent": regression_["agent"], "twin": "demo-co-support"},
+    }
+    return {
+        "regression_id": regression_["id"],
+        "trace_id": regression_["representative_trace_id"],
+        "draft": {
+            "document": document,
+            "yaml": f"apiVersion: agenttwin.dev/v1\nkind: Scenario\nmetadata:\n  name: {name}\n",
+            "notes": [],
+            "problems": list(problems),
+            "mappings": [],
+            "complete": not problems,
+        },
+    }
+
+
+def promoted_regression(regression_: Mapping[str, Any], **over: Any) -> dict[str, Any]:
+    """``promoteRegression``: the promoted group, its scenario and dataset."""
+    name = "regression-refund-payment-took-effect-twice"
+    promoted = dict(regression_) | {
+        "status": "PROMOTED",
+        "scenario_id": uuid(0xE101),
+        "scenario_name": name,
+        "dataset_id": uuid(0xE201),
+        "dataset_version": 1,
+        "promoted_by": ACTOR,
+        "promoted_at": NOW,
+    }
+    return {
+        "regression": promoted,
+        "scenario": {"id": uuid(0xE101), "name": name, "version": 1, "created": True, "warnings": []},
+        "dataset": {"id": uuid(0xE201), "name": "production-regressions", "version": 1},
+        "redacted": 0,
+    } | over
+
+
 def error(code: str, message: str, **details: Any) -> dict[str, Any]:
     body: dict[str, Any] = {"code": code, "message": message, "request_id": "0" * 32}
     if details:
@@ -1151,6 +1272,7 @@ _ROUTES: tuple[tuple[str, str], ...] = (
     ("/api/v1/eval-runs", "evaluation-service"),
     ("/api/v1/reviews", "evaluation-service"),
     ("/api/v1/judges", "evaluation-service"),
+    ("/api/v1/regressions", "evaluation-service"),
     ("/internal/v1", "control-plane"),
     ("/api/v1", "control-plane"),
 )

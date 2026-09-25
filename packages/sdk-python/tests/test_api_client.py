@@ -28,6 +28,7 @@ EVAL = fake.uuid(0xA003)
 DATASET = fake.uuid(0xA004)
 CHANGE_SET = fake.uuid(0xC101)
 RELEASE = fake.uuid(0xD101)
+REGRESSION = fake.uuid(0xE001)
 
 
 class Stub:
@@ -177,6 +178,32 @@ class Stub:
             if self.gate_polls < 2:
                 return 200, fake.release_gate(revision=revision)
             return 200, fake.release_gate("BLOCK", revision=revision)
+        return self.regressions(h, body)
+
+    def regressions(self, h: BaseHTTPRequestHandler, body: bytes) -> tuple[int, Any]:
+        base = f"/api/v1/regressions/{REGRESSION}"
+        group = fake.regression(id=REGRESSION)
+        if h.command == "GET" and h.path.startswith("/api/v1/regressions/candidates?"):
+            return 200, {"items": [group], "next_cursor": None}
+        if h.command == "GET" and h.path == base:
+            return 200, fake.regression_detail(group)
+        if h.command == "GET" and h.path == f"{base}/draft":
+            return 200, fake.regression_draft(group)
+        if h.command == "PATCH" and h.path == base:
+            changes = {k: v for k, v in json.loads(body).items() if k != "reason"}
+            return 200, {"regression": group | changes | {"triaged_by": "apikey:test"}}
+        if h.command == "POST" and h.path in (f"{base}/confirm", f"{base}/dismiss", f"{base}/reopen"):
+            req = json.loads(body)
+            if h.path.endswith(("dismiss", "reopen")) and not req.get("reason"):
+                return 400, fake.error("INVALID_REQUEST", "A reason is required.", field="reason")
+            status = {"confirm": "CONFIRMED", "dismiss": "DISMISSED", "reopen": "REOPENED"}
+            return 200, {"regression": group | {"status": status[h.path.rsplit("/", 1)[1]]}}
+        if h.command == "POST" and h.path == f"{base}/merge":
+            into = json.loads(body)["into"]
+            merged = group | {"merged_into": into, "occurrence_count": 0}
+            return 200, {"regression": fake.regression(id=into, occurrence_count=2), "merged": merged}
+        if h.command == "POST" and h.path == f"{base}/promote":
+            return 201, fake.promoted_regression(group)
         return 404, fake.error("NOT_FOUND", "Not found.")
 
 
@@ -194,7 +221,7 @@ def stub() -> Iterator[tuple[Stub, str]]:
             self.end_headers()
             self.wfile.write(raw)
 
-        do_GET = do_POST = _serve
+        do_GET = do_POST = do_PATCH = _serve
 
         def log_message(self, *args: Any) -> None:
             pass
@@ -533,6 +560,72 @@ def test_releases_and_their_gates(stub: tuple[Stub, str]) -> None:
     assert used <= state.checker.succeeded()
 
 
+def test_regressions_triage_and_promotion(stub: tuple[Stub, str]) -> None:
+    state, url = stub
+    client = Client(url, KEY)
+    inbox = client.regressions(
+        PROJECT, status=["CANDIDATE", "CONFIRMED"], severity=["critical"], agent="support-refund-agent"
+    )
+    assert [r["id"] for r in inbox] == [REGRESSION]
+    assert state.requests[-1]["path"] == (
+        f"/api/v1/regressions/candidates?project_id={PROJECT}&limit=200"
+        "&status=CANDIDATE%2CCONFIRMED&severity=critical&agent=support-refund-agent"
+    )
+    client.regressions(PROJECT, taxonomy="TIMEOUT", include_merged=True, limit=5)
+    assert state.requests[-1]["path"] == (
+        f"/api/v1/regressions/candidates?project_id={PROJECT}&limit=5&taxonomy=TIMEOUT&include_merged=true"
+    )
+    assert client.regression(REGRESSION)["occurrences"][0]["join_kind"] == "new"
+    assert client.regression_draft(REGRESSION)["draft"]["complete"] is True
+
+    triaged = client.triage_regression(REGRESSION, severity="high", assignee=None, reason="seen before")
+    assert triaged["regression"]["severity"] == "high"
+    sent = state.requests[-1]
+    assert (sent["method"], json.loads(sent["body"])) == (
+        "PATCH",
+        {"severity": "high", "assignee": None, "reason": "seen before"},
+    )
+    assert client.confirm_regression(REGRESSION)["regression"]["status"] == "CONFIRMED"
+    assert json.loads(state.requests[-1]["body"]) == {}
+    out = client.dismiss_regression(REGRESSION, "a test tenant", idempotency_key="dismiss-regression-1")
+    assert out["regression"]["status"] == "DISMISSED"
+    assert state.requests[-1]["headers"]["idempotency-key"] == "dismiss-regression-1"
+    assert json.loads(state.requests[-1]["body"]) == {"reason": "a test tenant"}
+    assert client.reopen_regression(REGRESSION, "back again")["regression"]["status"] == "REOPENED"
+    with pytest.raises(APIError) as e:
+        client.dismiss_regression(REGRESSION, "")
+    assert (e.value.status, e.value.code) == (400, "INVALID_REQUEST")
+
+    into = fake.uuid(0xE002)
+    merged = client.merge_regression(REGRESSION, into, reason="the same failure")
+    assert merged["merged"]["merged_into"] == into and merged["regression"]["occurrence_count"] == 2
+    assert json.loads(state.requests[-1]["body"]) == {"into": into, "reason": "the same failure"}
+
+    promoted = client.promote_regression(REGRESSION, reason="customers refunded twice")
+    assert promoted["regression"]["status"] == "PROMOTED"
+    assert promoted["dataset"]["name"] == "production-regressions"
+    assert json.loads(state.requests[-1]["body"]) == {"reason": "customers refunded twice"}
+    client.promote_regression(REGRESSION, yaml="kind: Scenario\n", idempotency_key="promote-regression-1")
+    assert json.loads(state.requests[-1]["body"]) == {"yaml": "kind: Scenario\n"}
+    doc = fake.regression_draft(fake.regression())["draft"]["document"]
+    client.promote_regression(REGRESSION, document=doc)
+    assert json.loads(state.requests[-1]["body"]) == {"document": doc}
+    with pytest.raises(ValueError, match="not both"):
+        client.promote_regression(REGRESSION, document=doc, yaml="kind: Scenario\n")
+    used = {
+        "listRegressions",
+        "getRegression",
+        "draftRegressionScenario",
+        "triageRegression",
+        "confirmRegression",
+        "dismissRegression",
+        "reopenRegression",
+        "mergeRegression",
+        "promoteRegression",
+    }
+    assert used <= state.checker.succeeded()
+
+
 @pytest.mark.parametrize(
     ("call", "violation"),
     [
@@ -568,7 +661,7 @@ def test_requests_the_service_would_reject_are_caught(call: Any, violation: str)
             self.end_headers()
             self.wfile.write(raw)
 
-        do_GET = do_POST = _serve
+        do_GET = do_POST = do_PATCH = _serve
 
         def log_message(self, *args: Any) -> None:
             pass

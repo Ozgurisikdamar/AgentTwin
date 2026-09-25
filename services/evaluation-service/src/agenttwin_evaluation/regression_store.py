@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from agenttwin_core.db import Conn, Pool, jsonb
+from agenttwin_evaluation.store import Cursor, Scope
 
 __all__ = ["MINER_ACTOR", "RegressionStore"]
 
@@ -352,6 +353,83 @@ class RegressionStore:
                    ORDER BY started_at DESC, trace_id LIMIT %s""",
                 (group_id, limit),
             )
+
+    # ------------------------------------------------------------ reading
+
+    async def get(self, group_id: str) -> Row | None:
+        async with self.pool.connection() as conn:
+            return await self.group(conn, group_id)
+
+    async def list_groups(
+        self,
+        scope: Scope,
+        *,
+        statuses: Sequence[str] = (),
+        severities: Sequence[str] = (),
+        taxonomy: str | None = None,
+        agent: str | None = None,
+        include_merged: bool = False,
+        after: Cursor | None = None,
+        limit: int = 50,
+    ) -> list[Row]:
+        """The inbox: most recently seen first."""
+        where, params = scope.clause()
+        clauses = [where]
+        if statuses:
+            clauses.append("status = ANY(%s)")
+            params.append(list(statuses))
+        if severities:
+            clauses.append("severity = ANY(%s)")
+            params.append(list(severities))
+        if taxonomy:
+            clauses.append("taxonomy = %s")
+            params.append(taxonomy)
+        if agent:
+            clauses.append("agent_name = %s")
+            params.append(agent)
+        if not include_merged:
+            clauses.append("merged_into IS NULL")
+        if after is not None:
+            clauses.append("(last_seen, id) < (%s::timestamptz, %s::uuid)")
+            params.extend([after.key, after.id])
+        query = (
+            "SELECT * FROM regression_group WHERE "  # noqa: S608 - fixed clauses
+            + " AND ".join(clauses)
+            + " ORDER BY last_seen DESC, id DESC LIMIT %s"
+        )
+        async with self.pool.connection() as conn:
+            return await self._all(conn, query, (*params, limit))
+
+    # ------------------------------------------------------------ people
+
+    async def update_group(self, conn: Conn, group_id: str, values: Mapping[str, Any]) -> Row:
+        sets = ["updated_at = now()"]
+        params: list[Any] = []
+        for key, value in values.items():
+            sets.append(f"{key} = %s")
+            params.append(value)
+        row = await self._one(
+            conn,
+            f"UPDATE regression_group SET {', '.join(sets)} WHERE id = %s RETURNING *",  # noqa: S608 - fixed keys
+            (*params, group_id),
+        )
+        assert row is not None  # noqa: S101 - the caller holds the locked row
+        return row
+
+    async def merge(self, conn: Conn, source_id: str, target_id: str) -> None:
+        """Moves the source group's failures and fingerprints to the target
+        and marks the source merged into it."""
+        await conn.execute(
+            "UPDATE regression_occurrence SET group_id = %s, updated_at = now() WHERE group_id = %s",
+            (target_id, source_id),
+        )
+        await conn.execute(
+            "UPDATE regression_fingerprint SET group_id = %s WHERE group_id = %s", (target_id, source_id)
+        )
+        await conn.execute(
+            "UPDATE regression_group SET merged_into = %s, updated_at = now() WHERE id = %s",
+            (target_id, source_id),
+        )
 
     # ------------------------------------------------------------ fixes
 

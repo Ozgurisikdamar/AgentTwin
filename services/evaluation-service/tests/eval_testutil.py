@@ -42,6 +42,7 @@ from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import FakeJudge, JudgeProvider
 from agenttwin_evaluation.miner import Miner
 from agenttwin_evaluation.regression_store import RegressionStore
+from agenttwin_evaluation.regressions import RegressionsAPI
 from agenttwin_evaluation.reviews import ReviewsAPI
 from agenttwin_evaluation.runs import EvalRunsAPI
 from agenttwin_evaluation.store import SCHEMA, Store
@@ -330,6 +331,9 @@ async def evaluation_stack(
         EvalRunsAPI(store=store, log=get_logger("api")).routes(app)
         ReviewsAPI(store=store, log=get_logger("api")).routes(app)
         JudgesAPI(store=store, judge=worker.judge, log=get_logger("api")).routes(app)
+        RegressionsAPI(
+            store=store, regressions=regressions, simulation=simulation, traces=traces, log=get_logger("api")
+        ).routes(app)
         try:
             async with (
                 serve_app(app) as base,

@@ -117,6 +117,10 @@ class _Client:
             raise UpstreamError(f"{what}: the answer is not JSON") from None
 
 
+class ScenarioRefused(PairRefused):
+    """The simulation service refused a scenario document."""
+
+
 class SimulationClient(_Client):
     audience = "simulation-service"
 
@@ -137,6 +141,45 @@ class SimulationClient(_Client):
             if not cursor:
                 return out
         raise UpstreamError("the scenario list did not end")
+
+    async def twin_document(self, org: str, project: str, name: str) -> dict[str, Any] | None:
+        """The latest document of the project's twin ``name`` (canary
+        secrets masked), or None."""
+        resp = await self._send("GET", org, project, "/api/v1/twins", params={"project_id": project})
+        if resp.status_code != 200:
+            raise UpstreamError(f"simulation service answered {resp.status_code} listing twins")
+        twin_id = next(
+            (t.get("id") for t in self._json(resp, "twin list").get("items") or [] if t.get("name") == name),
+            None,
+        )
+        if not twin_id:
+            return None
+        resp = await self._send("GET", org, project, f"/api/v1/twins/{quote(str(twin_id), safe='')}")
+        if resp.status_code == 404:
+            return None
+        if resp.status_code != 200:
+            raise UpstreamError(f"simulation service answered {resp.status_code} reading a twin")
+        document = self._json(resp, "twin").get("document")
+        return document if isinstance(document, dict) else None
+
+    async def create_scenario(self, org: str, project: str, document: Mapping[str, Any]) -> dict[str, Any]:
+        """Registers a scenario version (a document identical to the latest
+        version creates nothing and answers it). A refusal of the document
+        raises :class:`ScenarioRefused`."""
+        body = {"project_id": project, "document": dict(document)}
+        resp = await self._send("POST", org, project, "/api/v1/scenarios", body=body)
+        if resp.status_code in (200, 201):
+            out: dict[str, Any] = self._json(resp, "scenario")
+            return out
+        if resp.status_code in (400, 409, 413, 422):
+            error = (self._json(resp, "scenario refusal") or {}).get("error") or {}
+            raise ScenarioRefused(
+                resp.status_code,
+                str(error.get("code") or "SCENARIO_INVALID"),
+                str(error.get("message") or "The simulation service refused the scenario."),
+                error.get("details") if isinstance(error.get("details"), dict) else None,
+            )
+        raise UpstreamError(f"simulation service answered {resp.status_code} registering a scenario")
 
     async def start_pair(self, org: str, project: str, body: Mapping[str, Any]) -> dict[str, Any]:
         """Both runs of an evaluation (ADR-0023); a repeat answers the same pair."""

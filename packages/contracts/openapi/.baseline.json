@@ -21884,6 +21884,1091 @@
         }
       }
     },
+    "GET /api/v1/regressions/candidates": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:agent": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:include_merged": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"false\"",
+                "\"true\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:severity": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:status": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:taxonomy": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"AUTHORIZATION\"",
+                "\"COST_BUDGET\"",
+                "\"DATA_LEAKAGE\"",
+                "\"DUPLICATE_SIDE_EFFECT\"",
+                "\"HALLUCINATED_SUCCESS\"",
+                "\"INCORRECT_ESCALATION\"",
+                "\"LATENCY\"",
+                "\"LOOP\"",
+                "\"MISSING_APPROVAL\"",
+                "\"MISSING_TOOL\"",
+                "\"POLICY_VIOLATION\"",
+                "\"PROMPT_INJECTION\"",
+                "\"RETRIEVAL_FAILURE\"",
+                "\"RETRY_SAFETY\"",
+                "\"STALE_CONTEXT\"",
+                "\"STATE_MISMATCH\"",
+                "\"TIMEOUT\"",
+                "\"TOOL_ERROR_HANDLING\"",
+                "\"UNKNOWN\"",
+                "\"WRONG_ARGUMENT\"",
+                "\"WRONG_TOOL\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/items/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/items/[]/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/items/[]/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/items/[]/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/items/[]/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent": [
+              "string"
+            ],
+            "/items/[]/assignee": [
+              "null",
+              "string"
+            ],
+            "/items/[]/component": [
+              "null",
+              "string"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/items/[]/environments": [
+              "array"
+            ],
+            "/items/[]/environments/[]": [
+              "string"
+            ],
+            "/items/[]/evidence": [
+              "array"
+            ],
+            "/items/[]/evidence/[]": [
+              "string"
+            ],
+            "/items/[]/fingerprint": [
+              "string"
+            ],
+            "/items/[]/first_seen": [
+              "string"
+            ],
+            "/items/[]/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/last_seen": [
+              "string"
+            ],
+            "/items/[]/merged_into": [
+              "null",
+              "string"
+            ],
+            "/items/[]/occurrence_count": [
+              "integer"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/items/[]/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/items/[]/representative_trace_id": [
+              "string"
+            ],
+            "/items/[]/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/items/[]/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/items/[]/secondary": [
+              "array"
+            ],
+            "/items/[]/secondary/[]": [
+              "string"
+            ],
+            "/items/[]/severity": [
+              "string"
+            ],
+            "/items/[]/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/items/[]/status": [
+              "string"
+            ],
+            "/items/[]/suggested_severity": [
+              "string"
+            ],
+            "/items/[]/suggested_taxonomy": [
+              "string"
+            ],
+            "/items/[]/tags": [
+              "array"
+            ],
+            "/items/[]/tags/[]": [
+              "string"
+            ],
+            "/items/[]/taxonomy": [
+              "string"
+            ],
+            "/items/[]/title": [
+              "string"
+            ],
+            "/items/[]/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/items/[]/versions": [
+              "array"
+            ],
+            "/items/[]/versions/[]": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/regressions/{regression_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/events/[]/action": [
+              "\"assign\"",
+              "\"confirm\"",
+              "\"created\"",
+              "\"dismiss\"",
+              "\"fixed\"",
+              "\"merge\"",
+              "\"merged\"",
+              "\"promote\"",
+              "\"reopen\"",
+              "\"triage\""
+            ],
+            "/events/[]/from_status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/events/[]/to_status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/occurrences/[]/join_kind": [
+              "\"exact\"",
+              "\"new\"",
+              "\"similar\""
+            ],
+            "/occurrences/[]/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/occurrences/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/occurrences/[]/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/regression/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "events",
+              "occurrences",
+              "regression"
+            ],
+            "/events/[]": [
+              "action",
+              "actor",
+              "at",
+              "detail",
+              "from_status",
+              "reason",
+              "seq",
+              "to_status"
+            ],
+            "/occurrences/[]": [
+              "agent_version",
+              "component",
+              "created_at",
+              "environment",
+              "evidence",
+              "join_kind",
+              "join_reason",
+              "reasons",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "similarity",
+              "started_at",
+              "taxonomy",
+              "title",
+              "trace_id"
+            ],
+            "/regression": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/events": [
+              "array"
+            ],
+            "/events/[]": [
+              "object"
+            ],
+            "/events/[]/action": [
+              "string"
+            ],
+            "/events/[]/actor": [
+              "string"
+            ],
+            "/events/[]/at": [
+              "string"
+            ],
+            "/events/[]/detail": [
+              "object"
+            ],
+            "/events/[]/from_status": [
+              "null",
+              "string"
+            ],
+            "/events/[]/reason": [
+              "null",
+              "string"
+            ],
+            "/events/[]/seq": [
+              "integer"
+            ],
+            "/events/[]/to_status": [
+              "null",
+              "string"
+            ],
+            "/occurrences": [
+              "array"
+            ],
+            "/occurrences/[]": [
+              "object"
+            ],
+            "/occurrences/[]/agent_version": [
+              "null",
+              "string"
+            ],
+            "/occurrences/[]/component": [
+              "null",
+              "string"
+            ],
+            "/occurrences/[]/created_at": [
+              "string"
+            ],
+            "/occurrences/[]/environment": [
+              "null",
+              "string"
+            ],
+            "/occurrences/[]/evidence": [
+              "array"
+            ],
+            "/occurrences/[]/evidence/[]": [
+              "string"
+            ],
+            "/occurrences/[]/join_kind": [
+              "string"
+            ],
+            "/occurrences/[]/join_reason": [
+              "string"
+            ],
+            "/occurrences/[]/reasons": [
+              "array"
+            ],
+            "/occurrences/[]/reasons/[]": [
+              "string"
+            ],
+            "/occurrences/[]/secondary": [
+              "array"
+            ],
+            "/occurrences/[]/secondary/[]": [
+              "string"
+            ],
+            "/occurrences/[]/severity": [
+              "string"
+            ],
+            "/occurrences/[]/severity_reason": [
+              "string"
+            ],
+            "/occurrences/[]/similarity": [
+              "null",
+              "number"
+            ],
+            "/occurrences/[]/started_at": [
+              "string"
+            ],
+            "/occurrences/[]/taxonomy": [
+              "string"
+            ],
+            "/occurrences/[]/title": [
+              "string"
+            ],
+            "/occurrences/[]/trace_id": [
+              "string"
+            ],
+            "/regression": [
+              "object"
+            ],
+            "/regression/agent": [
+              "string"
+            ],
+            "/regression/assignee": [
+              "null",
+              "string"
+            ],
+            "/regression/component": [
+              "null",
+              "string"
+            ],
+            "/regression/created_at": [
+              "string"
+            ],
+            "/regression/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/regression/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/regression/environments": [
+              "array"
+            ],
+            "/regression/environments/[]": [
+              "string"
+            ],
+            "/regression/evidence": [
+              "array"
+            ],
+            "/regression/evidence/[]": [
+              "string"
+            ],
+            "/regression/fingerprint": [
+              "string"
+            ],
+            "/regression/first_seen": [
+              "string"
+            ],
+            "/regression/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/regression/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/regression/id": [
+              "string"
+            ],
+            "/regression/last_seen": [
+              "string"
+            ],
+            "/regression/merged_into": [
+              "null",
+              "string"
+            ],
+            "/regression/occurrence_count": [
+              "integer"
+            ],
+            "/regression/organization_id": [
+              "string"
+            ],
+            "/regression/project_id": [
+              "string"
+            ],
+            "/regression/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/regression/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/regression/representative_trace_id": [
+              "string"
+            ],
+            "/regression/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/regression/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/regression/secondary": [
+              "array"
+            ],
+            "/regression/secondary/[]": [
+              "string"
+            ],
+            "/regression/severity": [
+              "string"
+            ],
+            "/regression/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/regression/status": [
+              "string"
+            ],
+            "/regression/suggested_severity": [
+              "string"
+            ],
+            "/regression/suggested_taxonomy": [
+              "string"
+            ],
+            "/regression/tags": [
+              "array"
+            ],
+            "/regression/tags/[]": [
+              "string"
+            ],
+            "/regression/taxonomy": [
+              "string"
+            ],
+            "/regression/title": [
+              "string"
+            ],
+            "/regression/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/regression/updated_at": [
+              "string"
+            ],
+            "/regression/versions": [
+              "array"
+            ],
+            "/regression/versions/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/regressions/{regression_id}/draft": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "draft",
+              "regression_id",
+              "trace_id"
+            ],
+            "/draft": [
+              "complete",
+              "document",
+              "mappings",
+              "notes",
+              "problems",
+              "yaml"
+            ],
+            "/draft/mappings/[]": [
+              "added",
+              "agreeing",
+              "collection",
+              "differing",
+              "reason",
+              "source_id",
+              "target_id"
+            ],
+            "/draft/mappings/[]/differing/[]": [
+              "field",
+              "observed",
+              "twin"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/draft": [
+              "object"
+            ],
+            "/draft/complete": [
+              "boolean"
+            ],
+            "/draft/document": [
+              "object"
+            ],
+            "/draft/mappings": [
+              "array"
+            ],
+            "/draft/mappings/[]": [
+              "object"
+            ],
+            "/draft/mappings/[]/added": [
+              "boolean"
+            ],
+            "/draft/mappings/[]/agreeing": [
+              "array"
+            ],
+            "/draft/mappings/[]/agreeing/[]": [
+              "string"
+            ],
+            "/draft/mappings/[]/collection": [
+              "string"
+            ],
+            "/draft/mappings/[]/differing": [
+              "array"
+            ],
+            "/draft/mappings/[]/differing/[]": [
+              "object"
+            ],
+            "/draft/mappings/[]/differing/[]/field": [
+              "string"
+            ],
+            "/draft/mappings/[]/reason": [
+              "string"
+            ],
+            "/draft/mappings/[]/source_id": [
+              "string"
+            ],
+            "/draft/mappings/[]/target_id": [
+              "null",
+              "string"
+            ],
+            "/draft/notes": [
+              "array"
+            ],
+            "/draft/notes/[]": [
+              "string"
+            ],
+            "/draft/problems": [
+              "array"
+            ],
+            "/draft/problems/[]": [
+              "string"
+            ],
+            "/draft/yaml": [
+              "string"
+            ],
+            "/regression_id": [
+              "string"
+            ],
+            "/trace_id": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
     "GET /api/v1/reviews": {
       "parameters": {
         "header:x-agenttwin-org": {
@@ -22042,6 +23127,386 @@
             ],
             "/next_cursor": [
               "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "PATCH /api/v1/regressions/{regression_id}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/assignee": [
+              "null",
+              "string"
+            ],
+            "/reason": [
+              "null",
+              "string"
+            ],
+            "/severity": [
+              "string"
+            ],
+            "/tags": [
+              "array"
+            ],
+            "/tags/[]": [
+              "string"
+            ],
+            "/taxonomy": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/regression/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/regression/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "regression"
+            ],
+            "/regression": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/regression": [
+              "object"
+            ],
+            "/regression/agent": [
+              "string"
+            ],
+            "/regression/assignee": [
+              "null",
+              "string"
+            ],
+            "/regression/component": [
+              "null",
+              "string"
+            ],
+            "/regression/created_at": [
+              "string"
+            ],
+            "/regression/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/regression/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/regression/environments": [
+              "array"
+            ],
+            "/regression/environments/[]": [
+              "string"
+            ],
+            "/regression/evidence": [
+              "array"
+            ],
+            "/regression/evidence/[]": [
+              "string"
+            ],
+            "/regression/fingerprint": [
+              "string"
+            ],
+            "/regression/first_seen": [
+              "string"
+            ],
+            "/regression/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/regression/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/regression/id": [
+              "string"
+            ],
+            "/regression/last_seen": [
+              "string"
+            ],
+            "/regression/merged_into": [
+              "null",
+              "string"
+            ],
+            "/regression/occurrence_count": [
+              "integer"
+            ],
+            "/regression/organization_id": [
+              "string"
+            ],
+            "/regression/project_id": [
+              "string"
+            ],
+            "/regression/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/regression/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/regression/representative_trace_id": [
+              "string"
+            ],
+            "/regression/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/regression/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/regression/secondary": [
+              "array"
+            ],
+            "/regression/secondary/[]": [
+              "string"
+            ],
+            "/regression/severity": [
+              "string"
+            ],
+            "/regression/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/regression/status": [
+              "string"
+            ],
+            "/regression/suggested_severity": [
+              "string"
+            ],
+            "/regression/suggested_taxonomy": [
+              "string"
+            ],
+            "/regression/tags": [
+              "array"
+            ],
+            "/regression/tags/[]": [
+              "string"
+            ],
+            "/regression/taxonomy": [
+              "string"
+            ],
+            "/regression/title": [
+              "string"
+            ],
+            "/regression/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/regression/updated_at": [
+              "string"
+            ],
+            "/regression/versions": [
+              "array"
+            ],
+            "/regression/versions/[]": [
               "string"
             ]
           }
@@ -25037,6 +26502,2005 @@
               "string"
             ],
             "/calibration/status": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/regressions/{regression_id}/confirm": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/reason": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/regression/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/regression/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "regression"
+            ],
+            "/regression": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/regression": [
+              "object"
+            ],
+            "/regression/agent": [
+              "string"
+            ],
+            "/regression/assignee": [
+              "null",
+              "string"
+            ],
+            "/regression/component": [
+              "null",
+              "string"
+            ],
+            "/regression/created_at": [
+              "string"
+            ],
+            "/regression/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/regression/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/regression/environments": [
+              "array"
+            ],
+            "/regression/environments/[]": [
+              "string"
+            ],
+            "/regression/evidence": [
+              "array"
+            ],
+            "/regression/evidence/[]": [
+              "string"
+            ],
+            "/regression/fingerprint": [
+              "string"
+            ],
+            "/regression/first_seen": [
+              "string"
+            ],
+            "/regression/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/regression/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/regression/id": [
+              "string"
+            ],
+            "/regression/last_seen": [
+              "string"
+            ],
+            "/regression/merged_into": [
+              "null",
+              "string"
+            ],
+            "/regression/occurrence_count": [
+              "integer"
+            ],
+            "/regression/organization_id": [
+              "string"
+            ],
+            "/regression/project_id": [
+              "string"
+            ],
+            "/regression/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/regression/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/regression/representative_trace_id": [
+              "string"
+            ],
+            "/regression/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/regression/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/regression/secondary": [
+              "array"
+            ],
+            "/regression/secondary/[]": [
+              "string"
+            ],
+            "/regression/severity": [
+              "string"
+            ],
+            "/regression/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/regression/status": [
+              "string"
+            ],
+            "/regression/suggested_severity": [
+              "string"
+            ],
+            "/regression/suggested_taxonomy": [
+              "string"
+            ],
+            "/regression/tags": [
+              "array"
+            ],
+            "/regression/tags/[]": [
+              "string"
+            ],
+            "/regression/taxonomy": [
+              "string"
+            ],
+            "/regression/title": [
+              "string"
+            ],
+            "/regression/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/regression/updated_at": [
+              "string"
+            ],
+            "/regression/versions": [
+              "array"
+            ],
+            "/regression/versions/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/regressions/{regression_id}/dismiss": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/reason": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/regression/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/regression/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "regression"
+            ],
+            "/regression": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/regression": [
+              "object"
+            ],
+            "/regression/agent": [
+              "string"
+            ],
+            "/regression/assignee": [
+              "null",
+              "string"
+            ],
+            "/regression/component": [
+              "null",
+              "string"
+            ],
+            "/regression/created_at": [
+              "string"
+            ],
+            "/regression/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/regression/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/regression/environments": [
+              "array"
+            ],
+            "/regression/environments/[]": [
+              "string"
+            ],
+            "/regression/evidence": [
+              "array"
+            ],
+            "/regression/evidence/[]": [
+              "string"
+            ],
+            "/regression/fingerprint": [
+              "string"
+            ],
+            "/regression/first_seen": [
+              "string"
+            ],
+            "/regression/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/regression/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/regression/id": [
+              "string"
+            ],
+            "/regression/last_seen": [
+              "string"
+            ],
+            "/regression/merged_into": [
+              "null",
+              "string"
+            ],
+            "/regression/occurrence_count": [
+              "integer"
+            ],
+            "/regression/organization_id": [
+              "string"
+            ],
+            "/regression/project_id": [
+              "string"
+            ],
+            "/regression/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/regression/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/regression/representative_trace_id": [
+              "string"
+            ],
+            "/regression/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/regression/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/regression/secondary": [
+              "array"
+            ],
+            "/regression/secondary/[]": [
+              "string"
+            ],
+            "/regression/severity": [
+              "string"
+            ],
+            "/regression/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/regression/status": [
+              "string"
+            ],
+            "/regression/suggested_severity": [
+              "string"
+            ],
+            "/regression/suggested_taxonomy": [
+              "string"
+            ],
+            "/regression/tags": [
+              "array"
+            ],
+            "/regression/tags/[]": [
+              "string"
+            ],
+            "/regression/taxonomy": [
+              "string"
+            ],
+            "/regression/title": [
+              "string"
+            ],
+            "/regression/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/regression/updated_at": [
+              "string"
+            ],
+            "/regression/versions": [
+              "array"
+            ],
+            "/regression/versions/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/regressions/{regression_id}/merge": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "into"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/into": [
+              "string"
+            ],
+            "/reason": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/merged/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/merged/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/merged/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/merged/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/merged/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/merged/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/regression/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "merged",
+              "regression"
+            ],
+            "/merged": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ],
+            "/regression": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/merged": [
+              "object"
+            ],
+            "/merged/agent": [
+              "string"
+            ],
+            "/merged/assignee": [
+              "null",
+              "string"
+            ],
+            "/merged/component": [
+              "null",
+              "string"
+            ],
+            "/merged/created_at": [
+              "string"
+            ],
+            "/merged/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/merged/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/merged/environments": [
+              "array"
+            ],
+            "/merged/environments/[]": [
+              "string"
+            ],
+            "/merged/evidence": [
+              "array"
+            ],
+            "/merged/evidence/[]": [
+              "string"
+            ],
+            "/merged/fingerprint": [
+              "string"
+            ],
+            "/merged/first_seen": [
+              "string"
+            ],
+            "/merged/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/merged/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/merged/id": [
+              "string"
+            ],
+            "/merged/last_seen": [
+              "string"
+            ],
+            "/merged/merged_into": [
+              "null",
+              "string"
+            ],
+            "/merged/occurrence_count": [
+              "integer"
+            ],
+            "/merged/organization_id": [
+              "string"
+            ],
+            "/merged/project_id": [
+              "string"
+            ],
+            "/merged/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/merged/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/merged/representative_trace_id": [
+              "string"
+            ],
+            "/merged/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/merged/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/merged/secondary": [
+              "array"
+            ],
+            "/merged/secondary/[]": [
+              "string"
+            ],
+            "/merged/severity": [
+              "string"
+            ],
+            "/merged/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/merged/status": [
+              "string"
+            ],
+            "/merged/suggested_severity": [
+              "string"
+            ],
+            "/merged/suggested_taxonomy": [
+              "string"
+            ],
+            "/merged/tags": [
+              "array"
+            ],
+            "/merged/tags/[]": [
+              "string"
+            ],
+            "/merged/taxonomy": [
+              "string"
+            ],
+            "/merged/title": [
+              "string"
+            ],
+            "/merged/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/merged/updated_at": [
+              "string"
+            ],
+            "/merged/versions": [
+              "array"
+            ],
+            "/merged/versions/[]": [
+              "string"
+            ],
+            "/regression": [
+              "object"
+            ],
+            "/regression/agent": [
+              "string"
+            ],
+            "/regression/assignee": [
+              "null",
+              "string"
+            ],
+            "/regression/component": [
+              "null",
+              "string"
+            ],
+            "/regression/created_at": [
+              "string"
+            ],
+            "/regression/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/regression/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/regression/environments": [
+              "array"
+            ],
+            "/regression/environments/[]": [
+              "string"
+            ],
+            "/regression/evidence": [
+              "array"
+            ],
+            "/regression/evidence/[]": [
+              "string"
+            ],
+            "/regression/fingerprint": [
+              "string"
+            ],
+            "/regression/first_seen": [
+              "string"
+            ],
+            "/regression/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/regression/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/regression/id": [
+              "string"
+            ],
+            "/regression/last_seen": [
+              "string"
+            ],
+            "/regression/merged_into": [
+              "null",
+              "string"
+            ],
+            "/regression/occurrence_count": [
+              "integer"
+            ],
+            "/regression/organization_id": [
+              "string"
+            ],
+            "/regression/project_id": [
+              "string"
+            ],
+            "/regression/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/regression/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/regression/representative_trace_id": [
+              "string"
+            ],
+            "/regression/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/regression/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/regression/secondary": [
+              "array"
+            ],
+            "/regression/secondary/[]": [
+              "string"
+            ],
+            "/regression/severity": [
+              "string"
+            ],
+            "/regression/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/regression/status": [
+              "string"
+            ],
+            "/regression/suggested_severity": [
+              "string"
+            ],
+            "/regression/suggested_taxonomy": [
+              "string"
+            ],
+            "/regression/tags": [
+              "array"
+            ],
+            "/regression/tags/[]": [
+              "string"
+            ],
+            "/regression/taxonomy": [
+              "string"
+            ],
+            "/regression/title": [
+              "string"
+            ],
+            "/regression/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/regression/updated_at": [
+              "string"
+            ],
+            "/regression/versions": [
+              "array"
+            ],
+            "/regression/versions/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/regressions/{regression_id}/promote": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/document": [
+              "null",
+              "object"
+            ],
+            "/reason": [
+              "null",
+              "string"
+            ],
+            "/yaml": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {
+            "/regression/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/regression/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "dataset",
+              "redacted",
+              "regression",
+              "scenario"
+            ],
+            "/dataset": [
+              "id",
+              "name",
+              "version"
+            ],
+            "/regression": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ],
+            "/scenario": [
+              "created",
+              "id",
+              "name",
+              "version",
+              "warnings"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/dataset": [
+              "object"
+            ],
+            "/dataset/id": [
+              "string"
+            ],
+            "/dataset/name": [
+              "string"
+            ],
+            "/dataset/version": [
+              "integer"
+            ],
+            "/redacted": [
+              "integer"
+            ],
+            "/regression": [
+              "object"
+            ],
+            "/regression/agent": [
+              "string"
+            ],
+            "/regression/assignee": [
+              "null",
+              "string"
+            ],
+            "/regression/component": [
+              "null",
+              "string"
+            ],
+            "/regression/created_at": [
+              "string"
+            ],
+            "/regression/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/regression/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/regression/environments": [
+              "array"
+            ],
+            "/regression/environments/[]": [
+              "string"
+            ],
+            "/regression/evidence": [
+              "array"
+            ],
+            "/regression/evidence/[]": [
+              "string"
+            ],
+            "/regression/fingerprint": [
+              "string"
+            ],
+            "/regression/first_seen": [
+              "string"
+            ],
+            "/regression/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/regression/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/regression/id": [
+              "string"
+            ],
+            "/regression/last_seen": [
+              "string"
+            ],
+            "/regression/merged_into": [
+              "null",
+              "string"
+            ],
+            "/regression/occurrence_count": [
+              "integer"
+            ],
+            "/regression/organization_id": [
+              "string"
+            ],
+            "/regression/project_id": [
+              "string"
+            ],
+            "/regression/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/regression/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/regression/representative_trace_id": [
+              "string"
+            ],
+            "/regression/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/regression/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/regression/secondary": [
+              "array"
+            ],
+            "/regression/secondary/[]": [
+              "string"
+            ],
+            "/regression/severity": [
+              "string"
+            ],
+            "/regression/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/regression/status": [
+              "string"
+            ],
+            "/regression/suggested_severity": [
+              "string"
+            ],
+            "/regression/suggested_taxonomy": [
+              "string"
+            ],
+            "/regression/tags": [
+              "array"
+            ],
+            "/regression/tags/[]": [
+              "string"
+            ],
+            "/regression/taxonomy": [
+              "string"
+            ],
+            "/regression/title": [
+              "string"
+            ],
+            "/regression/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/regression/updated_at": [
+              "string"
+            ],
+            "/regression/versions": [
+              "array"
+            ],
+            "/regression/versions/[]": [
+              "string"
+            ],
+            "/scenario": [
+              "object"
+            ],
+            "/scenario/created": [
+              "boolean"
+            ],
+            "/scenario/id": [
+              "string"
+            ],
+            "/scenario/name": [
+              "string"
+            ],
+            "/scenario/version": [
+              "integer"
+            ],
+            "/scenario/warnings": [
+              "array"
+            ],
+            "/scenario/warnings/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/regressions/{regression_id}/reopen": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:regression_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/reason": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/regression/secondary/[]": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/status": [
+              "\"CANDIDATE\"",
+              "\"CONFIRMED\"",
+              "\"DISMISSED\"",
+              "\"FIXED\"",
+              "\"PROMOTED\"",
+              "\"REOPENED\""
+            ],
+            "/regression/suggested_severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/regression/suggested_taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ],
+            "/regression/taxonomy": [
+              "\"AUTHORIZATION\"",
+              "\"COST_BUDGET\"",
+              "\"DATA_LEAKAGE\"",
+              "\"DUPLICATE_SIDE_EFFECT\"",
+              "\"HALLUCINATED_SUCCESS\"",
+              "\"INCORRECT_ESCALATION\"",
+              "\"LATENCY\"",
+              "\"LOOP\"",
+              "\"MISSING_APPROVAL\"",
+              "\"MISSING_TOOL\"",
+              "\"POLICY_VIOLATION\"",
+              "\"PROMPT_INJECTION\"",
+              "\"RETRIEVAL_FAILURE\"",
+              "\"RETRY_SAFETY\"",
+              "\"STALE_CONTEXT\"",
+              "\"STATE_MISMATCH\"",
+              "\"TIMEOUT\"",
+              "\"TOOL_ERROR_HANDLING\"",
+              "\"UNKNOWN\"",
+              "\"WRONG_ARGUMENT\"",
+              "\"WRONG_TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "regression"
+            ],
+            "/regression": [
+              "agent",
+              "assignee",
+              "component",
+              "created_at",
+              "dataset_id",
+              "dataset_version",
+              "environments",
+              "evidence",
+              "fingerprint",
+              "first_seen",
+              "fixed_eval_run_id",
+              "fixed_version",
+              "id",
+              "last_seen",
+              "merged_into",
+              "occurrence_count",
+              "organization_id",
+              "project_id",
+              "promoted_at",
+              "promoted_by",
+              "representative_trace_id",
+              "scenario_id",
+              "scenario_name",
+              "secondary",
+              "severity",
+              "severity_reason",
+              "status",
+              "suggested_severity",
+              "suggested_taxonomy",
+              "tags",
+              "taxonomy",
+              "title",
+              "triaged_by",
+              "updated_at",
+              "versions"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/regression": [
+              "object"
+            ],
+            "/regression/agent": [
+              "string"
+            ],
+            "/regression/assignee": [
+              "null",
+              "string"
+            ],
+            "/regression/component": [
+              "null",
+              "string"
+            ],
+            "/regression/created_at": [
+              "string"
+            ],
+            "/regression/dataset_id": [
+              "null",
+              "string"
+            ],
+            "/regression/dataset_version": [
+              "integer",
+              "null"
+            ],
+            "/regression/environments": [
+              "array"
+            ],
+            "/regression/environments/[]": [
+              "string"
+            ],
+            "/regression/evidence": [
+              "array"
+            ],
+            "/regression/evidence/[]": [
+              "string"
+            ],
+            "/regression/fingerprint": [
+              "string"
+            ],
+            "/regression/first_seen": [
+              "string"
+            ],
+            "/regression/fixed_eval_run_id": [
+              "null",
+              "string"
+            ],
+            "/regression/fixed_version": [
+              "null",
+              "string"
+            ],
+            "/regression/id": [
+              "string"
+            ],
+            "/regression/last_seen": [
+              "string"
+            ],
+            "/regression/merged_into": [
+              "null",
+              "string"
+            ],
+            "/regression/occurrence_count": [
+              "integer"
+            ],
+            "/regression/organization_id": [
+              "string"
+            ],
+            "/regression/project_id": [
+              "string"
+            ],
+            "/regression/promoted_at": [
+              "null",
+              "string"
+            ],
+            "/regression/promoted_by": [
+              "null",
+              "string"
+            ],
+            "/regression/representative_trace_id": [
+              "string"
+            ],
+            "/regression/scenario_id": [
+              "null",
+              "string"
+            ],
+            "/regression/scenario_name": [
+              "null",
+              "string"
+            ],
+            "/regression/secondary": [
+              "array"
+            ],
+            "/regression/secondary/[]": [
+              "string"
+            ],
+            "/regression/severity": [
+              "string"
+            ],
+            "/regression/severity_reason": [
+              "null",
+              "string"
+            ],
+            "/regression/status": [
+              "string"
+            ],
+            "/regression/suggested_severity": [
+              "string"
+            ],
+            "/regression/suggested_taxonomy": [
+              "string"
+            ],
+            "/regression/tags": [
+              "array"
+            ],
+            "/regression/tags/[]": [
+              "string"
+            ],
+            "/regression/taxonomy": [
+              "string"
+            ],
+            "/regression/title": [
+              "string"
+            ],
+            "/regression/triaged_by": [
+              "null",
+              "string"
+            ],
+            "/regression/updated_at": [
+              "string"
+            ],
+            "/regression/versions": [
+              "array"
+            ],
+            "/regression/versions/[]": [
               "string"
             ]
           }

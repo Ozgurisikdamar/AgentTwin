@@ -143,6 +143,12 @@ class Store:
         await self._insert_version(conn, dataset_id, int(row["latest_version"]), version)
         return row
 
+    async def dataset_named(self, conn: Conn, project_id: str, name: str) -> Row | None:
+        """A project's dataset by name, locked."""
+        return await self._one(
+            conn, "SELECT * FROM dataset WHERE project_id = %s AND name = %s FOR UPDATE", (project_id, name)
+        )
+
     async def get_dataset(self, dataset_id: str) -> Row | None:
         return await self.one("SELECT * FROM dataset WHERE id = %s", (dataset_id,))
 

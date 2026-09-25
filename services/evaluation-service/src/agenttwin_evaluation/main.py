@@ -1,10 +1,10 @@
 """evaluation-service entry point.
 
-``evaluation-service [serve]``  the API: datasets, evaluation runs, reviews
-                                and judge calibrations
-``evaluation-service worker``   prepares, waits for and evaluates runs
-                                (separable from the API: a slow judge never
-                                blocks it)
+``evaluation-service [serve]``  the API: datasets, evaluation runs, reviews,
+                                judge calibrations and regressions
+``evaluation-service worker``   prepares, waits for and evaluates runs and
+                                mines production failures (separable from the
+                                API: a slow judge never blocks it)
 ``evaluation-service migrate``  / ``healthcheck`` (see agenttwin_core.service)
 """
 
@@ -27,6 +27,7 @@ from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import build_judge
 from agenttwin_evaluation.miner import Miner
 from agenttwin_evaluation.regression_store import RegressionStore
+from agenttwin_evaluation.regressions import RegressionsAPI
 from agenttwin_evaluation.reviews import ReviewsAPI
 from agenttwin_evaluation.runs import EvalRunsAPI
 from agenttwin_evaluation.store import SCHEMA, Store
@@ -51,6 +52,7 @@ async def build_serve(rt: Runtime, cfg: Any) -> FastAPI:
     assert isinstance(cfg, EvaluationConfig)  # noqa: S101 - wired by SPEC
     store = Store(rt.pool)
     simulation = SimulationClient(cfg.simulation_service_url, rt.tokens)
+    traces = TraceClient(cfg.trace_service_url, rt.tokens)
     app = build_app(
         service=rt.metrics.service, version=VERSION, health=rt.health, tokens=rt.tokens, audience=NAME
     )
@@ -58,11 +60,15 @@ async def build_serve(rt: Runtime, cfg: Any) -> FastAPI:
     EvalRunsAPI(store=store, log=rt.log).routes(app)
     ReviewsAPI(store=store, log=rt.log).routes(app)
     JudgesAPI(store=store, judge=build_judge(cfg.judge), log=rt.log).routes(app)
+    RegressionsAPI(
+        store=store, regressions=RegressionStore(rt.pool), simulation=simulation, traces=traces, log=rt.log
+    ).routes(app)
     rt.start_relay(SCHEMA)
 
     async def close_clients() -> None:
         await rt.stop.wait()
         await simulation.close()
+        await traces.close()
 
     rt.spawn("clients", close_clients)
     return app

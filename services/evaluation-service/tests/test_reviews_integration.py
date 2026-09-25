@@ -18,6 +18,7 @@ from agenttwin_core.yamlsafe import load_yaml
 from agenttwin_evaluation.calibrations import CRITERION_NAMES
 from agenttwin_evaluation.judges import FakeJudge, JudgeRequest, JudgeVerdict
 from eval_testutil import ASSURANCE, ORG, PROJECT, Stack, evaluation_stack, evaluation_with_simulation
+from regression_testutil import mined
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
@@ -385,4 +386,18 @@ async def test_every_operation_answers_as_documented() -> None:
         await ev.ok("GET", f"/api/v1/judges/calibrations/{cal['calibration']['id']}")
         await ev.ok("GET", "/api/v1/judges", project_id=PROJECT)
         await ev.ok("POST", f"/api/v1/datasets/{dataset}/archive")
+        # Regressions (ADR-0032): mined failures, people's decisions, promotion.
+        dup, _ = await mined(ev, "duplicate-refund")
+        denied, _ = await mined(ev, "cross-tenant-denied")
+        handled, _ = await mined(ev, "timeout-handled")
+        regressions = "/api/v1/regressions"
+        await ev.ok("GET", f"{regressions}/candidates")
+        await ev.ok("GET", f"{regressions}/{dup}")
+        await ev.ok("GET", f"{regressions}/{dup}/draft")
+        await ev.ok("PATCH", f"{regressions}/{dup}", {"assignee": "user:alex", "tags": ["refunds"]})
+        await ev.ok("POST", f"{regressions}/{dup}/confirm", {})
+        await ev.ok("POST", f"{regressions}/{denied}/dismiss", {"reason": "a test tenant"})
+        await ev.ok("POST", f"{regressions}/{denied}/reopen", {"reason": "a customer after all"})
+        await ev.ok("POST", f"{regressions}/{handled}/merge", {"into": dup})
+        await ev.ok("POST", f"{regressions}/{dup}/promote", {}, status=201, as_=REVIEWER)
         assert ev.contract.uncovered() == []

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: AgentTwin evaluation API
   version: 1.0.0
-  summary: Datasets, evaluation runs, human reviews and judge calibration.
+  summary: Datasets, evaluation runs, human reviews, judge calibration and production regressions.
   description: |
     Curate versioned datasets of scenarios, evaluate a candidate agent
     version against its baseline on one pinned suite, review what the
@@ -40,6 +40,8 @@ tags:
     description: People's verdicts on what the evaluators decided (spec §16.5).
   - name: Judges
     description: The LLM judge and its calibration against human labels (spec §16.4).
+  - name: Regressions
+    description: Production failures mined into groups and promoted to regression tests (spec §18).
 security:
   - bearerAuth: []
   - apiKey: []
@@ -840,6 +842,460 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /api/v1/regressions/candidates:
+    get:
+      operationId: listRegressions
+      tags: [Regressions]
+      summary: The regression inbox
+      description: |
+        Production failures the miner grouped (ADR-0032): one entry per group
+        of failures with the same fingerprint or a similar one, most recently
+        seen first. Groups merged into another are hidden unless asked for.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - $ref: '#/components/parameters/RegressionStatusFilter'
+        - $ref: '#/components/parameters/SeverityFilter'
+        - $ref: '#/components/parameters/TaxonomyFilter'
+        - $ref: '#/components/parameters/AgentFilter'
+        - $ref: '#/components/parameters/IncludeMerged'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of the inbox.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/regressions/{regression_id}:
+    get:
+      operationId: getRegression
+      tags: [Regressions]
+      summary: Get a regression
+      description: |
+        The group, every failure in it (newest first, with why it is a
+        candidate and how it joined the group) and its history: creation,
+        triage, status changes, merges, promotion, fix.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      responses:
+        '200':
+          description: The regression.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    patch:
+      operationId: triageRegression
+      tags: [Regressions]
+      summary: Triage a regression
+      description: |
+        Changes the failure label, the severity, the tags or the assignee.
+        A label or severity a person set is kept from then on (the miner's
+        suggestion stays in `suggested_taxonomy` / `suggested_severity`).
+        Recorded in the group's history and announced to the audit log.
+        Needs `review.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriageRequest'
+      responses:
+        '200':
+          description: The regression after the change.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RegressionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/regressions/{regression_id}/draft:
+    get:
+      operationId: draftRegressionScenario
+      tags: [Regressions]
+      summary: Draft a scenario from a regression
+      description: |
+        The scenario the representative trace suggests, over the twin the
+        agent's scenarios use most: the input (redacted), the twin records the
+        trace's entities map to, the failure the trace met as a fault and the
+        expectations that would have caught it. `problems` names what only a
+        person can write (the draft is `complete` without any); `mappings`
+        says which production record each twin record stands for. Nothing is
+        saved.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      responses:
+        '200':
+          description: The draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RegressionConflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/regressions/{regression_id}/confirm:
+    post:
+      operationId: confirmRegression
+      tags: [Regressions]
+      summary: Confirm a regression
+      description: |
+        A person agrees the failure is real (`CANDIDATE` or `REOPENED` →
+        `CONFIRMED`). Recorded in the group's history and announced to the
+        audit log. Needs `review.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The regression after the change.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RegressionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/regressions/{regression_id}/dismiss:
+    post:
+      operationId: dismissRegression
+      tags: [Regressions]
+      summary: Dismiss a regression
+      description: |
+        Not a real failure, or not one worth a test (`CANDIDATE`, `CONFIRMED`
+        or `REOPENED` → `DISMISSED`); the reason is required. New failures of
+        its fingerprints still join it without reopening it. Needs
+        `review.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The regression after the change.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RegressionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/regressions/{regression_id}/reopen:
+    post:
+      operationId: reopenRegression
+      tags: [Regressions]
+      summary: Reopen a regression
+      description: |
+        A dismissed group was dismissed wrongly, or a fixed one is not fixed
+        (`DISMISSED` or `FIXED` → `REOPENED`); the reason is required. A new
+        failure at or after the fixed version reopens a fixed group by itself.
+        Needs `review.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The regression after the change.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RegressionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/regressions/{regression_id}/merge:
+    post:
+      operationId: mergeRegression
+      tags: [Regressions]
+      summary: Merge a regression into another
+      description: |
+        The same failure grouped twice: the group's failures and fingerprints
+        move to `into` (a group of the same project and agent), whose summary
+        is recomputed; the merged group keeps its history and is hidden from
+        the inbox. A group that became a test cannot be merged into another
+        (merge the others into it). Needs `review.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeRequest'
+      responses:
+        '200':
+          description: The group merged into, and the merged group.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RegressionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/regressions/{regression_id}/promote:
+    post:
+      operationId: promoteRegression
+      tags: [Regressions]
+      summary: Promote a regression to a regression test
+      description: |
+        Registers the scenario (the reviewed draft, or the given `document` /
+        `yaml`) in the simulation service and adds it to the project's
+        `production-regressions` dataset as a `production_regression` case, so
+        every future evaluation of the agent runs it. The document's source is
+        set to the representative trace, it is tagged `production-regression`,
+        marked reviewed and its input is redacted again. A retry after a
+        failure completes the promotion (the same document registers nothing
+        new). Needs `regression.promote` (owners, admins, reviewers).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/RegressionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoteRequest'
+      responses:
+        '201':
+          description: The promoted regression, its scenario and the dataset version it joined.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromoteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/RegressionConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -912,6 +1368,49 @@ components:
       description: The scenario name of the case.
       schema:
         $ref: '#/components/schemas/Name'
+    RegressionId:
+      name: regression_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    RegressionStatusFilter:
+      name: status
+      in: query
+      description: Only groups in these statuses (comma-separated).
+      schema:
+        type: string
+        maxLength: 200
+        example: CANDIDATE,CONFIRMED
+    SeverityFilter:
+      name: severity
+      in: query
+      description: Only groups of these severities (comma-separated).
+      schema:
+        type: string
+        maxLength: 100
+        example: critical,high
+    TaxonomyFilter:
+      name: taxonomy
+      in: query
+      description: Only groups with this failure label.
+      schema:
+        $ref: '#/components/schemas/FailureLabel'
+    AgentFilter:
+      name: agent
+      in: query
+      description: Only groups of this agent.
+      schema:
+        type: string
+        maxLength: 200
+    IncludeMerged:
+      name: include_merged
+      in: query
+      description: Also groups merged into another one.
+      schema:
+        type: string
+        enum: ['true', 'false']
+        default: 'false'
 
   headers:
     IdempotentReplayed:
@@ -1017,6 +1516,20 @@ components:
         A dependency is unavailable (`UNAVAILABLE`; e.g. the simulation service
         while checking scenario names), or the evaluation service is not
         configured on this control plane (`SERVICE_NOT_CONFIGURED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RegressionConflict:
+      description: |
+        The regression cannot do that now: `REGRESSION_TRANSITION_INVALID`
+        (not from its status; `details.status`, `details.action`),
+        `REGRESSION_MERGED` (it was merged into another; `details.merged_into`),
+        `REGRESSION_AGENT_MISMATCH` or `REGRESSION_HAS_TEST` (merge),
+        `REGRESSION_TRACE_GONE` (its trace is no longer kept: promote with a
+        document), `REGRESSION_DRAFT_INCOMPLETE` (the draft needs a person;
+        `details.problems`), `REGRESSION_DATASET_ARCHIVED`, `TOO_MANY_CASES`
+        or `IDEMPOTENCY_IN_PROGRESS`.
       content:
         application/json:
           schema:
@@ -2486,3 +2999,427 @@ components:
                 anyOf:
                   - $ref: '#/components/schemas/Calibration'
                   - type: 'null'
+
+    FailureLabel:
+      type: string
+      description: The failure taxonomy of spec §18.3 (`UNKNOWN` when no rule applies).
+      enum: [WRONG_TOOL, WRONG_ARGUMENT, MISSING_TOOL, TOOL_ERROR_HANDLING, DUPLICATE_SIDE_EFFECT,
+             RETRY_SAFETY, LOOP, TIMEOUT, COST_BUDGET, LATENCY, POLICY_VIOLATION, AUTHORIZATION,
+             PROMPT_INJECTION, DATA_LEAKAGE, STALE_CONTEXT, RETRIEVAL_FAILURE, HALLUCINATED_SUCCESS,
+             INCORRECT_ESCALATION, MISSING_APPROVAL, STATE_MISMATCH, UNKNOWN]
+    Severity:
+      type: string
+      enum: [critical, high, medium, low]
+    RegressionStatus:
+      type: string
+      enum: [CANDIDATE, CONFIRMED, PROMOTED, FIXED, DISMISSED, REOPENED]
+      description: |
+        `CANDIDATE` found by the miner; `CONFIRMED` a person agrees;
+        `PROMOTED` it has a regression test; `FIXED` a later version passes
+        the test; `DISMISSED` not a failure worth a test; `REOPENED` a
+        dismissed or fixed group is back.
+    Actor:
+      type: string
+      description: Who (`user:…`, `apikey:…`, `service:…`, `system:…`).
+    TraceId:
+      type: string
+      pattern: ^[a-f0-9]{32}$
+    Regression:
+      type: object
+      required: [id, organization_id, project_id, agent, title, status, taxonomy, suggested_taxonomy, secondary,
+                 severity, suggested_severity, severity_reason, triaged_by, component, assignee, tags, evidence,
+                 fingerprint, representative_trace_id, occurrence_count, first_seen, last_seen, versions,
+                 environments, merged_into, scenario_id, scenario_name, dataset_id, dataset_version, promoted_by,
+                 promoted_at, fixed_version, fixed_eval_run_id, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        agent:
+          type: string
+        title:
+          type: string
+          description: What went wrong, from the representative failure.
+        status:
+          $ref: '#/components/schemas/RegressionStatus'
+        taxonomy:
+          $ref: '#/components/schemas/FailureLabel'
+        suggested_taxonomy:
+          $ref: '#/components/schemas/FailureLabel'
+        secondary:
+          type: array
+          description: Other labels the representative failure matches.
+          items:
+            $ref: '#/components/schemas/FailureLabel'
+        severity:
+          $ref: '#/components/schemas/Severity'
+        suggested_severity:
+          $ref: '#/components/schemas/Severity'
+        severity_reason:
+          type: [string, 'null']
+          description: Why the severity (the rule, or who set it).
+        triaged_by:
+          oneOf:
+            - $ref: '#/components/schemas/Actor'
+            - type: 'null'
+          description: Who set the label or severity (`null`, the rules did).
+        component:
+          type: [string, 'null']
+          description: The component the failure points at (the failing tool).
+        assignee:
+          oneOf:
+            - $ref: '#/components/schemas/Actor'
+            - type: 'null'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        evidence:
+          type: array
+          description: What in the representative trace shows the failure.
+          items:
+            type: string
+        fingerprint:
+          type: string
+          pattern: ^[a-f0-9]{32}$
+        representative_trace_id:
+          $ref: '#/components/schemas/TraceId'
+        occurrence_count:
+          type: integer
+          minimum: 0
+        first_seen:
+          $ref: '#/components/schemas/Timestamp'
+        last_seen:
+          $ref: '#/components/schemas/Timestamp'
+        versions:
+          type: array
+          description: The agent versions it failed in.
+          items:
+            type: string
+        environments:
+          type: array
+          items:
+            type: string
+        merged_into:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        scenario_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        scenario_name:
+          oneOf:
+            - $ref: '#/components/schemas/Name'
+            - type: 'null'
+          description: The regression test it became.
+        dataset_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        dataset_version:
+          type: [integer, 'null']
+          minimum: 1
+        promoted_by:
+          oneOf:
+            - $ref: '#/components/schemas/Actor'
+            - type: 'null'
+        promoted_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        fixed_version:
+          type: [string, 'null']
+          description: The agent version that passed the test.
+        fixed_eval_run_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    RegressionOccurrence:
+      type: object
+      required: [trace_id, agent_version, environment, started_at, title, component, taxonomy, secondary, severity,
+                 severity_reason, evidence, reasons, join_kind, join_reason, similarity, created_at]
+      properties:
+        trace_id:
+          $ref: '#/components/schemas/TraceId'
+        agent_version:
+          type: [string, 'null']
+        environment:
+          type: [string, 'null']
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        title:
+          type: string
+        component:
+          type: [string, 'null']
+        taxonomy:
+          $ref: '#/components/schemas/FailureLabel'
+        secondary:
+          type: array
+          items:
+            $ref: '#/components/schemas/FailureLabel'
+        severity:
+          $ref: '#/components/schemas/Severity'
+        severity_reason:
+          type: string
+        evidence:
+          type: array
+          items:
+            type: string
+        reasons:
+          type: array
+          description: Why the trace is a candidate (an error outcome, a person's flag, a failed check…).
+          minItems: 1
+          items:
+            type: string
+        join_kind:
+          type: string
+          enum: [exact, similar, new]
+          description: |
+            `exact` its fingerprint is the group's; `similar` it is the
+            nearest neighbour above the threshold; `new` it started the group.
+        join_reason:
+          type: string
+        similarity:
+          type: [number, 'null']
+          description: The cosine similarity it joined with (`similar` only).
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    RegressionEvent:
+      type: object
+      required: [seq, action, from_status, to_status, actor, reason, detail, at]
+      properties:
+        seq:
+          type: integer
+          minimum: 1
+        action:
+          type: string
+          enum: [created, confirm, dismiss, reopen, promote, fixed, merge, merged, triage, assign]
+        from_status:
+          oneOf:
+            - $ref: '#/components/schemas/RegressionStatus'
+            - type: 'null'
+        to_status:
+          oneOf:
+            - $ref: '#/components/schemas/RegressionStatus'
+            - type: 'null'
+        actor:
+          $ref: '#/components/schemas/Actor'
+        reason:
+          type: [string, 'null']
+        detail:
+          type: object
+          description: Action-specific (the triaged fields, the merged group, the scenario promoted to…).
+        at:
+          $ref: '#/components/schemas/Timestamp'
+    RegressionPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Regression'
+        next_cursor:
+          type: [string, 'null']
+    RegressionDetail:
+      type: object
+      required: [regression, occurrences, events]
+      properties:
+        regression:
+          $ref: '#/components/schemas/Regression'
+        occurrences:
+          type: array
+          description: Newest first.
+          items:
+            $ref: '#/components/schemas/RegressionOccurrence'
+        events:
+          type: array
+          description: Oldest first.
+          items:
+            $ref: '#/components/schemas/RegressionEvent'
+    RegressionResponse:
+      type: object
+      required: [regression]
+      properties:
+        regression:
+          $ref: '#/components/schemas/Regression'
+    MergeResponse:
+      type: object
+      required: [regression, merged]
+      properties:
+        regression:
+          description: The group merged into.
+          $ref: '#/components/schemas/Regression'
+        merged:
+          description: The merged group.
+          $ref: '#/components/schemas/Regression'
+    EntityMapping:
+      type: object
+      required: [collection, source_id, target_id, agreeing, differing, added, reason]
+      properties:
+        collection:
+          type: string
+        source_id:
+          type: string
+          description: The record the production trace touched.
+        target_id:
+          type: [string, 'null']
+          description: The twin record that stands for it (`null`, none).
+        agreeing:
+          type: array
+          items:
+            type: string
+        differing:
+          type: array
+          items:
+            type: object
+            required: [field, observed, twin]
+            properties:
+              field:
+                type: string
+              observed: {}
+              twin: {}
+        added:
+          type: boolean
+          description: The draft adds the record to the twin's state.
+        reason:
+          type: string
+    RegressionDraft:
+      type: object
+      required: [regression_id, trace_id, draft]
+      properties:
+        regression_id:
+          $ref: '#/components/schemas/Uuid'
+        trace_id:
+          $ref: '#/components/schemas/TraceId'
+        draft:
+          type: object
+          required: [document, yaml, notes, problems, mappings, complete]
+          properties:
+            document:
+              type: object
+              description: The scenario (`agenttwin.dev/v1` `Scenario`).
+            yaml:
+              type: string
+              description: The same document as YAML.
+            notes:
+              type: array
+              description: What the draft assumed.
+              items:
+                type: string
+            problems:
+              type: array
+              description: What only a person can write.
+              items:
+                type: string
+            mappings:
+              type: array
+              items:
+                $ref: '#/components/schemas/EntityMapping'
+            complete:
+              type: boolean
+              description: No problems; the draft can be promoted as it is.
+    TriageRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: At least one of `taxonomy`, `severity`, `tags`, `assignee`.
+      properties:
+        taxonomy:
+          $ref: '#/components/schemas/FailureLabel'
+        severity:
+          $ref: '#/components/schemas/Severity'
+        tags:
+          type: array
+          maxItems: 20
+          description: Replaces the tags.
+          items:
+            $ref: '#/components/schemas/Tag'
+        assignee:
+          type: [string, 'null']
+          pattern: ^(user|apikey|service):[A-Za-z0-9._@:-]{1,200}$
+          description: '`null` unassigns.'
+        reason:
+          type: [string, 'null']
+          maxLength: 2000
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: [string, 'null']
+          maxLength: 2000
+          description: Why; required to dismiss or reopen. Kept in the history and the audit log.
+    MergeRequest:
+      type: object
+      additionalProperties: false
+      required: [into]
+      properties:
+        into:
+          $ref: '#/components/schemas/Uuid'
+        reason:
+          type: [string, 'null']
+          maxLength: 2000
+    PromoteRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        The scenario as `document` or `yaml` (at most one); with neither, the
+        draft is promoted as it is (`409 REGRESSION_DRAFT_INCOMPLETE` when it
+        needs a person).
+      properties:
+        document:
+          type: [object, 'null']
+        yaml:
+          type: [string, 'null']
+          maxLength: 600000
+        reason:
+          type: [string, 'null']
+          maxLength: 2000
+    PromoteResponse:
+      type: object
+      required: [regression, scenario, dataset, redacted]
+      properties:
+        regression:
+          $ref: '#/components/schemas/Regression'
+        scenario:
+          type: object
+          required: [id, name, version, created, warnings]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            name:
+              $ref: '#/components/schemas/Name'
+            version:
+              type: integer
+              minimum: 1
+            created:
+              type: boolean
+              description: '`false`: the same document was already registered.'
+            warnings:
+              type: array
+              items:
+                type: string
+        dataset:
+          type: object
+          required: [id, name, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            name:
+              $ref: '#/components/schemas/Name'
+            version:
+              type: integer
+              minimum: 1
+        redacted:
+          type: integer
+          minimum: 0
+          description: Values of the scenario's input the redaction replaced.

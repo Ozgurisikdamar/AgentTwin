@@ -549,11 +549,152 @@ class Client:
                 )
             time.sleep(interval_s)
 
+    # ------------------------------------------------------------ regressions
+    def regressions(
+        self,
+        project_id: str,
+        *,
+        status: Sequence[str] | None = None,
+        severity: Sequence[str] | None = None,
+        taxonomy: str | None = None,
+        agent: str | None = None,
+        include_merged: bool = False,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """The project's regression inbox: production failures the miner
+        grouped, most recently seen first (the first ``limit``)."""
+        query = {"project_id": project_id, "limit": str(limit)}
+        if status:
+            query["status"] = ",".join(status)
+        if severity:
+            query["severity"] = ",".join(severity)
+        if taxonomy is not None:
+            query["taxonomy"] = taxonomy
+        if agent is not None:
+            query["agent"] = agent
+        if include_merged:
+            query["include_merged"] = "true"
+        body = self.request("GET", "/api/v1/regressions/candidates", query=query)
+        items: list[dict[str, Any]] = body.get("items", []) if isinstance(body, dict) else []
+        return items
+
+    def regression(self, regression_id: str) -> dict[str, Any]:
+        """A regression with its failures and its history."""
+        result: dict[str, Any] = self.request("GET", _regression_path(regression_id))
+        return result
+
+    def regression_draft(self, regression_id: str) -> dict[str, Any]:
+        """The scenario its representative trace suggests (``draft.document``,
+        ``draft.yaml``; ``draft.problems`` names what a person must write)."""
+        result: dict[str, Any] = self.request("GET", _regression_path(regression_id, "draft"))
+        return result
+
+    def triage_regression(
+        self,
+        regression_id: str,
+        *,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
+        **changes: Any,
+    ) -> dict[str, Any]:
+        """Sets ``taxonomy``, ``severity``, ``tags`` or ``assignee``
+        (``assignee=None`` unassigns)."""
+        body = dict(changes) | ({"reason": reason} if reason is not None else {})
+        result: dict[str, Any] = self.request(
+            "PATCH", _regression_path(regression_id), json_body=body, headers=_idempotency(idempotency_key)
+        )
+        return result
+
+    def confirm_regression(
+        self, regression_id: str, *, reason: str | None = None, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        return self._regression_action(regression_id, "confirm", reason, idempotency_key)
+
+    def dismiss_regression(
+        self, regression_id: str, reason: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """Not a failure worth a test; the reason is required."""
+        return self._regression_action(regression_id, "dismiss", reason, idempotency_key)
+
+    def reopen_regression(
+        self, regression_id: str, reason: str, *, idempotency_key: str | None = None
+    ) -> dict[str, Any]:
+        """A dismissed or fixed regression is back; the reason is required."""
+        return self._regression_action(regression_id, "reopen", reason, idempotency_key)
+
+    def merge_regression(
+        self,
+        regression_id: str,
+        into: str,
+        *,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Moves the regression's failures into ``into`` (the same agent's)."""
+        body: dict[str, Any] = {"into": into} | ({"reason": reason} if reason is not None else {})
+        result: dict[str, Any] = self.request(
+            "POST",
+            _regression_path(regression_id, "merge"),
+            json_body=body,
+            headers=_idempotency(idempotency_key),
+        )
+        return result
+
+    def promote_regression(
+        self,
+        regression_id: str,
+        *,
+        document: Mapping[str, Any] | None = None,
+        yaml: str | None = None,
+        reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Makes the regression a regression test: its scenario (the draft
+        as it is, or ``document`` / ``yaml``) joins the project's
+        ``production-regressions`` dataset. Needs ``regression.promote``."""
+        if document is not None and yaml is not None:
+            raise ValueError("give the document or its YAML, not both")
+        body: dict[str, Any] = {}
+        if document is not None:
+            body["document"] = dict(document)
+        if yaml is not None:
+            body["yaml"] = yaml
+        if reason is not None:
+            body["reason"] = reason
+        result: dict[str, Any] = self.request(
+            "POST",
+            _regression_path(regression_id, "promote"),
+            json_body=body,
+            headers=_idempotency(idempotency_key),
+        )
+        return result
+
+    def _regression_action(
+        self, regression_id: str, action: str, reason: str | None, idempotency_key: str | None
+    ) -> dict[str, Any]:
+        body = {"reason": reason} if reason is not None else {}
+        result: dict[str, Any] = self.request(
+            "POST",
+            _regression_path(regression_id, action),
+            json_body=body,
+            headers=_idempotency(idempotency_key),
+        )
+        return result
+
     def record_outcome(self, trace_id: str, outcome: Mapping[str, Any]) -> dict[str, Any]:
         result: dict[str, Any] = self.request(
             "POST", f"/api/v1/traces/{trace_id.lower()}/outcome", json_body=dict(outcome)
         )
         return result
+
+
+def _regression_path(regression_id: str, action: str | None = None) -> str:
+    path = f"/api/v1/regressions/{urllib.parse.quote(regression_id, safe='')}"
+    return f"{path}/{action}" if action else path
+
+
+def _idempotency(key: str | None) -> dict[str, str] | None:
+    return {"Idempotency-Key": key} if key else None
 
 
 def _cases(cases: Sequence[str | Mapping[str, Any]]) -> list[dict[str, Any]]:

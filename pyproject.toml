@@ -41,7 +41,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agenttwin", "agenttwin_core", "agenttwin_simulation", "agenttwin_evaluation", "support_refund_agent", "sdk_testutil", "demo_testutil", "sim_testutil", "eval_testutil"]
+known-first-party = ["agenttwin", "agenttwin_core", "agenttwin_simulation", "agenttwin_evaluation", "support_refund_agent", "sdk_testutil", "demo_testutil", "sim_testutil", "eval_testutil", "regression_testutil"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106", "S107", "S310", "PLR2004", "T20"]

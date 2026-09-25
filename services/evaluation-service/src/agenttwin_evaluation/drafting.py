@@ -35,7 +35,16 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-__all__ = ["MINER", "Draft", "EntityMapping", "ToolCall", "draft_scenario", "tool_calls"]
+__all__ = [
+    "MINER",
+    "Draft",
+    "EntityMapping",
+    "NotAScenario",
+    "ToolCall",
+    "draft_scenario",
+    "prepare_promotion",
+    "tool_calls",
+]
 
 #: The ``generated.by`` of a drafted scenario.
 MINER = "agenttwin-regression-miner"
@@ -761,3 +770,71 @@ def _state_expectations(
             }
         )
     return out
+
+
+# ---------------------------------------------------------------- promotion
+
+
+class NotAScenario(ValueError):
+    """A promoted document that is not a scenario."""
+
+
+def _redact_strings(value: Any, redact: Callable[[str], str]) -> tuple[Any, int]:
+    """Every string in ``value`` redacted; how many changed."""
+    if isinstance(value, str):
+        clean = redact(value)
+        return clean, int(clean != value)
+    if isinstance(value, Mapping):
+        out: dict[str, Any] = {}
+        changed = 0
+        for k, v in value.items():
+            out[k], n = _redact_strings(v, redact)
+            changed += n
+        return out, changed
+    if isinstance(value, list):
+        items = [_redact_strings(v, redact) for v in value]
+        return [v for v, _ in items], sum(n for _, n in items)
+    return value, 0
+
+
+def prepare_promotion(
+    document: Mapping[str, Any],
+    *,
+    group: Mapping[str, Any],
+    trace_id: str,
+    redact: Callable[[str], str] | None = None,
+) -> tuple[dict[str, Any], int]:
+    """The document a person promotes, made a production regression (ADR-0032):
+    its source is the trace, it is tagged ``production-regression`` and
+    marked reviewed, and its input is redacted again, whatever the person
+    wrote. Returns the document and how many values were redacted.
+
+    Everything else is the person's: name, severity, expectations, faults."""
+    if not isinstance(document, Mapping):
+        raise NotAScenario("The document is not an object.")
+    if document.get("apiVersion") != "agenttwin.dev/v1" or document.get("kind") != "Scenario":
+        raise NotAScenario("The document is not a scenario (apiVersion agenttwin.dev/v1, kind Scenario).")
+    doc = json.loads(json.dumps(document))
+    metadata = doc.get("metadata")
+    spec = doc.get("spec")
+    if not isinstance(metadata, dict) or not isinstance(spec, dict):
+        raise NotAScenario("A scenario has metadata and a spec.")
+    metadata["source"] = "production_regression"
+    if re.fullmatch(r"[a-f0-9]{32}", trace_id):
+        metadata["sourceTraceId"] = trace_id
+    else:
+        metadata.pop("sourceTraceId", None)
+    raw_generated = metadata.get("generated")
+    generated: dict[str, Any] = raw_generated if isinstance(raw_generated, dict) else {}
+    evidence = generated.get("evidence")
+    if not isinstance(evidence, list):
+        evidence = [str(e)[:1000] for e in (group.get("evidence") or [])][:_MAX_EVIDENCE]
+    metadata["generated"] = {"by": str(generated.get("by") or MINER), "evidence": evidence, "reviewed": True}
+    raw_tags = metadata.get("tags")
+    tags: list[Any] = raw_tags if isinstance(raw_tags, list) else []
+    metadata["tags"] = sorted({*(t for t in tags if isinstance(t, str)), "production-regression"})
+    metadata.setdefault("severity", str(group.get("severity") or "high"))
+    redacted = 0
+    if isinstance(spec.get("input"), dict) and redact is not None:
+        spec["input"], redacted = _redact_strings(spec["input"], redact)
+    return doc, redacted

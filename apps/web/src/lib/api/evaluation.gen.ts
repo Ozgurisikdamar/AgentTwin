@@ -335,6 +335,203 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/regressions/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The regression inbox
+         * @description Production failures the miner grouped (ADR-0032): one entry per group
+         *     of failures with the same fingerprint or a similar one, most recently
+         *     seen first. Groups merged into another are hidden unless asked for.
+         */
+        get: operations["listRegressions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regressions/{regression_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a regression
+         * @description The group, every failure in it (newest first, with why it is a
+         *     candidate and how it joined the group) and its history: creation,
+         *     triage, status changes, merges, promotion, fix.
+         */
+        get: operations["getRegression"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Triage a regression
+         * @description Changes the failure label, the severity, the tags or the assignee.
+         *     A label or severity a person set is kept from then on (the miner's
+         *     suggestion stays in `suggested_taxonomy` / `suggested_severity`).
+         *     Recorded in the group's history and announced to the audit log.
+         *     Needs `review.write`.
+         */
+        patch: operations["triageRegression"];
+        trace?: never;
+    };
+    "/api/v1/regressions/{regression_id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Draft a scenario from a regression
+         * @description The scenario the representative trace suggests, over the twin the
+         *     agent's scenarios use most: the input (redacted), the twin records the
+         *     trace's entities map to, the failure the trace met as a fault and the
+         *     expectations that would have caught it. `problems` names what only a
+         *     person can write (the draft is `complete` without any); `mappings`
+         *     says which production record each twin record stands for. Nothing is
+         *     saved.
+         */
+        get: operations["draftRegressionScenario"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regressions/{regression_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a regression
+         * @description A person agrees the failure is real (`CANDIDATE` or `REOPENED` →
+         *     `CONFIRMED`). Recorded in the group's history and announced to the
+         *     audit log. Needs `review.write`.
+         */
+        post: operations["confirmRegression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regressions/{regression_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a regression
+         * @description Not a real failure, or not one worth a test (`CANDIDATE`, `CONFIRMED`
+         *     or `REOPENED` → `DISMISSED`); the reason is required. New failures of
+         *     its fingerprints still join it without reopening it. Needs
+         *     `review.write`.
+         */
+        post: operations["dismissRegression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regressions/{regression_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen a regression
+         * @description A dismissed group was dismissed wrongly, or a fixed one is not fixed
+         *     (`DISMISSED` or `FIXED` → `REOPENED`); the reason is required. A new
+         *     failure at or after the fixed version reopens a fixed group by itself.
+         *     Needs `review.write`.
+         */
+        post: operations["reopenRegression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regressions/{regression_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge a regression into another
+         * @description The same failure grouped twice: the group's failures and fingerprints
+         *     move to `into` (a group of the same project and agent), whose summary
+         *     is recomputed; the merged group keeps its history and is hidden from
+         *     the inbox. A group that became a test cannot be merged into another
+         *     (merge the others into it). Needs `review.write`.
+         */
+        post: operations["mergeRegression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regressions/{regression_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote a regression to a regression test
+         * @description Registers the scenario (the reviewed draft, or the given `document` /
+         *     `yaml`) in the simulation service and adds it to the project's
+         *     `production-regressions` dataset as a `production_regression` case, so
+         *     every future evaluation of the agent runs it. The document's source is
+         *     set to the representative trace, it is tagged `production-regression`,
+         *     marked reviewed and its input is redacted again. A retry after a
+         *     failure completes the promotion (the same document registers nothing
+         *     new). Needs `regression.promote` (owners, admins, reviewers).
+         */
+        post: operations["promoteRegression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1006,6 +1203,206 @@ export interface components {
                 calibration: components["schemas"]["Calibration"] | null;
             }[];
         };
+        /**
+         * @description The failure taxonomy of spec §18.3 (`UNKNOWN` when no rule applies).
+         * @enum {string}
+         */
+        FailureLabel: "WRONG_TOOL" | "WRONG_ARGUMENT" | "MISSING_TOOL" | "TOOL_ERROR_HANDLING" | "DUPLICATE_SIDE_EFFECT" | "RETRY_SAFETY" | "LOOP" | "TIMEOUT" | "COST_BUDGET" | "LATENCY" | "POLICY_VIOLATION" | "AUTHORIZATION" | "PROMPT_INJECTION" | "DATA_LEAKAGE" | "STALE_CONTEXT" | "RETRIEVAL_FAILURE" | "HALLUCINATED_SUCCESS" | "INCORRECT_ESCALATION" | "MISSING_APPROVAL" | "STATE_MISMATCH" | "UNKNOWN";
+        /** @enum {string} */
+        Severity: "critical" | "high" | "medium" | "low";
+        /**
+         * @description `CANDIDATE` found by the miner; `CONFIRMED` a person agrees;
+         *     `PROMOTED` it has a regression test; `FIXED` a later version passes
+         *     the test; `DISMISSED` not a failure worth a test; `REOPENED` a
+         *     dismissed or fixed group is back.
+         * @enum {string}
+         */
+        RegressionStatus: "CANDIDATE" | "CONFIRMED" | "PROMOTED" | "FIXED" | "DISMISSED" | "REOPENED";
+        /** @description Who (`user:…`, `apikey:…`, `service:…`, `system:…`). */
+        Actor: string;
+        TraceId: string;
+        Regression: {
+            id: components["schemas"]["Uuid"];
+            organization_id: components["schemas"]["Uuid"];
+            project_id: components["schemas"]["Uuid"];
+            agent: string;
+            /** @description What went wrong, from the representative failure. */
+            title: string;
+            status: components["schemas"]["RegressionStatus"];
+            taxonomy: components["schemas"]["FailureLabel"];
+            suggested_taxonomy: components["schemas"]["FailureLabel"];
+            /** @description Other labels the representative failure matches. */
+            secondary: components["schemas"]["FailureLabel"][];
+            severity: components["schemas"]["Severity"];
+            suggested_severity: components["schemas"]["Severity"];
+            /** @description Why the severity (the rule, or who set it). */
+            severity_reason: string | null;
+            /** @description Who set the label or severity (`null`, the rules did). */
+            triaged_by: components["schemas"]["Actor"] | null;
+            /** @description The component the failure points at (the failing tool). */
+            component: string | null;
+            assignee: components["schemas"]["Actor"] | null;
+            tags: components["schemas"]["Tag"][];
+            /** @description What in the representative trace shows the failure. */
+            evidence: string[];
+            fingerprint: string;
+            representative_trace_id: components["schemas"]["TraceId"];
+            occurrence_count: number;
+            first_seen: components["schemas"]["Timestamp"];
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description The agent versions it failed in. */
+            versions: string[];
+            environments: string[];
+            merged_into: components["schemas"]["Uuid"] | null;
+            scenario_id: components["schemas"]["Uuid"] | null;
+            /** @description The regression test it became. */
+            scenario_name: components["schemas"]["Name"] | null;
+            dataset_id: components["schemas"]["Uuid"] | null;
+            dataset_version: number | null;
+            promoted_by: components["schemas"]["Actor"] | null;
+            promoted_at: components["schemas"]["Timestamp"] | null;
+            /** @description The agent version that passed the test. */
+            fixed_version: string | null;
+            fixed_eval_run_id: components["schemas"]["Uuid"] | null;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
+        RegressionOccurrence: {
+            trace_id: components["schemas"]["TraceId"];
+            agent_version: string | null;
+            environment: string | null;
+            started_at: components["schemas"]["Timestamp"];
+            title: string;
+            component: string | null;
+            taxonomy: components["schemas"]["FailureLabel"];
+            secondary: components["schemas"]["FailureLabel"][];
+            severity: components["schemas"]["Severity"];
+            severity_reason: string;
+            evidence: string[];
+            /** @description Why the trace is a candidate (an error outcome, a person's flag, a failed check…). */
+            reasons: string[];
+            /**
+             * @description `exact` its fingerprint is the group's; `similar` it is the
+             *     nearest neighbour above the threshold; `new` it started the group.
+             * @enum {string}
+             */
+            join_kind: "exact" | "similar" | "new";
+            join_reason: string;
+            /** @description The cosine similarity it joined with (`similar` only). */
+            similarity: number | null;
+            created_at: components["schemas"]["Timestamp"];
+        };
+        RegressionEvent: {
+            seq: number;
+            /** @enum {string} */
+            action: "created" | "confirm" | "dismiss" | "reopen" | "promote" | "fixed" | "merge" | "merged" | "triage" | "assign";
+            from_status: components["schemas"]["RegressionStatus"] | null;
+            to_status: components["schemas"]["RegressionStatus"] | null;
+            actor: components["schemas"]["Actor"];
+            reason: string | null;
+            /** @description Action-specific (the triaged fields, the merged group, the scenario promoted to…). */
+            detail: Record<string, unknown>;
+            at: components["schemas"]["Timestamp"];
+        };
+        RegressionPage: {
+            items: components["schemas"]["Regression"][];
+            next_cursor: string | null;
+        };
+        RegressionDetail: {
+            regression: components["schemas"]["Regression"];
+            /** @description Newest first. */
+            occurrences: components["schemas"]["RegressionOccurrence"][];
+            /** @description Oldest first. */
+            events: components["schemas"]["RegressionEvent"][];
+        };
+        RegressionResponse: {
+            regression: components["schemas"]["Regression"];
+        };
+        MergeResponse: {
+            /** @description The group merged into. */
+            regression: components["schemas"]["Regression"];
+            /** @description The merged group. */
+            merged: components["schemas"]["Regression"];
+        };
+        EntityMapping: {
+            collection: string;
+            /** @description The record the production trace touched. */
+            source_id: string;
+            /** @description The twin record that stands for it (`null`, none). */
+            target_id: string | null;
+            agreeing: string[];
+            differing: {
+                field: string;
+                observed: unknown;
+                twin: unknown;
+            }[];
+            /** @description The draft adds the record to the twin's state. */
+            added: boolean;
+            reason: string;
+        };
+        RegressionDraft: {
+            regression_id: components["schemas"]["Uuid"];
+            trace_id: components["schemas"]["TraceId"];
+            draft: {
+                /** @description The scenario (`agenttwin.dev/v1` `Scenario`). */
+                document: Record<string, unknown>;
+                /** @description The same document as YAML. */
+                yaml: string;
+                /** @description What the draft assumed. */
+                notes: string[];
+                /** @description What only a person can write. */
+                problems: string[];
+                mappings: components["schemas"]["EntityMapping"][];
+                /** @description No problems; the draft can be promoted as it is. */
+                complete: boolean;
+            };
+        };
+        /** @description At least one of `taxonomy`, `severity`, `tags`, `assignee`. */
+        TriageRequest: {
+            taxonomy?: components["schemas"]["FailureLabel"];
+            severity?: components["schemas"]["Severity"];
+            /** @description Replaces the tags. */
+            tags?: components["schemas"]["Tag"][];
+            /** @description `null` unassigns. */
+            assignee?: string | null;
+            reason?: string | null;
+        };
+        ReasonRequest: {
+            /** @description Why; required to dismiss or reopen. Kept in the history and the audit log. */
+            reason?: string | null;
+        };
+        MergeRequest: {
+            into: components["schemas"]["Uuid"];
+            reason?: string | null;
+        };
+        /**
+         * @description The scenario as `document` or `yaml` (at most one); with neither, the
+         *     draft is promoted as it is (`409 REGRESSION_DRAFT_INCOMPLETE` when it
+         *     needs a person).
+         */
+        PromoteRequest: {
+            document?: Record<string, unknown> | null;
+            yaml?: string | null;
+            reason?: string | null;
+        };
+        PromoteResponse: {
+            regression: components["schemas"]["Regression"];
+            scenario: {
+                id: components["schemas"]["Uuid"];
+                name: components["schemas"]["Name"];
+                version: number;
+                /** @description `false`: the same document was already registered. */
+                created: boolean;
+                warnings: string[];
+            };
+            dataset: {
+                id: components["schemas"]["Uuid"];
+                name: components["schemas"]["Name"];
+                version: number;
+            };
+            /** @description Values of the scenario's input the redaction replaced. */
+            redacted: number;
+        };
     };
     responses: {
         /**
@@ -1151,6 +1548,24 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /**
+         * @description The regression cannot do that now: `REGRESSION_TRANSITION_INVALID`
+         *     (not from its status; `details.status`, `details.action`),
+         *     `REGRESSION_MERGED` (it was merged into another; `details.merged_into`),
+         *     `REGRESSION_AGENT_MISMATCH` or `REGRESSION_HAS_TEST` (merge),
+         *     `REGRESSION_TRACE_GONE` (its trace is no longer kept: promote with a
+         *     document), `REGRESSION_DRAFT_INCOMPLETE` (the draft needs a person;
+         *     `details.problems`), `REGRESSION_DATASET_ARCHIVED`, `TOO_MANY_CASES`
+         *     or `IDEMPOTENCY_IN_PROGRESS`.
+         */
+        RegressionConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
     };
     parameters: {
         /**
@@ -1171,6 +1586,17 @@ export interface components {
         EvalRunId: components["schemas"]["Uuid"];
         /** @description The scenario name of the case. */
         ScenarioName: components["schemas"]["Name"];
+        RegressionId: components["schemas"]["Uuid"];
+        /** @description Only groups in these statuses (comma-separated). */
+        RegressionStatusFilter: string;
+        /** @description Only groups of these severities (comma-separated). */
+        SeverityFilter: string;
+        /** @description Only groups with this failure label. */
+        TaxonomyFilter: components["schemas"]["FailureLabel"];
+        /** @description Only groups of this agent. */
+        AgentFilter: string;
+        /** @description Also groups merged into another one. */
+        IncludeMerged: "true" | "false";
     };
     requestBodies: never;
     headers: {
@@ -1894,6 +2320,414 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listRegressions: {
+        parameters: {
+            query?: {
+                /** @description Restricts the list to one project (default every project the caller can access). */
+                project_id?: components["parameters"]["ProjectFilter"];
+                /** @description Only groups in these statuses (comma-separated). */
+                status?: components["parameters"]["RegressionStatusFilter"];
+                /** @description Only groups of these severities (comma-separated). */
+                severity?: components["parameters"]["SeverityFilter"];
+                /** @description Only groups with this failure label. */
+                taxonomy?: components["parameters"]["TaxonomyFilter"];
+                /** @description Only groups of this agent. */
+                agent?: components["parameters"]["AgentFilter"];
+                /** @description Also groups merged into another one. */
+                include_merged?: components["parameters"]["IncludeMerged"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the inbox. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getRegression: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The regression. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    triageRegression: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageRequest"];
+            };
+        };
+        responses: {
+            /** @description The regression after the change. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["RegressionConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    draftRegressionScenario: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionDraft"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["RegressionConflict"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    confirmRegression: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The regression after the change. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["RegressionConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    dismissRegression: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The regression after the change. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["RegressionConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    reopenRegression: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description The regression after the change. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegressionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["RegressionConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    mergeRegression: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeRequest"];
+            };
+        };
+        responses: {
+            /** @description The group merged into, and the merged group. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["RegressionConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+            502: components["responses"]["UpstreamUnavailable"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    promoteRegression: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description One key per user action (ADR-0019). A repeat of the same request
+                 *     returns the stored response with `Idempotent-Replayed: true`; the same
+                 *     key with a different request answers `422`; while the first request
+                 *     runs, `409`. Keys expire after 24 hours.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description The organization to act in, for credentials that belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                regression_id: components["parameters"]["RegressionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteRequest"];
+            };
+        };
+        responses: {
+            /** @description The promoted regression, its scenario and the dataset version it joined. */
+            201: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromoteResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["RegressionConflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["IdempotencyKeyReused"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Internal"];
             502: components["responses"]["UpstreamUnavailable"];

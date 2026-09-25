@@ -40,10 +40,12 @@ __all__ = [
     "Suggestion",
     "at_or_after",
     "choose_group",
+    "component",
     "detect",
     "feature_text",
     "features",
     "fingerprint",
+    "observation_from_detail",
     "observation_from_event",
     "observation_from_trace",
     "on_occurrence",
@@ -235,6 +237,23 @@ def observation_from_trace(row: Mapping[str, Any], previous: Observation | None 
         flags=previous.flags if previous else (),
         **base,
     )
+
+
+def observation_from_detail(detail: Mapping[str, Any]) -> Observation:
+    """From the trace service's trace detail (``GET /api/v1/traces/{id}``:
+    trace, spans, flags): the row, the risks its tool spans recorded and the
+    flags people put on it."""
+    risks = set()
+    for span in detail.get("spans") or []:
+        if isinstance(span, Mapping) and span.get("kind") == "tool":
+            name, risk = _str(span.get("tool_name")), _str(span.get("tool_risk"))
+            if name and risk:
+                risks.add((name, risk))
+    obs = replace(observation_from_trace(_map(detail.get("trace"))), tool_risks=tuple(sorted(risks)))
+    for flag in detail.get("flags") or []:
+        if isinstance(flag, Mapping) and _str(flag.get("reason")):
+            obs = with_flag(obs, str(flag.get("kind") or "manual"), str(flag["reason"]))
+    return obs
 
 
 def with_flag(obs: Observation, kind: str, reason: str) -> Observation:
@@ -503,13 +522,18 @@ _TITLES: dict[str, str] = {
 }
 
 
+def component(obs: Observation, taxonomy: Suggestion) -> str | None:
+    """The tool the failure points at: the one taken twice for a duplicated
+    side effect, else the failing one."""
+    if taxonomy.primary == "DUPLICATE_SIDE_EFFECT":
+        return _duplicated_tool(obs)
+    return obs.failing_tool
+
+
 def title(obs: Observation, taxonomy: Suggestion) -> str:
     """A short failure title for the inbox."""
-    tool = (
-        _duplicated_tool(obs) if taxonomy.primary == "DUPLICATE_SIDE_EFFECT" else obs.failing_tool
-    ) or "a tool"
     text = _TITLES.get(taxonomy.primary, taxonomy.primary.replace("_", " ").capitalize())
-    return text.format(tool=tool)
+    return text.format(tool=component(obs, taxonomy) or "a tool")
 
 
 # ---------------------------------------------------------------- grouping

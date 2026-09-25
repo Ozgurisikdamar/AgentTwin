@@ -43,6 +43,7 @@ from agenttwin_evaluation.common import AGENT, NAME, PRODUCER
 from agenttwin_evaluation.comparison import EVALUATED, CaseComparison, Side, compare_case, summarize
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.judges import JudgeProvider, judge_identity
+from agenttwin_evaluation.miner import TRACE_EVENTS, Miner
 from agenttwin_evaluation.reviewing import needs_review
 from agenttwin_evaluation.semantic import JudgeBudget, Judged, SemanticJudging
 from agenttwin_evaluation.store import SCHEMA, JudgmentCache, Row, Store
@@ -233,6 +234,8 @@ class EvalWorker:
     judge: JudgeProvider
     log: Log
     owner: str = field(default_factory=_default_owner)
+    # Mines production traces into regressions and fixes promoted ones.
+    miner: Miner | None = None
 
     # ------------------------------------------------------------ steps
 
@@ -470,6 +473,10 @@ class EvalWorker:
         )
         if done is None:
             raise _LeaseLost(run_id)
+        if self.miner is not None:
+            fixed = await self.miner.record_fixes(conn, done, rows)
+            if fixed:
+                self.log.info("regressions fixed", eval_run_id=run_id, regression_group_ids=fixed)
         await write_outbox(conn, SCHEMA, completed_event(done, JobStatus.COMPLETED, None))
 
     # ------------------------------------------------------------ endings
@@ -573,8 +580,13 @@ class EvalWorker:
 
     async def on_event(self, env: Envelope) -> None:
         """``simulation.run_completed.v1`` makes the waiting run due at once;
-        ``evaluation.run_requested.v1`` queues a release's run. The other
-        events of the queue are for later phases."""
+        ``evaluation.run_requested.v1`` queues a release's run; the trace
+        events are mined for regressions. The other events of the queue are
+        for later phases."""
+        if env.type in TRACE_EVENTS:
+            if self.miner is not None:
+                await self.miner.on_event(env)
+            return
         if env.type == "evaluation.run_requested.v1":
             await self.release_requested(env)
             return

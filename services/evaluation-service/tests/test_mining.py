@@ -22,10 +22,12 @@ from agenttwin_evaluation.mining import (
     Suggestion,
     at_or_after,
     choose_group,
+    component,
     detect,
     feature_text,
     features,
     fingerprint,
+    observation_from_detail,
     observation_from_event,
     observation_from_trace,
     on_occurrence,
@@ -117,6 +119,29 @@ def test_a_trace_row_keeps_the_risks_and_flags_already_known() -> None:
     assert later.tool_risks == first.tool_risks
     assert later.flags == (("incident", "Customer refunded twice"),)
     assert observation_from_trace(load("duplicate-refund")["trace"]).tool_risks == ()
+
+
+def test_a_trace_detail_carries_risks_and_flags() -> None:
+    d = load("duplicate-refund")
+    assert observation_from_detail(d) == real("duplicate-refund")
+    flagged = {
+        **d,
+        "flags": [
+            {"kind": "incident", "reason": " Customer refunded twice ", "flagged_by": "u"},
+            {"kind": "odd", "reason": "x"},
+            {"kind": "manual", "reason": ""},
+            "not a flag",
+        ],
+        "spans": [
+            *d["spans"],
+            {"kind": "tool", "tool_name": "x"},
+            {"kind": "model", "tool_name": "y", "tool_risk": "READ"},
+        ],
+    }
+    o = observation_from_detail(flagged)
+    assert o.flags == (("incident", "Customer refunded twice"), ("manual", "x"))
+    assert o.tool_risks == risks(d)
+    assert detect(o)[-2:] == ["flagged as incident: Customer refunded twice", "flagged as manual: x"]
 
 
 def test_the_recorded_outcome_wins_over_the_summary() -> None:
@@ -381,6 +406,21 @@ def test_tool_errors_are_compared_without_case() -> None:
     o = obs(errors=("t:TIMEOUT", "u:Denied"))
     assert suggest_taxonomy(o).all == ("AUTHORIZATION", "TIMEOUT")
     assert features(o)["tool_errors"] == ["t:timeout", "u:denied"]
+
+
+def test_the_component_is_the_tool_the_title_names() -> None:
+    o = real("duplicate-refund")
+    assert component(o, suggest_taxonomy(o)) == "refund_payment"
+    risky = (("charge", "WRITE_IRREVERSIBLE"), ("lookup", "READ"))
+    dup = obs(
+        signals=("duplicate_side_effect",),
+        tools=("charge", "charge"),
+        tool_risks=risky,
+        failing_tool="lookup",
+    )
+    assert component(dup, suggest_taxonomy(dup)) == "charge"
+    assert component(dup, Suggestion("TIMEOUT")) == "lookup"
+    assert component(obs(failing_tool=None), Suggestion("UNKNOWN")) is None
 
 
 def test_titles() -> None:

@@ -30,6 +30,7 @@ import httpx
 from agenttwin_core import api_fakes as fake
 from agenttwin_core.auth import Principal, Role, TokenService
 from agenttwin_core.db import Migrator, Pool, connect, load_migrations
+from agenttwin_core.embeddings import HashingEmbedder
 from agenttwin_core.logx import get_logger
 from agenttwin_core.openapi_contract import Contract, ContractViolation, contract_path
 from agenttwin_core.testing import temp_database
@@ -39,6 +40,8 @@ from agenttwin_evaluation.clients import SimulationClient, TraceClient
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import FakeJudge, JudgeProvider
+from agenttwin_evaluation.miner import Miner
+from agenttwin_evaluation.regression_store import RegressionStore
 from agenttwin_evaluation.reviews import ReviewsAPI
 from agenttwin_evaluation.runs import EvalRunsAPI
 from agenttwin_evaluation.store import SCHEMA, Store
@@ -154,6 +157,8 @@ class FakeTraces:
         self.scale: dict[str, int] = {}
         self.calls: list[dict[str, str]] = []
         self.fail: int | None = None
+        # ``GET /api/v1/traces/{id}``: the detail of each known trace (by id).
+        self.details: dict[str, dict[str, Any]] = {}
         self.checker = fake.ExchangeChecker()
 
     async def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -168,6 +173,17 @@ class FakeTraces:
         assert p.can_access_project(q["project_id"])
         if self.fail is not None:
             return httpx.Response(self.fail, json=fake.error("INTERNAL", "An internal error occurred."))
+        prefix = "/api/v1/traces/"
+        if request.url.path.startswith(prefix):
+            detail = self.details.get(request.url.path[len(prefix) :])
+            # A trace of a detail without a project belongs to the one asked for.
+            owner = {"organization_id": p.org_id, "project_id": q["project_id"]}
+            if detail is not None:
+                detail = detail | {"trace": owner | detail["trace"]}
+            if detail is None or detail["trace"]["project_id"] != q["project_id"]:
+                missing = fake.error("NOT_FOUND", "The requested resource does not exist.")
+                return httpx.Response(404, json=missing)
+            return httpx.Response(200, json=detail)
         ids = await self.traces_of(q["simulation_run_id"]) if self.traces_of else []
         scale = self.scale.setdefault(q["simulation_run_id"], len(self.scale) + 1)
         items = [
@@ -199,6 +215,7 @@ class Stack:
     worker: EvalWorker
     traces: FakeTraces
     cfg: EvaluationConfig
+    regressions: RegressionStore
     principal: Principal = field(
         default_factory=lambda: Principal(
             org_id=ORG, actor="user:engineer", role=Role.ENGINEER, project_ids=(PROJECT,)
@@ -285,6 +302,7 @@ async def evaluation_stack(
         }
         settings.update(overrides)
         cfg = EvaluationConfig(**settings)
+        regressions = RegressionStore(pool)
         worker = EvalWorker(
             store=store,
             cfg=cfg,
@@ -292,6 +310,13 @@ async def evaluation_stack(
             traces=traces,
             judge=judge or FakeJudge(),
             log=get_logger("worker"),
+            miner=Miner(
+                store=regressions,
+                traces=traces,
+                embedder=HashingEmbedder(),
+                threshold=cfg.regression_similarity_threshold,
+                log=get_logger("miner"),
+            ),
         )
         checker = contract()
         app = build_app(
@@ -327,6 +352,7 @@ async def evaluation_stack(
                         worker=worker,
                         traces=fake_traces,
                         cfg=cfg,
+                        regressions=regressions,
                     )
                 finally:
                     # A violation on the service's own calls to the simulation

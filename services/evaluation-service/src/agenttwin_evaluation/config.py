@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 from agenttwin_core.config import Loader
+from agenttwin_core.embeddings import EmbeddingSettings, load_embedding_settings
 from agenttwin_evaluation.judges import JudgeSettings
 
 __all__ = ["EvaluationConfig", "load_config"]
@@ -28,6 +29,10 @@ class EvaluationConfig:
     max_run_attempts: int = 3
     # Parallel requests to the simulation and trace services while collecting cases.
     fetch_concurrency: int = 8
+    # Regression mining (ADR-0032): a failure joins the group of its nearest
+    # neighbour when their features are at least this similar (cosine).
+    regression_similarity_threshold: float = 0.85
+    embedding: EmbeddingSettings = field(default_factory=EmbeddingSettings)
 
 
 def _url(loader: Loader, key: str, default: str) -> str:
@@ -86,4 +91,6 @@ def load_config(loader: Loader) -> EvaluationConfig:
         max_wait_s=loader.duration("EVALUATION_MAX_WAIT", 3600.0),
         max_run_attempts=loader.integer("EVALUATION_MAX_RUN_ATTEMPTS", 3, 1, 20),
         fetch_concurrency=loader.integer("EVALUATION_FETCH_CONCURRENCY", 8, 1, 64),
+        regression_similarity_threshold=loader.number("REGRESSION_SIMILARITY_THRESHOLD", 0.85, 0.0, 1.0),
+        embedding=load_embedding_settings(loader),
     )

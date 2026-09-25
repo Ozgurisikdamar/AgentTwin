@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from agenttwin_core.embeddings import build_embedder
 from agenttwin_core.service import Runtime, Spec
 from agenttwin_core.service import main as service_main
 from agenttwin_core.web import build_app
@@ -24,6 +25,8 @@ from agenttwin_evaluation.clients import SimulationClient, TraceClient
 from agenttwin_evaluation.config import EvaluationConfig, load_config
 from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import build_judge
+from agenttwin_evaluation.miner import Miner
+from agenttwin_evaluation.regression_store import RegressionStore
 from agenttwin_evaluation.reviews import ReviewsAPI
 from agenttwin_evaluation.runs import EvalRunsAPI
 from agenttwin_evaluation.store import SCHEMA, Store
@@ -76,6 +79,13 @@ async def build_worker(rt: Runtime, cfg: Any) -> FastAPI | None:
         traces=traces,
         judge=build_judge(cfg.judge),
         log=rt.log,
+        miner=Miner(
+            store=RegressionStore(rt.pool),
+            traces=traces,
+            embedder=build_embedder(cfg.embedding),
+            threshold=cfg.regression_similarity_threshold,
+            log=rt.log,
+        ),
     )
     for i in range(cfg.worker_concurrency):
         rt.spawn(f"evaluation-claim-{i}", lambda: worker.claim_loop(rt.stop))

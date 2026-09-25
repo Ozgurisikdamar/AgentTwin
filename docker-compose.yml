@@ -30,8 +30,20 @@ x-simulation-build: &simulation-build
   args:
     PACKAGE: agenttwin-simulation
 
+# Embeddings (ADR-0014) of scenario matching (simulation) and regression
+# grouping (evaluation, ADR-0032): hashing-v1 (local, lexical) unless
+# EMBEDDING_PROVIDER=openai_compatible with EMBEDDING_MODEL and
+# EMBEDDING_DIMENSIONS (and EMBEDDING_API_KEY for api.openai.com).
+x-embedding-env: &embedding-env
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hashing}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+  EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-}
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-false}
+
 x-simulation-env: &simulation-env
-  <<: *service-env
+  <<: [*service-env, *embedding-env]
   CONTROL_PLANE_URL: http://control-plane:8080
   TRACE_SERVICE_URL: http://trace-service:8081
   # Agents under test reach the tool twin here, with a per-case token.
@@ -40,15 +52,6 @@ x-simulation-env: &simulation-env
   SIMULATION_AGENT_ENDPOINTS: '{"support-refund-agent": {"url": "http://demo-agent:8090", "token_env": "DEMO_AGENT_TOKEN"}}'
   DEMO_AGENT_TOKEN: ${DEMO_AGENT_TOKEN}
   SIMULATION_WORKER_CONCURRENCY: ${SIMULATION_WORKER_CONCURRENCY:-2}
-  # Scenario matching (ADR-0014): hashing-v1 (local, lexical) unless
-  # EMBEDDING_PROVIDER=openai_compatible with EMBEDDING_MODEL and
-  # EMBEDDING_DIMENSIONS (and EMBEDDING_API_KEY for api.openai.com).
-  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hashing}
-  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
-  EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-}
-  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
-  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
-  EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-false}
 
 x-evaluation-build: &evaluation-build
   context: .
@@ -58,7 +61,7 @@ x-evaluation-build: &evaluation-build
     PACKAGE: agenttwin-evaluation
 
 x-evaluation-env: &evaluation-env
-  <<: *service-env
+  <<: [*service-env, *embedding-env]
   SIMULATION_SERVICE_URL: http://simulation-service:8084
   TRACE_SERVICE_URL: http://trace-service:8081
   # The judge of semantic expectations (ADR-0022): the deterministic fake
@@ -68,6 +71,9 @@ x-evaluation-env: &evaluation-env
   JUDGE_API_KEY: ${JUDGE_API_KEY:-}
   JUDGE_BASE_URL: ${JUDGE_BASE_URL:-}
   EVALUATION_JUDGE_BUDGET_USD: ${EVALUATION_JUDGE_BUDGET_USD:-5}
+  # A production failure joins the group of its nearest neighbour when their
+  # features are at least this similar (cosine, ADR-0032).
+  REGRESSION_SIMILARITY_THRESHOLD: ${REGRESSION_SIMILARITY_THRESHOLD:-0.85}
 
 x-demo-env: &demo-env
   LOG_LEVEL: ${LOG_LEVEL:-info}

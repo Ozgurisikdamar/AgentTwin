@@ -33,7 +33,16 @@ The miner is the missing piece between them.
 * **The evaluation service mines.** It owns datasets and the evaluation of
   cases, so a regression case is one of its records. It consumes the three
   trace events from its existing queue. Each event is processed once
-  (`processed_event`).
+  (`processed_event`), in one transaction with its effects.
+  - `trace.ingested.v1` carries the finalized trace's summary and signals.
+  - `trace.outcome_recorded.v1` and `trace.flagged.v1` say something new
+    about a trace, so the miner reads its detail again from the trace
+    service, the authority on it. A flag that arrives before the trace is
+    finalized is kept (`regression_flag`) and joins the trace's ingestion.
+    If the trace service cannot be reached, the event is retried; a trace it
+    no longer knows (retention) is let go.
+  - Mining for one project's agent is serialized (an advisory lock), so two
+    failures of a new kind that arrive together make one group.
 * **Candidates come from deterministic signals, never from a model.** A
   production trace (not a simulation) becomes a candidate when any of these
   holds:
@@ -69,6 +78,22 @@ The miner is the missing piece between them.
      default, ADR-0014) and are stored in pgvector.
   3. **Neither.** The candidate becomes a group of one. It stays one:
      nothing is forced into a cluster (§18).
+
+  A fingerprint that joined a group by similarity is mapped to it, so the
+  next failure like it is a known one.
+
+  What is learnt later can change a trace's kind (its outcome turns out to
+  be contradicted, say). Its occurrence then moves to the group of its new
+  kind, found the same way; a trace whose failure is corrected away (a
+  success after all) leaves its group. A group left empty is deleted if
+  nobody acted on it (no status change, triage, assignment or merge);
+  otherwise it stays.
+
+  A group shows its representative occurrence (the first, until it leaves;
+  then the worst and earliest): its label, title, component and evidence.
+  Its counts, first and last seen, versions, environments and severity (the
+  worst of its occurrences) are derived from its occurrences. A label or a
+  severity a person set is kept.
 
   Density clustering (HDBSCAN) is not used in V1. A project should have at
   least 500 candidates and 50 groups reviewed by people before a density
@@ -129,11 +154,13 @@ The miner is the missing piece between them.
   regressions, and the gate makes them mandatory.
 * **Lifecycle (§121).** A group moves through `CANDIDATE`, `CONFIRMED`,
   `PROMOTED`, `FIXED`, `DISMISSED` and `REOPENED`.
-  - **Fixed.** A promoted group becomes `FIXED` when an evaluation run's
-    candidate passes its scenario. The version and the run are recorded, and
-    the scenario stays in the suite.
+  - **Fixed.** A promoted (or reopened) group becomes `FIXED` when an
+    evaluation run's candidate passes its scenario, in the transaction that
+    completes the run. The version and the run are recorded, and the
+    scenario stays in the suite.
   - **Reopened.** A new production failure joining a fixed group, from the
-    fixed version or a later one, reopens it.
+    fixed version or a later one, reopens it. What is learnt later about a
+    failure already counted does not.
   - **Dismissed.** A dismissed group keeps counting new occurrences but
     stays dismissed, so known noise stays quiet.
 
@@ -152,5 +179,7 @@ The miner is the missing piece between them.
 * The draft is only as good as the trace: content must be captured
   (`redacted` or `full`) for the input to be recovered. The entity mapping
   is a documented heuristic that the person checks, not a guarantee.
-* `regression.candidate_created.v1` announces a new group. No service
-  consumes it yet.
+* The `regression.candidate_created.v1` event of spec §36 is not published
+  yet: an event is published only when something consumes it (contracts
+  README). It is defined with its first consumer (notifications, Phase 8);
+  until then new groups appear in the inbox.

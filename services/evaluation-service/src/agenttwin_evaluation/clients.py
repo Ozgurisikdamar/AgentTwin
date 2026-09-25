@@ -182,6 +182,20 @@ class TraceUsage(dict[str, Any]):
 class TraceClient(_Client):
     audience = "trace-service"
 
+    async def trace(self, org: str, project: str, trace_id: str) -> dict[str, Any] | None:
+        """A trace's detail (trace, spans, outcome, flags); None when the
+        project has no such trace (never ingested, or deleted by retention)."""
+        path = f"/api/v1/traces/{quote(trace_id, safe='')}"
+        resp = await self._send("GET", org, project, path, params={"project_id": project})
+        if resp.status_code == 404:
+            return None
+        if resp.status_code != 200:
+            raise UpstreamError(f"trace service answered {resp.status_code} reading a trace")
+        detail = self._json(resp, "trace detail")
+        if not isinstance(detail, dict) or not isinstance(detail.get("trace"), dict):
+            raise UpstreamError("trace detail: the answer has no trace")
+        return detail
+
     async def usage_of_run(self, org: str, project: str, simulation_run_id: str) -> dict[str, TraceUsage]:
         """trace id -> usage, for the traces of one simulation run. A trace
         that is not finalized yet, or that recorded no model call, has an

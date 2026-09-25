@@ -8,7 +8,7 @@ tested software and is committed separately. Status is updated as work lands.
 | 0 | Architecture, ADRs, glossary, threat model skeleton, monorepo, contracts, gokit | Docs + schemas + Makefile + compose base + shared Go kit (unit + integration tests green) | done |
 | 1 | Walking skeleton: auth dev flow, projects/agents/versions, trace-service, OTel collector, Python SDK, demo agent, web trace page | `make dev` → demo agent trace visible in browser | done |
 | 2 | Scenarios, declarative stateful tool twin, fault injection, simulation runs + UI | happy path and timeout-after-mutation scenarios run | done |
-| 3 | Evaluators (deterministic, trajectory, judge adapter), datasets, eval runs, baseline vs candidate | candidate regression detected | pending |
+| 3 | Evaluators (deterministic, trajectory, judge adapter), datasets, eval runs, baseline vs candidate | candidate regression detected | done |
 | 4 | Graph, manifest/OpenAPI/MCP import, observed edges, change set, bounded blast radius, impacted selection | prompt/tool change selects refund scenarios with reasons | pending |
 | 5 | Release, gate rules, immutable evidence, CLI CI output, release UI | bad candidate BLOCKED | pending |
 | 6 | Regression miner: features, embeddings, grouping, taxonomy, inbox, promotion | demo failure → regression case → auto-included in next gate | pending |
@@ -150,6 +150,23 @@ service 138, SDK 71, demo 31, repository checks 41), web 110 (13 files);
 `make contracts-check` (events, 3 API documents, generated types); `make dev`
 healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical); `make doctor` 0 failed;
 `make e2e` 12/12 (Phase 1: 7, Phase 2: 5).
+
+## Phase 3 evidence (2026-09-25)
+
+Acceptance — *candidate regression detected*: on a stack built from scratch,
+the seeded evaluation of 1.3.0 against 1.2.4 finds it, and the Phase 3 e2e
+repeats it through the UI. Commands run on the Phase 3 code, with their
+results:
+
+| Command | Result |
+|---|---|
+| `make reset` (drop volumes, `make dev`: build, start, wait healthy, seed) | stack healthy and seeded in 90 s: 4 manifests, tool twin `demo-co-support` v1, 9 scenarios, simulations of 1.2.4 (9/9 passed) and 1.3.0 (6 passed, 3 failed, 2 critical), dataset `refund-regression-suite` v1 (9 cases), 40 conversations, 18 verified outcomes reported |
+| Seeded evaluation (`seed --evaluate 1.2.4:1.3.0`, seed 42) | **COMPLETED: 2 new critical failures** (`refund-timeout-after-mutation`, `refund-tool-success-lie`), **1 regressed** (`refund-happy-path`), 6 unchanged, 0 incomplete |
+| `make doctor` | 0 failed, 2 warnings (development placeholder secrets; `graph-service.events` waiting for the Phase 4 consumer); the evaluation service and worker ready, 1 migration applied, the demo project has a completed evaluation run |
+| `make e2e` | 16/16 Playwright tests against the fresh stack: Phase 1 (7), Phase 2 (5), Phase 3 (4) — 1.3.0 against 1.2.4 with the first divergence and a reviewer's verdict; 1.3.1 improves three cases on 1.3.0 and matches 1.2.4 on all nine; a dataset versioned to v3, evaluated and archived; a judge criterion calibrated from 20 labeled examples. Screenshots in `docs/screenshots/phase3-*.png` |
+| `make lint` | gofmt clean, `go vet` clean, golangci-lint 0 issues, ruff + ruff format + mypy (strict, 82 files) clean, Prettier + ESLint + `tsc` clean |
+| `make test` | Go: 131 tests + 81 subtests pass with real PostgreSQL + RabbitMQ (0 skipped); Python: 580 (core 147, simulation service 145, evaluation service 133, SDK 72, demo 37, contracts and document checks 46); web: 149 |
+| `make contracts-check` | 14 event schemas and 4 API documents (72 operations) compatible with the baselines; the four generated web type files up to date |
 
 ## Phase 3 progress (2026-09-25)
 

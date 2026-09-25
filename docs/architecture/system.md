@@ -202,7 +202,7 @@ sequenceDiagram
   CP-->>U: 202 {evaluation_id, status: QUEUED}
   CP->>MQ: evaluation.run_requested.v1 (outbox relay, publisher confirms)
   MQ->>ES: consume → create EvalRun (idempotent)
-  ES->>SS: POST /api/v1/simulations ×2 (baseline, candidate; Idempotency-Key)
+  ES->>SS: POST /internal/v1/simulation-pairs (baseline + candidate on one pinned suite)
   SS->>MQ: simulation.run_requested.v1 (outbox; wakes a worker)
   MQ->>SS: worker claims run (lease), runs cases in isolated twins
   SS->>MQ: simulation.run_completed.v1
@@ -249,7 +249,47 @@ Design decisions: [ADR-0016](../adr/0016-declarative-tool-twins-and-faults.md)
 (idempotency), [ADR-0020](../adr/0020-scenario-documents-stored-as-data.md)
 (scenario documents).
 
-### 3.5 Runtime containment (opt-in)
+### 3.5 Evaluation run
+
+The comparison the release gate will rely on, available on its own since
+Phase 3 (UI, SDK, `make seed`):
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as UI / SDK
+  participant CP as control-plane
+  participant ES as evaluation-service
+  participant W as evaluation worker
+  participant SS as simulation-service
+  participant J as judge (fake / Anthropic / OpenAI-compatible)
+  participant MQ as RabbitMQ
+  U->>CP: POST /api/v1/eval-runs (Idempotency-Key)
+  CP->>ES: forward with an internal JWT
+  ES->>ES: dataset version (or the scenarios asked for) resolved,<br/>run QUEUED + transition + audit in one tx
+  ES-->>U: 202 {run}
+  W->>W: claim (FOR UPDATE SKIP LOCKED, lease) → PREPARING
+  W->>SS: POST /internal/v1/simulation-pairs (keyed by the eval run)
+  SS-->>W: baseline + candidate runs, one pinned suite and seed<br/>(versions and scenarios checked here; a refusal fails the run)
+  W->>W: RUNNING: lease released, next check + wait deadline set
+  SS->>MQ: simulation.run_completed.v1 (each side)
+  MQ->>ES: the run is due now (polling is the fallback)
+  W->>W: both sides done → claim → EVALUATING
+  W->>SS: read every case of both sides
+  W->>J: grade semantic expectations (budget, verdict cache)
+  W->>W: classify each case, first divergence, deltas, slices
+  W->>ES: case results + COMPLETED + outbox(evaluation.run_completed.v1) in one tx
+```
+
+A person can then review one expectation's verdict: the review replaces it,
+and the case and the run are classified again from the stored snapshots,
+without the simulation service. Design decisions:
+[ADR-0022](../adr/0022-judges-grade-semantic-expectations.md) (judges),
+[ADR-0023](../adr/0023-baseline-and-candidate-run-as-one-pinned-pair.md)
+(the pinned pair), [ADR-0024](../adr/0024-evaluation-runs-wait-without-a-lease.md)
+(waiting without a lease).
+
+### 3.6 Runtime containment (opt-in)
 
 `agent → POST /gateway/v1/tools/{tool}/invoke → policy (CEL) → allow | allow_with_limits | require_approval | deny → upstream tool`
 

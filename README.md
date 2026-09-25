@@ -14,7 +14,7 @@ failures into permanent tests, and a runtime gateway that enforces tool policies
 > Decisions: [`docs/adr/`](docs/adr/) · Contracts: [`packages/contracts`](packages/contracts) ·
 > Threat model: [`docs/security/threat-model.md`](docs/security/threat-model.md).
 
-## What works today (Phase 1)
+## What works today (Phases 1–3)
 
 * **Trace ingestion** from any OpenTelemetry-instrumented agent through the
   OTel Collector into the trace service: GenAI semantic conventions, per-project
@@ -22,14 +22,35 @@ failures into permanent tests, and a runtime gateway that enforces tool policies
   verified outcomes with contradiction detection.
 * **Python SDK** ([`packages/sdk-python`](packages/sdk-python)) with client-side
   redaction, content capture off by default and measured overhead
-  ([benchmarks](docs/benchmarks/sdk-overhead.md)).
+  ([benchmarks](docs/benchmarks/sdk-overhead.md)); it also starts simulations,
+  builds datasets and runs evaluations.
 * **Control plane**: dev and OIDC authentication, organizations, projects,
   RBAC, API keys, immutable agent manifests and versions, hash-chained audit log.
-* **Web UI**: trace explorer (filters, facets, live refresh), trace detail with
-  waterfall, span details, outcome evidence and summary; overview and agents.
-* **Demo**: *Demo Co*'s support-refund agent with production-like tools and
-  fault injection, driven by a deterministic scripted planner (or Anthropic
-  Claude when `DEMO_AGENT_MODEL=anthropic` and a key are set).
+* **Simulation**: versioned scenarios run against declarative, stateful tool
+  twins with injected faults (timeout after mutation, a tool that lies about
+  success, rate limits…); every case records its trajectory, the twin's state
+  diff and a verdict per expectation; the same seed reproduces the verdicts.
+* **Evaluation**: deterministic expectations (state, trajectory, policy,
+  side effects) and semantic ones graded by a judge — a deterministic fake by
+  default, Anthropic or any OpenAI-compatible model behind configuration
+  (`JUDGE_PROVIDER`), with a spending budget and a verdict cache. An
+  evaluation runs a baseline and a candidate version on one pinned suite and
+  seed, and classifies every case: new critical failure, regressed,
+  incomplete, improved or unchanged, with the first step where the two
+  diverged. Versioned datasets, human reviews that replace a verdict, and
+  judge calibration against labels people gave (agreement and Cohen's kappa).
+* **Web UI**: trace explorer and trace detail with waterfall; scenarios and
+  simulations with the evidence down to the tool call and the state diff;
+  evaluations, compared cases side by side, datasets, the review queue and
+  judge calibration.
+* **Demo**: *Demo Co*'s support-refund agent with production-like tools,
+  driven by a deterministic scripted planner (or Anthropic Claude when
+  `DEMO_AGENT_MODEL=anthropic` and a key are set). Version 1.2.4 is good,
+  1.3.0 regresses (it refunds before checking the policy and trusts a tool's
+  false success), 1.3.1 fixes it. `make dev` seeds 9 scenarios, simulations
+  of 1.2.4 and 1.3.0, the `refund-regression-suite` dataset and an evaluation
+  of 1.3.0 against 1.2.4 that finds the regression: two new critical failures
+  and one regressed case.
 
 ## Quick start (local)
 

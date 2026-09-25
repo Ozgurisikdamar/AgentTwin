@@ -11,7 +11,7 @@ tested software and is committed separately. Status is updated as work lands.
 | 3 | Evaluators (deterministic, trajectory, judge adapter), datasets, eval runs, baseline vs candidate | candidate regression detected | done |
 | 4 | Graph, manifest/OpenAPI/MCP import, observed edges, change set, bounded blast radius, impacted selection | prompt/tool change selects refund scenarios with reasons | done |
 | 5 | Release, gate rules, immutable evidence, CLI CI output, release UI | bad candidate BLOCKED | done |
-| 6 | Regression miner: features, embeddings, grouping, taxonomy, inbox, promotion | demo failure → regression case → auto-included in next gate | pending |
+| 6 | Regression miner: features, embeddings, grouping, taxonomy, inbox, promotion | demo failure → regression case → auto-included in next gate | done |
 | 7 | Runtime gateway: CEL policies, approvals, idempotency, SSRF-safe proxy, audit | over-limit refund requires approval; tampered args rejected | pending |
 | 8 | Tenant isolation, SSRF, redaction, chaos, load, security, E2E, docs, screenshots | Definition of Done checklist | pending |
 
@@ -314,6 +314,51 @@ Found on the way and fixed:
   API key and two evaluation runs all labelled `01a0d92e`: the web shortened
   identifiers to their first 8 characters, which in a UUIDv7 are its
   creation time. A UUID now keeps its random end; hashes keep their start.
+
+## Phase 6 evidence (2026-09-25)
+
+Acceptance: *a demo failure becomes a regression case that the next release
+runs on its own.* It holds on a stack built from scratch, through the seed,
+through the UI (the Phase 6 e2e tests) and through the CLI a CI job runs.
+Commands run on the Phase 6 code, with their results:
+
+| Command | Result |
+|---|---|
+| `make reset` (drop volumes, then `make dev`: build, start, wait until healthy, seed) | Stack healthy and seeded in 130 s. Everything Phase 5 seeded (manifests, twin, scenarios, catalogs, change sets, simulations, dataset, the 1.3.0 evaluation, conversations, **1.2.4 → 1.3.0 BLOCK** and **1.2.4 → 1.3.1 PASS**), then the canary incident on 1.3.0: order ORD-3029, its refund's payment timed out after the money moved and was retried without an idempotency key — 2 refunds, the agent claimed SUCCESS, the verified outcome FAILURE was reported. 4 s later the seed found it grouped: **"refund_payment took effect twice"**, critical, `DUPLICATE_SIDE_EFFECT`, CANDIDATE, version 1.3.0. The inbox it reported: 4 groups, all CANDIDATE — that one, "Access to lookup_order was denied" (high, 5 occurrences), "Access to export_customer_data was denied" (high, 2) and "refund_payment timed out" (medium, 4), the last three from the 1.2.4 traffic |
+| `make e2e` | 25/25 Playwright tests in 2.7 min. Phase 1: 7, Phase 2: 5, Phase 3: 4, Phase 4: 4, Phase 5: 3, Phase 6: 2. The Phase 6 tests: a reviewer finds the incident in the inbox (critical, "Duplicate side effect", `refund_payment`), reads its evidence and failure, opens the representative trace (1.3.0, its waterfall), checks the draft is complete (`noDuplicateSideEffect`, the `timeout_after_mutation` fault), promotes it and follows it into `production-regressions` (a "Production regression" case, redacted); then an engineer creates 1.2.4 → 1.3.1 in the UI, its suite runs the scenario as a known regression, the gate passes, and the regression reads "Fixed in v1.3.1" with its history (created, promoted, fixed). Screenshots in `docs/screenshots/phase6-*.png` |
+| `bin/agenttwin release check --project support --baseline support-refund-agent@1.2.4 --candidate support-refund-agent@1.3.0 --reevaluate --ci` (after the promotion) | **exit 3**, revision 2 of the seed's release. "Blocked: a known regression is back (1); an action took effect twice (2); …". The new first rule, `known_regression`: the promoted scenario, "The side effect refund:ORD-1001 was applied 2 times", its first divergence and trace. Required scenarios passed 6/10 (9 at the end of Phase 5, now with the regression test); "Known regressions replayed 1/1". Evidence sha256 `051b8dec…` (verified). The regression stayed FIXED: an older version failing it does not reopen it (events created, promote, fixed) |
+| `make doctor` | 0 failed, 1 warning (development placeholder secrets). All migrations applied (control plane 4, trace 1, graph 1, simulation 3, evaluation 3); every service ready; dead-letter queues empty; no event waiting without a consumer. Demo workspace: traces, 10 scenarios, a completed evaluation run, 5 gated releases (2 BLOCK, 2 PASS, 1 OVERRIDDEN) and, new in Phase 6, "4 mined regressions (3 CANDIDATE, 1 FIXED)" |
+| `make lint` | gofmt clean; `go vet` clean; golangci-lint 0 issues; ruff, ruff format (200 files) and mypy strict (89 files) clean; Prettier, ESLint and `tsc` clean |
+| `make test` | Go: 287 tests and 233 subtests pass with real PostgreSQL and RabbitMQ (0 failed, 0 skipped). Python: 902 (evaluation service 343, core 194, simulation service 171, SDK 75, demo 67, contracts, images and document checks 52; 686 at the end of Phase 5). Web: 268 (26 files). 446 s |
+| `make contracts-check` | 14 event schemas and 5 API documents (101 operations, 92 at the end of Phase 5) compatible with the baselines; the five generated web type files up to date |
+
+## Phase 6 progress (2026-09-25)
+
+Pieces landed, each with its tests and the mutations they catch (same method
+as the earlier phases):
+
+| Piece | Tests | Mutations caught |
+|---|---|---|
+| Miner domain (`evaluation-service` `mining.py`, spec §18, ADR-0032) — candidates from deterministic signals, content-free features and the sentence embedded, taxonomy and severity each with its evidence, fingerprint, grouping (known fingerprint, then nearest neighbour ≥ 0.85, else a group of one), the §121 lifecycle | over four real traces of the demo stack | 51 of 51 |
+| Scenario drafting (`drafting.py`) — input and recorded request context, the faults the trace suffered, expectations that catch the failure, production entities mapped onto the twin's records through its own response templates, redaction, notes and what only a person can write | the same traces, the twin of the demo | 64 of 64 |
+| Mining trace events (`miner.py`, `regression_store.py`, migration 0003) — each event once and in one transaction; outcome and flag events read the trace again; one group per burst; kinds that change move; fixed by an evaluation run, reopened by a later failure | 17 integration tests on PostgreSQL, one through a real evaluation run of the demo agent | miner 24 of 25 (the one left is equivalent), store SQL 13 of 13 |
+| Regressions API (`regressions.py`, nine operations, OpenAPI, SDK) — inbox, detail, triage, confirm/dismiss/reopen, merge, draft, promotion to `production-regressions` (two steps, idempotent, concurrent promotions make one test) | 16 integration tests with the real simulation service, the contract walk, SDK tests against the contract | 25 of 25 (one survived a first run — an archived dataset still took promotions — and got its test) |
+| Request context (SDK `input_context`, trace service content key) — the tenant a draft maps entities within | SDK and trace-service tests (content, never an extra attribute; redacted under the capture policy) | — |
+| Demo incident — faults scoped to one order (tools server), `TrafficGenerator.incident`, `seed --incident` waiting for the miner's group and reporting the inbox | 67 demo tests (seed against a contract-checked fake, the incident against the real tools server) | seed wiring 14 of 14 (one survived at first: the test that caught it was not selected; renamed) |
+| Web: `/regressions` and `/regressions/{id}` (spec §41.3) — the inbox's columns, filters through the contract's query, evidence, failures, history, the actions the status and the caller's permissions allow, triage sending only what changed, merge, the draft and its promotion as drafted or as a person edited it | 27 (helpers 11, components 16) on the service's own answers captured by its integration tests; the lifecycle table is read from the service's source and the labels from the contract | 13 of 13, and the drift check fails on a changed transition |
+| Image layout — each Python service imports with only the schema documents its Dockerfile stage copies | 3 | the missing scenario schema reproduces the container's failure |
+
+Found on the way:
+
+* **The evaluation-service image lacked the scenario schema.** The regressions
+  API validates a promotion as a scenario when it is imported; the image stage
+  copied only the contracts, so the container failed at start while every
+  test, running from the repository, passed. The first `docker compose up` on
+  the Phase 6 code found it; the image layout test now holds every stage.
+* **The regression page lost what a promotion answered** (the scenario's
+  version, redactions, warnings) once it read the promoted regression again:
+  the form holding the answer was unmounted. The e2e test found it; the unit
+  tests' fake now answers like the service, and reproduced it.
 
 ## Definition of Done tracking
 

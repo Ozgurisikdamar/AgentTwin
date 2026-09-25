@@ -241,6 +241,22 @@ if [ -n "${AGENTTWIN_DEMO_API_KEY:-}" ]; then
   else
     warn "no gated release yet - run 'make seed'"
   fi
+  regressions=""
+  if [ -n "$project" ]; then
+    regressions=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
+      "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/regressions/candidates?project_id=$project&limit=200" 2>/dev/null)
+  fi
+  mined=$(grep -o '"status": \?"[A-Z]*"' <<<"$regressions" | wc -l | tr -d ' ')
+  if [ "${mined:-0}" -gt 0 ]; then
+    statuses=""
+    for s in CANDIDATE CONFIRMED REOPENED PROMOTED FIXED DISMISSED; do
+      n=$(grep -o "\"status\": \?\"$s\"" <<<"$regressions" | wc -l | tr -d ' ')
+      [ "$n" -gt 0 ] && statuses="${statuses:+$statuses, }$n $s"
+    done
+    ok "demo project has $mined mined regressions ($statuses)"
+  else
+    warn "no regression mined yet - run 'make seed'"
+  fi
 fi
 
 printf '\n%d failed, %d warnings\n' "$fails" "$warns"

@@ -368,7 +368,42 @@ problem named; it never shrinks the suite silently. The web shows the change
 set, the diff of each item, the required scenarios with why, and the blast
 radius on the dependency graph (ADR-0030).
 
-### 3.8 Runtime containment (opt-in)
+### 3.8 Regression mining (Phase 6)
+
+From a failing production trace to a test the next release runs (ADR-0032):
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant A as agent (SDK)
+  participant TS as trace-service
+  participant ES as evaluation-service (miner)
+  participant R as reviewer (UI / SDK)
+  participant SS as simulation-service
+  participant CP as control-plane
+  A->>TS: spans (OTLP) and the verified outcome
+  TS-->>ES: trace.ingested.v1 · trace.outcome_recorded.v1 · trace.flagged.v1
+  ES->>TS: GET the trace detail (outcome and flag events)
+  ES->>ES: deterministic signals → candidate; features (no content) and an embedding;<br/>group by fingerprint, else nearest neighbour ≥ 0.85, else a new group;<br/>suggested label and severity with their evidence
+  R->>ES: GET /api/v1/regressions/candidates · /{id} · /{id}/draft
+  ES->>TS: the representative trace (input, request context, faults, tool results)
+  ES->>SS: the twin, to map production entities onto its records
+  R->>ES: POST /api/v1/regressions/{id}/promote (regression.promote)
+  ES->>SS: POST /api/v1/scenarios (source production_regression, redacted, idempotent)
+  ES->>ES: one transaction: a new version of production-regressions,<br/>the group PROMOTED, its history and the audit entry
+  CP->>SS: a later release's impact matches the known-regression source
+  CP->>ES: the release's evaluation runs it; the gate's known_regression rule blocks if it fails
+  ES->>ES: a candidate that passes it marks the group FIXED in that version
+```
+
+The web shows the inbox, each group's evidence, failures, draft and history,
+and the actions its status allows (confirm, dismiss and reopen with a
+reason, triage, merge, promote). `make seed` sends a canary incident on
+`SEED_INCIDENT` (1.3.0: a refund whose payment times out after the money
+moved, retried without an idempotency key) and reports the group it lands
+in; promoting it is a reviewer's decision.
+
+### 3.9 Runtime containment (opt-in)
 
 `agent → POST /gateway/v1/tools/{tool}/invoke → policy (CEL) → allow | allow_with_limits | require_approval | deny → upstream tool`
 

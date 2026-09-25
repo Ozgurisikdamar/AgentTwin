@@ -324,12 +324,12 @@ AgentTwin does **not** turn these into a misleading “95% safe” claim.
 
 ## Development
 
-> **AgentTwin is under active phased development.** Phases 0–5 are done; the
-> regression miner and the runtime gateway follow.
+> **AgentTwin is under active phased development.** Phases 0–6 are done; the
+> runtime gateway and hardening follow.
 
 Track live build status and the evidence of each phase: [docs/plan/implementation-board.md](docs/plan/implementation-board.md)
 
-### What works today (Phases 1–5)
+### What works today (Phases 1–6)
 
 * **Trace ingestion** from any OpenTelemetry-instrumented agent through the
   OTel Collector into the trace service: GenAI semantic conventions, per-project
@@ -378,6 +378,20 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   verifies. An override (owners, admins, and reviewers when the policy
   allows) records who, why, the ticket and until when, and never turns the
   decision into a PASS.
+* **Regression mining**: failing production traces become candidates from
+  deterministic signals (a failed or contradicted outcome, an irreversible
+  action taken twice, a write retried without an idempotency key, a loop, a
+  tool error, a policy denial, a timeout after a mutation, a person's flag).
+  The miner keeps structured features, never the conversation. It groups the
+  candidates by known fingerprint, else by nearest neighbour, and suggests a
+  label and a severity, each with its evidence. A reviewer promotes a group
+  into a regression test. The scenario is drafted from its representative
+  trace: the input and request context, the faults it suffered, the
+  expectations that catch the failure, and production entities mapped onto
+  the twin's records. The test joins the `production-regressions` dataset,
+  and every later release of the agent runs it as a known regression. A
+  release blocks if the regression is back; a version that passes the test
+  marks it fixed.
 * **CLI** ([`packages/cli`](packages/cli)): `agenttwin release check` creates a
   release from CI, waits for its gate, prints why it decided and exits with
   it (0 pass, 2 warn, 3 block, 4 infrastructure error), with JUnit and JSON
@@ -388,7 +402,9 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   judge calibration; change sets with what each change requires and why,
   and the dependency graph with a change's blast radius, evidence filters
   and manual mappings; releases with why each gate decided, its evidence
-  and hash, the pinned suite, the audit trail, and overrides.
+  and hash, the pinned suite, the audit trail, and overrides; the regression
+  inbox, each group's evidence, failures and history, triage, merges and the
+  promotion of its drafted scenario.
 * **Demo**: *Demo Co*'s support-refund agent with production-like tools,
   driven by a deterministic scripted planner (or Anthropic Claude when
   `DEMO_AGENT_MODEL=anthropic` and a key are set). Version 1.2.4 is good,
@@ -401,7 +417,11 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   orders APIs (OpenAPI) and the support desk's MCP tools, and two change
   sets — the prompt change 1.2.4 → 1.3.0 and the tool change 1.3.1 → 1.3.2 —
   each listing the scenarios it requires and why, and two gated releases:
-  1.2.4 → 1.3.0, **BLOCKED**, and its fix 1.2.4 → 1.3.1, which is not.
+  1.2.4 → 1.3.0, **BLOCKED**, and its fix 1.2.4 → 1.3.1, which is not. It
+  ends with a canary production incident on 1.3.0: a refund whose payment
+  times out after the money moved and is retried without an idempotency key,
+  so the customer is refunded twice. The miner groups it into the regression
+  inbox, where a reviewer can promote it.
 
 ### Quick start (local)
 
@@ -470,7 +490,7 @@ services/
   trace-service/      Go · OTLP ingestion, traces, outcomes
   graph-service/      Go · dependency graph, evidence, bounded blast radius
   simulation-service/ Python · scenarios, tool twins, faults, simulation runs
-  evaluation-service/ Python · datasets, evaluation runs, judges, reviews
+  evaluation-service/ Python · datasets, evaluation runs, judges, reviews, regression mining
 
 packages/
   contracts/          shared versioned event schemas and OpenAPI documents

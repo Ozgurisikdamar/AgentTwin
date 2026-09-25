@@ -1025,3 +1025,47 @@ func TestAnOrganizationHasBoundedProjects(t *testing.T) {
 		t.Errorf("concurrent creations at %d of %d: %v", authn.MaxTokenProjects-5, authn.MaxTokenProjects, statuses)
 	}
 }
+
+// A key past its expiry is refused at the edge and by the internal
+// verification the trace service and runtime gateway rely on (spec §63).
+func TestAnExpiredKeyIsRefusedEverywhere(t *testing.T) {
+	h := newHarness(t, nil)
+	pid := h.s.Demo.ProjectID
+	admin := h.login("admin@demo.agenttwin.dev")
+	created := h.request("POST", "/api/v1/projects/"+pid+"/api-keys",
+		map[string]any{"name": "short-lived", "scopes": []string{"read", "traces:write"}}, bearer(admin))
+	if created.Status != http.StatusCreated {
+		t.Fatalf("create key: %d %s", created.Status, created.Raw)
+	}
+	key, keyID := created.Body["key"].(string), created.Body["id"].(string)
+	svc, err := h.tokens.Mint(authn.SystemPrincipal("trace-service"), "control-plane", "rid-12345678")
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := func() any {
+		r := h.request("POST", "/internal/v1/api-keys/verify", map[string]string{"key": key}, bearer(svc))
+		if r.Status != http.StatusOK {
+			t.Fatalf("verify: %d %s", r.Status, r.Raw)
+		}
+		return r.Body["valid"]
+	}
+	if r := h.request("GET", "/api/v1/me", nil, map[string]string{"X-AgentTwin-Api-Key": key}); r.Status != http.StatusOK || valid() != true {
+		t.Fatalf("a fresh key works: %d", r.Status)
+	}
+
+	if _, err := h.pool.Exec(context.Background(),
+		`UPDATE control.api_key SET expires_at = now() - interval '1 second' WHERE id = $1`, keyID); err != nil {
+		t.Fatal(err)
+	}
+	r := h.request("GET", "/api/v1/me", nil, map[string]string{"X-AgentTwin-Api-Key": key})
+	if r.Status != http.StatusUnauthorized || bytes.Contains(r.Raw, []byte(key)) {
+		t.Fatalf("expired key at the edge = %d %s, want 401 without the key", r.Status, r.Raw)
+	}
+	if valid() != false {
+		t.Fatal("the internal verification accepts an expired key")
+	}
+	// Nor can it be brought back by rotation.
+	if r := h.request("POST", "/api/v1/api-keys/"+keyID+"/rotate", nil, bearer(admin)); r.Status != http.StatusConflict {
+		t.Fatalf("rotating an expired key = %d, want 409", r.Status)
+	}
+}

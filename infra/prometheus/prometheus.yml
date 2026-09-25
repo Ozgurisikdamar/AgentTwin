@@ -21,3 +21,10 @@ scrape_configs:
   - job_name: rabbitmq
     static_configs:
       - targets: [rabbitmq:15692]
+  # Per-queue depth (ready, unacked) for the queue and dead-letter panels.
+  - job_name: rabbitmq-queues
+    metrics_path: /metrics/detailed
+    params:
+      family: [queue_coarse_metrics]
+    static_configs:
+      - targets: [rabbitmq:15692]

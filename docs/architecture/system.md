@@ -482,6 +482,18 @@ compatibility baseline ([ADR-0021](../adr/0021-http-contracts-checked-openapi.md
   Irreversible runtime actions fail closed when policy evaluation fails.
 * **Deterministic fakes are labeled.** The demo agent's scripted planner and the
   fake judge are marked `deterministic-fake` in every run record and in the UI.
+* **Internal observability (spec §54).** Every service exposes Prometheus
+  metrics named `agenttwin_*` with a `service` label (requests, latency, errors,
+  database latency, outbox backlog, consumed events by outcome) and its own
+  (trace ingestion, simulation and evaluation runs and durations, judge calls
+  by outcome, runtime decisions and approvals). Labels are fixed sets: tools,
+  agents and policies never become labels. RabbitMQ queue and dead-letter
+  depths and the collector's dropped spans come from their exporters. Three
+  provisioned Grafana dashboards (`infra/grafana/dashboards`: services,
+  pipelines, runtime containment) read them; a test holds every panel's query
+  to a metric the code defines. AgentTwin's own spans go to the collector and
+  become RED metrics (`agenttwin_internal_*`), never customer traces. Logs are
+  structured JSON on stdout with the request id and redaction.
 
 ## 7. Deployment
 

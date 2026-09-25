@@ -208,6 +208,16 @@ probe "demo agent" "http://127.0.0.1:${DEMO_AGENT_HOST_PORT:-8090}/healthz" 200
 probe "demo tools" "http://127.0.0.1:${DEMO_TOOLS_HOST_PORT:-8091}/healthz" 200
 probe "prometheus" "http://127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}/-/ready" 200
 probe "grafana" "http://127.0.0.1:${GRAFANA_HOST_PORT:-3001}/api/health" 200
+targets=$(curl --noproxy '*' -s --max-time 5 "http://127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}/api/v1/targets?state=active" 2>/dev/null)
+up=$(grep -o '"health":"up"' <<<"$targets" | wc -l | tr -d ' ')
+down=$(grep -o '"health":"down"' <<<"$targets" | wc -l | tr -d ' ')
+if [ "${up:-0}" -gt 0 ] && [ "${down:-0}" -eq 0 ]; then ok "prometheus scrapes $up targets, all up"
+else warn "prometheus: ${down:-?} of $(( ${up:-0} + ${down:-0} )) scrape targets are down (http://127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}/targets)"; fi
+dashboards=$(curl --noproxy '*' -s --max-time 5 -u "admin:${GRAFANA_ADMIN_PASSWORD:-}" \
+  "http://127.0.0.1:${GRAFANA_HOST_PORT:-3001}/api/search?tag=agenttwin" 2>/dev/null)
+boards=$(grep -o '"uid":"agenttwin-' <<<"$dashboards" | wc -l | tr -d ' ')
+if [ "${boards:-0}" -ge 3 ]; then ok "grafana has $boards AgentTwin dashboards"
+else warn "grafana has no AgentTwin dashboards (infra/grafana/dashboards is provisioned at start)"; fi
 
 # ------------------------------------------------------------------ demo data
 section "Demo workspace"

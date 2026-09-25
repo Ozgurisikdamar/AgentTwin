@@ -466,6 +466,13 @@ Then open <http://localhost:3000> and sign in with a demo account
 | `reviewer@demo.agenttwin.dev` | reviewer |
 | `viewer@demo.agenttwin.dev` | viewer |
 
+AgentTwin watches itself too: Grafana at <http://localhost:3001> (user
+`admin`, password `GRAFANA_ADMIN_PASSWORD` from `.env`) has three dashboards
+in the *AgentTwin* folder — services (requests, errors, latency, database,
+events, queues and dead letters), pipelines (trace ingestion and dropped
+telemetry, simulations, evaluations, judge calls) and runtime containment
+(decisions, approvals waiting, tool latency).
+
 Useful developer entrypoints:
 
 ```bash

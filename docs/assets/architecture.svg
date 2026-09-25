@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="910" viewBox="0 0 1600 910">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#080C14"/>
+    <stop offset="1" stop-color="#101827"/>
+  </linearGradient>
+  <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#2DD4BF"/>
+    <stop offset="1" stop-color="#38BDF8"/>
+  </linearGradient>
+  <style>
+    .title{font:700 38px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+    .sub{font:400 18px Inter,Segoe UI,Arial,sans-serif;fill:#94A3B8}
+    .lane{font:700 14px Inter,Segoe UI,Arial,sans-serif;fill:#89A0B9;letter-spacing:2px}
+    .ct{font:700 20px Inter,Segoe UI,Arial,sans-serif;fill:#F8FAFC}
+    .cs{font:400 15px Inter,Segoe UI,Arial,sans-serif;fill:#AAB7C8}
+    .tiny{font:600 13px Inter,Segoe UI,Arial,sans-serif;fill:#D0DAE7}
+  </style>
+</defs>
+<rect width="1600" height="910" rx="28" fill="url(#bg)"/>
+<text x="800" y="58" text-anchor="middle" class="title">Target V1 architecture</text>
+<text x="800" y="91" text-anchor="middle" class="sub">Service boundaries exist only where workload, runtime, failure mode or security boundary genuinely differ.</text>
+
+<!-- lane labels -->
+<text x="78" y="142" class="lane">CLIENTS</text>
+<text x="78" y="284" class="lane">EDGE &amp; CONTROL</text>
+<text x="78" y="446" class="lane">CORE SERVICES</text>
+<text x="78" y="664" class="lane">INFRASTRUCTURE</text>
+
+<!-- clients -->
+<g transform="translate(230 120)">
+  <rect width="330" height="98" rx="20" fill="#101A29" stroke="#38BDF8" stroke-width="2"/>
+  <text x="165" y="41" text-anchor="middle" class="ct">Next.js Web UI</text>
+  <text x="165" y="69" text-anchor="middle" class="cs">release readiness · traces · reviews</text>
+</g>
+<g transform="translate(635 120)">
+  <rect width="330" height="98" rx="20" fill="#101A29" stroke="#818CF8" stroke-width="2"/>
+  <text x="165" y="41" text-anchor="middle" class="ct">CLI / CI</text>
+  <text x="165" y="69" text-anchor="middle" class="cs">agenttwin release check · REST</text>
+</g>
+<g transform="translate(1040 120)">
+  <rect width="330" height="98" rx="20" fill="#101A29" stroke="#2DD4BF" stroke-width="2"/>
+  <text x="165" y="41" text-anchor="middle" class="ct">Python / TypeScript SDKs</text>
+  <text x="165" y="69" text-anchor="middle" class="cs">OTLP traces · outcomes · redaction</text>
+</g>
+
+<!-- edge -->
+<g transform="translate(355 270)">
+  <rect width="560" height="112" rx="22" fill="#0C2030" stroke="url(#edge)" stroke-width="2.5"/>
+  <text x="280" y="43" text-anchor="middle" class="ct">Control Plane · Go</text>
+  <text x="280" y="71" text-anchor="middle" class="cs">auth · projects · agents · releases · gate · audit · API gateway</text>
+  <text x="280" y="95" text-anchor="middle" class="tiny">internet-facing governance boundary</text>
+</g>
+<g transform="translate(1040 270)">
+  <rect width="330" height="112" rx="22" fill="#10231F" stroke="#2DD4BF" stroke-width="2"/>
+  <text x="165" y="43" text-anchor="middle" class="ct">OpenTelemetry Collector</text>
+  <text x="165" y="71" text-anchor="middle" class="cs">receive · batch · tenant metadata</text>
+  <text x="165" y="95" text-anchor="middle" class="tiny">standard OTLP transport</text>
+</g>
+
+<!-- core services -->
+<g transform="translate(110 470)">
+  <rect width="260" height="128" rx="20" fill="#111A29" stroke="#38BDF8" stroke-width="2"/>
+  <text x="130" y="42" text-anchor="middle" class="ct">Trace Service</text>
+  <text x="130" y="70" text-anchor="middle" class="cs">Go</text>
+  <text x="130" y="98" text-anchor="middle" class="cs">traces · spans · outcomes</text>
+</g>
+<g transform="translate(402 470)">
+  <rect width="260" height="128" rx="20" fill="#111A29" stroke="#60A5FA" stroke-width="2"/>
+  <text x="130" y="42" text-anchor="middle" class="ct">Graph Service</text>
+  <text x="130" y="70" text-anchor="middle" class="cs">Go</text>
+  <text x="130" y="98" text-anchor="middle" class="cs">dependencies · blast radius</text>
+</g>
+<g transform="translate(694 470)">
+  <rect width="260" height="128" rx="20" fill="#16172A" stroke="#818CF8" stroke-width="2"/>
+  <text x="130" y="42" text-anchor="middle" class="ct">Evaluation Service</text>
+  <text x="130" y="70" text-anchor="middle" class="cs">Python / FastAPI</text>
+  <text x="130" y="98" text-anchor="middle" class="cs">evals · compare · regressions</text>
+</g>
+<g transform="translate(986 470)">
+  <rect width="260" height="128" rx="20" fill="#16172A" stroke="#A78BFA" stroke-width="2"/>
+  <text x="130" y="42" text-anchor="middle" class="ct">Simulation Service</text>
+  <text x="130" y="70" text-anchor="middle" class="cs">Python / FastAPI</text>
+  <text x="130" y="98" text-anchor="middle" class="cs">twins · replay · faults</text>
+</g>
+<g transform="translate(1278 470)">
+  <rect width="260" height="128" rx="20" fill="#10231F" stroke="#34D399" stroke-width="2"/>
+  <text x="130" y="42" text-anchor="middle" class="ct">Runtime Gateway</text>
+  <text x="130" y="70" text-anchor="middle" class="cs">Go</text>
+  <text x="130" y="98" text-anchor="middle" class="cs">policy · approval · audit</text>
+</g>
+
+<!-- infrastructure -->
+<g transform="translate(110 696)">
+  <rect width="290" height="110" rx="20" fill="#101925" stroke="#64748B" stroke-width="2"/>
+  <text x="145" y="41" text-anchor="middle" class="ct">PostgreSQL + pgvector</text>
+  <text x="145" y="70" text-anchor="middle" class="cs">logical schemas · clear ownership</text>
+  <text x="145" y="94" text-anchor="middle" class="tiny">control · trace · graph · eval · simulation · runtime</text>
+</g>
+<g transform="translate(430 696)">
+  <rect width="250" height="110" rx="20" fill="#101925" stroke="#F59E0B" stroke-width="2"/>
+  <text x="125" y="41" text-anchor="middle" class="ct">RabbitMQ</text>
+  <text x="125" y="70" text-anchor="middle" class="cs">at-least-once events</text>
+  <text x="125" y="94" text-anchor="middle" class="tiny">retry · DLQ · outbox where needed</text>
+</g>
+<g transform="translate(710 696)">
+  <rect width="250" height="110" rx="20" fill="#101925" stroke="#2DD4BF" stroke-width="2"/>
+  <text x="125" y="41" text-anchor="middle" class="ct">OTel Collector</text>
+  <text x="125" y="70" text-anchor="middle" class="cs">telemetry backbone</text>
+  <text x="125" y="94" text-anchor="middle" class="tiny">agent + internal observability</text>
+</g>
+<g transform="translate(990 696)">
+  <rect width="250" height="110" rx="20" fill="#101925" stroke="#38BDF8" stroke-width="2"/>
+  <text x="125" y="41" text-anchor="middle" class="ct">Object Storage</text>
+  <text x="125" y="70" text-anchor="middle" class="cs">filesystem / S3-compatible</text>
+  <text x="125" y="94" text-anchor="middle" class="tiny">simulation evidence &amp; artifacts</text>
+</g>
+<g transform="translate(1270 696)">
+  <rect width="268" height="110" rx="20" fill="#101925" stroke="#60A5FA" stroke-width="2"/>
+  <text x="134" y="41" text-anchor="middle" class="ct">Prometheus + Grafana</text>
+  <text x="134" y="70" text-anchor="middle" class="cs">metrics · service health</text>
+  <text x="134" y="94" text-anchor="middle" class="tiny">operability without APM reinvention</text>
+</g>
+
+<!-- connectors -->
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M395 218v52" stroke="#38BDF8" stroke-width="3"/>
+  <path d="M800 218v52" stroke="#818CF8" stroke-width="3"/>
+  <path d="M1205 218v52" stroke="#2DD4BF" stroke-width="3"/>
+  <path d="M1205 382v46h-965v42" stroke="#2DD4BF" stroke-width="2.5" stroke-dasharray="7 7"/>
+  <path d="M635 382v52" stroke="#38BDF8" stroke-width="3"/>
+  <path d="M635 434 H1408" stroke="#334155" stroke-width="2"/>
+  <path d="M240 434v36M532 434v36M824 434v36M1116 434v36M1408 434v36" stroke="#334155" stroke-width="2"/>
+  <path d="M824 598v62" stroke="#818CF8" stroke-width="2.5"/>
+  <path d="M240 598v62M532 598v62M1116 598v62M1408 598v62" stroke="#64748B" stroke-width="2" stroke-dasharray="6 6"/>
+</g>
+
+<text x="800" y="864" text-anchor="middle" class="sub">Lean by default: no Kafka · Qdrant · Neo4j · ClickHouse · Temporal · Kubernetes · Redis until measured need justifies them.</text>
+</svg>

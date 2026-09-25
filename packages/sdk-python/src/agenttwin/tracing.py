@@ -335,6 +335,7 @@ class AgentTwin:
         version: str | None = None,
         *,
         input: str | None = None,
+        input_context: Mapping[str, Any] | None = None,
         session_id: str | None = None,
         environment: str | None = None,
         source: Source | None = None,
@@ -345,7 +346,12 @@ class AgentTwin:
         agent_id: str | None = None,
         attributes: Mapping[str, Any] | None = None,
     ) -> AgentRun:
-        """Start the root span of one agent run (use as a context manager)."""
+        """Start the root span of one agent run (use as a context manager).
+
+        ``input_context`` is the request context the run acts in (tenant,
+        customer, ...): content, recorded only when the content mode allows
+        and redacted like the input. A production failure's scenario draft
+        replays it (ADR-0032)."""
         ctx: dict[str, Any] = {
             A.AGENT_NAME: agent,
             A.ENVIRONMENT: environment or self.config.environment,
@@ -362,7 +368,7 @@ class AgentTwin:
         ):
             if value:
                 ctx[key] = value
-        return AgentRun(self, agent, ctx, input=input, attributes=attributes)
+        return AgentRun(self, agent, ctx, input=input, input_context=input_context, attributes=attributes)
 
     def flush(self, timeout_s: float = 10.0) -> bool:
         """Export everything queued so far (blocks; use in tests/shutdown)."""
@@ -442,11 +448,13 @@ class AgentRun(_SpanScope):
         *,
         input: str | None,
         attributes: Mapping[str, Any] | None,
+        input_context: Mapping[str, Any] | None = None,
     ) -> None:
         self.client = client
         self.agent = agent
         self._ctx = ctx
         self._input = input
+        self._input_context = input_context
         self._attributes = attributes
         self._run_token: contextvars.Token[AgentRun | None] | None = None
         self._outcome_recorded = False
@@ -473,6 +481,8 @@ class AgentRun(_SpanScope):
         if sc.is_valid:
             self.client._run_ctx.register(sc.trace_id, dict(self._ctx))
         self.set_attribute(A.INPUT, self.client._content.text(self._input))
+        if self._input_context:
+            self.set_attribute(A.INPUT_CONTEXT, self.client._content.value(dict(self._input_context)))
         self._activate()
         self._run_token = _current_run.set(self)
         return self

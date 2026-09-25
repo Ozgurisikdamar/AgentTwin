@@ -59,3 +59,24 @@ func TestFullKeepsPIIButNeverSecrets(t *testing.T) {
 		t.Fatal("secrets are masked in every mode")
 	}
 }
+
+func TestTheRequestContextIsContent(t *testing.T) {
+	withContext := func(redacted bool) *model.Span {
+		return &model.Span{
+			Resource: model.Resource{ContentRedacted: redacted},
+			Content:  &model.Content{InputContext: `{"tenant":"demo-co","contact":"jane@example.com"}`},
+		}
+	}
+	// A context alone is content: off drops it.
+	s := withContext(true)
+	Apply(ForMode(Off), s)
+	if s.Content != nil || !s.ContentDropped {
+		t.Fatal("off mode must drop the request context")
+	}
+	// Redacted: kept, and masked again on the server.
+	s = withContext(true)
+	Apply(ForMode(Redacted), s)
+	if s.Content == nil || s.Content.InputContext != `{"tenant":"demo-co","contact":"[REDACTED:email]"}` {
+		t.Fatalf("redacted mode must mask the request context: %+v", s.Content)
+	}
+}

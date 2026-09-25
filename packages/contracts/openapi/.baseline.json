@@ -38081,6 +38081,9 @@
             "/spans/[]/content/input": [
               "string"
             ],
+            "/spans/[]/content/input_context": [
+              "string"
+            ],
             "/spans/[]/content/output": [
               "string"
             ],

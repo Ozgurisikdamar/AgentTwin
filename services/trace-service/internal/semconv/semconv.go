@@ -86,8 +86,8 @@ const None = "none"
 var contentKeys = map[string]bool{
 	"gen_ai.input.messages": true, "gen_ai.output.messages": true, "gen_ai.system_instructions": true,
 	"gen_ai.prompt": true, "gen_ai.completion": true, "gen_ai.tool.call.arguments": true, "gen_ai.tool.call.result": true,
-	"agenttwin.input": true, "agenttwin.output": true, "agenttwin.tool.args": true, "agenttwin.tool.result": true,
-	"gen_ai.tool.definitions": true,
+	"agenttwin.input": true, "agenttwin.input.context": true, "agenttwin.output": true, "agenttwin.tool.args": true,
+	"agenttwin.tool.result": true, "gen_ai.tool.definitions": true,
 }
 
 var contentPrefixes = []string{"gen_ai.prompt.", "gen_ai.completion.", "llm.input_messages", "llm.output_messages", "input.value", "output.value"}
@@ -416,6 +416,7 @@ func Normalize(sp otlp.Span) model.Span {
 	if content.Input == "" {
 		content.Input = r.str("agenttwin.input")
 	}
+	content.InputContext = r.str("agenttwin.input.context")
 	if content.Output == "" {
 		content.Output = r.str("agenttwin.output")
 	}

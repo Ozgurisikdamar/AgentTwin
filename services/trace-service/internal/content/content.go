@@ -66,7 +66,7 @@ func Apply(p Policy, s *model.Span) {
 			if p.Mode == Redacted {
 				r = all // defense in depth on top of the SDK's redaction
 			}
-			for _, f := range []*string{&s.Content.Input, &s.Content.Output, &s.Content.SystemInstructions, &s.Content.ToolArgs, &s.Content.ToolResult} {
+			for _, f := range []*string{&s.Content.Input, &s.Content.InputContext, &s.Content.Output, &s.Content.SystemInstructions, &s.Content.ToolArgs, &s.Content.ToolResult} {
 				if *f == "" {
 					continue
 				}

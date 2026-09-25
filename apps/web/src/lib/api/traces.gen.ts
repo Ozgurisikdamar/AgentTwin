@@ -582,6 +582,12 @@ export interface components {
          */
         SpanContent: {
             input?: string;
+            /**
+             * @description The request context the run acted in (tenant, customer, ...), as
+             *     the SDK recorded it (`agenttwin.input.context`): JSON text. A
+             *     regression's scenario draft replays it (ADR-0032).
+             */
+            input_context?: string;
             output?: string;
             system_instructions?: string;
             tool_args?: string;

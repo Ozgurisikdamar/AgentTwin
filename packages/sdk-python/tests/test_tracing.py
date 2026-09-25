@@ -25,6 +25,7 @@ def attrs(span: ReadableSpan) -> dict[str, Any]:
 
 CONTENT_KEYS = {
     "agenttwin.input",
+    "agenttwin.input.context",
     "agenttwin.output",
     "gen_ai.input.messages",
     "gen_ai.output.messages",
@@ -39,6 +40,7 @@ def run_refund(client: AgentTwin, **run_kwargs: Any) -> str:
         "support-refund-agent",
         "1.3.0",
         input="Refund ORD-1001, my email is jane@example.com. password=hunter2hunter",
+        input_context={"tenant": "demo-co", "customer_id": "CUS-100", "contact": "jane@example.com"},
         session_id="sess-1",
         **run_kwargs,
     ) as run:
@@ -166,6 +168,12 @@ def test_redacted_mode_masks_pii_and_secrets(make_client: Any, exporter: InMemor
     assert root["agenttwin.input"] == (
         "Refund ORD-1001, my email is [REDACTED:email]. password=[REDACTED:credential]"
     )
+    # The request context is content too: JSON, redacted like the input.
+    assert json.loads(root["agenttwin.input.context"]) == {
+        "tenant": "demo-co",
+        "customer_id": "CUS-100",
+        "contact": "[REDACTED:email]",
+    }
     assert "jane@example.com" not in json.dumps(
         {k: str(v) for s in spans.values() for k, v in attrs(s).items()}
     )
@@ -192,6 +200,7 @@ def test_full_mode_keeps_pii_but_never_secrets(make_client: Any, exporter: InMem
         root["agenttwin.input"]
         == "Refund ORD-1001, my email is jane@example.com. password=[REDACTED:credential]"
     )
+    assert json.loads(root["agenttwin.input.context"])["contact"] == "jane@example.com"
 
 
 def test_json_path_redaction_applies_to_tool_arguments(

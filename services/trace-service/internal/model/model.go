@@ -138,7 +138,10 @@ type Attrs struct {
 
 // Content holds captured content, present only when the project allows it.
 type Content struct {
-	Input              string `json:"input,omitempty"`
+	Input string `json:"input,omitempty"`
+	// InputContext is the request context the run acted in (tenant,
+	// customer, ...) as the SDK recorded it: JSON text.
+	InputContext       string `json:"input_context,omitempty"`
 	Output             string `json:"output,omitempty"`
 	SystemInstructions string `json:"system_instructions,omitempty"`
 	ToolArgs           string `json:"tool_args,omitempty"`
@@ -147,7 +150,8 @@ type Content struct {
 
 // Empty reports whether no content is present.
 func (c *Content) Empty() bool {
-	return c == nil || (c.Input == "" && c.Output == "" && c.SystemInstructions == "" && c.ToolArgs == "" && c.ToolResult == "")
+	return c == nil || (c.Input == "" && c.InputContext == "" && c.Output == "" && c.SystemInstructions == "" &&
+		c.ToolArgs == "" && c.ToolResult == "")
 }
 
 // Event is a sanitized span event.

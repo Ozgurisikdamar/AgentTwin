@@ -135,3 +135,23 @@ func TestNumbersAreFiniteAndCountsNonNegative(t *testing.T) {
 		t.Fatalf("valid numbers dropped: %+v", ok.Attrs)
 	}
 }
+
+func TestTheRequestContextIsContentNeverExtra(t *testing.T) {
+	sp := otlp.Span{TraceID: "0123456789abcdef0123456789abcdef", SpanID: "0123456789abcdef", Name: "invoke_agent a",
+		Start: time.Unix(1790000000, 0), End: time.Unix(1790000001, 0),
+		Attrs: map[string]any{
+			"agenttwin.span.kind": "agent", "agenttwin.input": "refund ORD-1",
+			"agenttwin.input.context": `{"tenant":"demo-co","customer_id":"CUS-100"}`,
+		}}
+	s := Normalize(sp)
+	if s.Content == nil || s.Content.InputContext != `{"tenant":"demo-co","customer_id":"CUS-100"}` ||
+		s.Content.Input != "refund ORD-1" {
+		t.Fatalf("request context: %+v", s.Content)
+	}
+	if !IsContentKey("agenttwin.input.context") {
+		t.Fatal("the request context is a content key")
+	}
+	if _, ok := s.Attrs.Extra["agenttwin.input.context"]; ok {
+		t.Fatalf("the request context leaked into extra: %v", s.Attrs.Extra)
+	}
+}

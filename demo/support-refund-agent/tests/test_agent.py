@@ -7,6 +7,7 @@ well-formed trace.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -277,6 +278,8 @@ def test_trace_shape(telemetry: AgentTwin, exporter: InMemorySpanExporter) -> No
     assert attrs["agenttwin.agent.version"] == BASELINE
     assert attrs["agenttwin.model.kind"] == "deterministic-fake"
     assert "[REDACTED:email]" in attrs["agenttwin.input"]
+    # The request context a production failure's scenario draft replays.
+    assert json.loads(attrs["agenttwin.input.context"]) == {"tenant": "demo-co", "customer_id": "CUS-100"}
     refund = next(s for s in spans if s.name == "execute_tool refund_payment")
     assert dict(refund.attributes or {})["agenttwin.tool.risk"] == "WRITE_IRREVERSIBLE"
     outcome = dict(next(s for s in spans if s.name == "outcome.verify").attributes or {})

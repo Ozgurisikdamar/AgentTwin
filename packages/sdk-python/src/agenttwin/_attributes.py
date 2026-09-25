@@ -71,6 +71,9 @@ RETRIEVAL_DOCUMENT_COUNT = "agenttwin.retrieval.document_count"
 
 # Agent input/output content
 INPUT = "agenttwin.input"
+#: The request context the run acted in (tenant, customer, ...), as JSON.
+#: Content: governed by the content mode and redacted like the input.
+INPUT_CONTEXT = "agenttwin.input.context"
 OUTPUT = "agenttwin.output"
 
 # Errors

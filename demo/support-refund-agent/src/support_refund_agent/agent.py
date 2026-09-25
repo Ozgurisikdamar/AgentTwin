@@ -194,6 +194,8 @@ class Agent:
             manifest.name,
             manifest.version,
             input=req.input,
+            # The request context a production failure's scenario replays (ADR-0032).
+            input_context={k: v for k, v in (("tenant", req.tenant), ("customer_id", req.customer_id)) if v},
             session_id=session,
             source=req.source,  # type: ignore[arg-type]
             environment=req.environment,

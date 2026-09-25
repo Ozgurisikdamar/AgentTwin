@@ -1483,6 +1483,12 @@ components:
       properties:
         input:
           type: string
+        input_context:
+          type: string
+          description: |
+            The request context the run acted in (tenant, customer, ...), as
+            the SDK recorded it (`agenttwin.input.context`): JSON text. A
+            regression's scenario draft replays it (ADR-0032).
         output:
           type: string
         system_instructions:

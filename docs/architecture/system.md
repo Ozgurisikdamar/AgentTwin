@@ -62,13 +62,13 @@ flowchart TB
   subgraph core[Services]
     ts[trace-service · Go<br/>OTLP/JSON ingest, normalization,<br/>trace query, outcomes]
     gs[graph-service · Go<br/>components, edges, evidence,<br/>blast radius]
-    es[evaluation-service · Python<br/>evaluators, datasets, comparison,<br/>regression miner]
+    es[evaluation-service · Python<br/>datasets, evaluation runs, comparison,<br/>judges, reviews + worker]
     ss[simulation-service · Python<br/>scenarios, tool twins, faults,<br/>simulation runs + worker]
     rg[runtime-gateway · Go<br/>CEL policies, approvals,<br/>idempotency, SSRF-safe proxy]
   end
 
   subgraph infra[Infrastructure]
-    pg[(PostgreSQL 16 + pgvector<br/>schemas: control, trace, graph,<br/>eval, simulation, runtime)]
+    pg[(PostgreSQL 16 + pgvector<br/>schemas: control, trace, graph,<br/>evaluation, simulation, runtime)]
     mq[[RabbitMQ<br/>agenttwin.events topic exchange]]
     otel[OpenTelemetry Collector]
     obj[(Object storage<br/>filesystem / S3-compatible)]
@@ -111,7 +111,7 @@ boundary genuinely differ (specification §7 — "no microservice theatre"):
 | control-plane | Go | The only internet-facing edge: authentication, RBAC, tenancy, audit. Governance data with strict transactional invariants. |
 | trace-service | Go | Ingestion workload scales with customer traffic, not with users. Must survive bursts and back-pressure independently. |
 | graph-service | Go | Bounded recursive traversal and evidence bookkeeping; consumes events from several producers. |
-| evaluation-service | Python | Evaluators, embeddings, clustering (numpy, scikit-learn) and LLM-judge adapters live in the Python ecosystem. |
+| evaluation-service | Python | Evaluators, embeddings, clustering (numpy, scikit-learn) and LLM-judge adapters live in the Python ecosystem. Worker process is separable from its API (a slow judge never blocks it). |
 | simulation-service | Python | Long-running CPU/IO jobs with isolated per-run state; different failure mode (a stuck simulation must not affect the API). Worker process is separable from its API. |
 | runtime-gateway | Go | Sits in the agent's hot path for tool actions; latency-sensitive, security boundary for outbound traffic. |
 
@@ -268,7 +268,7 @@ through REST (synchronous, owner-validated) or events (asynchronous).
 | `control` | control-plane | organization, app_user, membership, project, environment, api_key, agent, agent_version, prompt_version, tool, tool_version, release_candidate, release_evaluation, gate_decision, gate_override, gate_policy, audit_event, outbox, processed_event |
 | `trace` | trace-service | trace, span, outcome, trace_flag, outbox |
 | `graph` | graph-service | component, dependency_edge, edge_evidence, processed_event |
-| `eval` | evaluation-service | dataset, eval_case, evaluator_version, eval_run, eval_result, scenario_comparison, human_review, failure, failure_cluster, regression_case, judge_calibration, outbox, processed_event |
+| `evaluation` | evaluation-service | dataset, dataset_version, eval_run, eval_run_transition, eval_case_result, judgment (verdict cache), human_review, judge_calibration, outbox, processed_event (regression mining adds its tables in Phase 6) |
 | `simulation` | simulation-service | twin_definition, scenario, scenario_version, simulation_run, simulation_run_transition, simulation_case, simulation_step, outbox, processed_event |
 | `runtime` | runtime-gateway | policy, policy_version, policy_decision, approval_request, approval_token, idempotency_record, tool_endpoint, trace_tool_counter, outbox |
 

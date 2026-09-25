@@ -23,6 +23,8 @@ services:
   seed: {build: *proxy-build}
   simulation-service: {build: *proxy-build}
   simulation-worker: {build: *proxy-build}
+  evaluation-service: {build: *proxy-build}
+  evaluation-worker: {build: *proxy-build}
 
 secrets:
   ca_bundle:

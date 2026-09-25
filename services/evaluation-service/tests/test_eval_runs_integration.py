@@ -117,7 +117,19 @@ async def test_the_candidate_is_compared_with_its_baseline_case_by_case() -> Non
             "EVALUATING",
             "COMPLETED",
         ]
-        assert final["judge"]["provider"] == "deterministic-fake" and final["budget"]["calls"] == 0
+        # The demo's three semantic expectations, graded on both sides.
+        assert final["judge"]["provider"] == "deterministic-fake" and final["budget"]["calls"] == 6
+        semantic = {}
+        for name in ("refund-happy-path", "refund-over-limit", "refund-tool-success-lie"):
+            graded = await ev.ok("GET", f"/api/v1/eval-runs/{run['id']}/cases/{name}")
+            [e] = [e for e in graded["comparison"]["expectations"] if e["type"] == "semantic"]
+            semantic[e["id"]] = (e["baseline"], e["candidate"], e["change"])
+        # The judge sees the candidate claim a refund the order does not show.
+        assert semantic == {
+            "reply-confirms-refund": ("PASS", "PASS", "same"),
+            "reply-explains-escalation": ("PASS", "PASS", "same"),
+            "reply-admits-unconfirmed-refund": ("PASS", "FAIL", "broken"),
+        }
 
         case = await ev.ok("GET", f"/api/v1/eval-runs/{run['id']}/cases/refund-timeout-after-mutation")
         comparison = case["comparison"]
@@ -152,6 +164,8 @@ def semantic_scenario(name: str = "refund-judged") -> str:
     """The happy path with two semantic expectations, graded by the judge."""
     doc = load_yaml((ASSURANCE / "scenarios" / "refund-happy-path.yaml").read_text())
     doc["metadata"]["name"] = name
+    # Only the semantic expectations this test asks for (not the demo's).
+    doc["spec"]["expectations"] = [e for e in doc["spec"]["expectations"] if e["type"] != "semantic"]
     doc["spec"]["expectations"] += [
         {
             "id": "reply-confirms-refund",

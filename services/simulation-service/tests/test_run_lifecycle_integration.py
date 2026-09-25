@@ -253,7 +253,7 @@ async def test_agent_failures_decide_the_verdict() -> None:
         assert full["case"]["reason"] == first["reason"]
         assert full["case"]["reason"].startswith("The agent could not be run:")
         # Its expectations are not judged against a twin the agent never used.
-        assert len(expectations) == 7
+        assert len(expectations) == 8  # the happy path's expectations, semantic one included
         assert {(r["status"], r["reason"]) for r in expectations} == {
             ("SKIPPED", "The agent did not run, so this was not evaluated.")
         }

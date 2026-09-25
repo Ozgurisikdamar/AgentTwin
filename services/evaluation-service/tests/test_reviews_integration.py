@@ -28,6 +28,7 @@ RUBRIC = "The reply confirms the refund."
 def judged_scenario(*, critical: bool, name: str = "refund-judged") -> str:
     doc = load_yaml((ASSURANCE / "scenarios" / "refund-happy-path.yaml").read_text())
     doc["metadata"]["name"] = name
+    doc["spec"]["expectations"] = [e for e in doc["spec"]["expectations"] if e["type"] != "semantic"]
     doc["spec"]["expectations"] += [
         {
             "id": "confirms",

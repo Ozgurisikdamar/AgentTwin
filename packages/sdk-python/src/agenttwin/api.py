@@ -2,9 +2,10 @@
 
 Authenticates with a project API key (``X-AgentTwin-Api-Key``). Covers what
 an agent codebase or its CI needs: finding the project, registering agent
-manifests, tool twins and scenarios, running simulations and recording
-outcomes. Errors carry the API's machine-readable code (``APIError.code``)
-and never include the key.
+manifests, tool twins and scenarios, running simulations, keeping datasets,
+evaluating a candidate version against its baseline and recording outcomes.
+Errors carry the API's machine-readable code (``APIError.code``) and never
+include the key.
 """
 
 from __future__ import annotations
@@ -239,11 +240,129 @@ class Client:
                 raise APIError(0, "TIMEOUT", f"simulation {run_id} is still {status} after {timeout_s:.0f}s")
             time.sleep(interval_s)
 
+    # ------------------------------------------------------------ evaluation
+    def datasets(self, project_id: str, *, name: str | None = None) -> list[dict[str, Any]]:
+        """The project's datasets (not archived); with ``name``, only the one
+        of that name (an empty list when there is none)."""
+        query = {"project_id": project_id, "limit": "200"}
+        if name is not None:
+            query["q"] = name
+        body = self.request("GET", "/api/v1/datasets", query=query)
+        items: list[dict[str, Any]] = body.get("items", []) if isinstance(body, dict) else []
+        return [d for d in items if name is None or d.get("name") == name]
+
+    def dataset(self, dataset_id: str, *, version: int | None = None) -> dict[str, Any]:
+        """A dataset with one version's cases (the latest unless ``version``)."""
+        query = {"version": str(version)} if version is not None else None
+        result: dict[str, Any] = self.request(
+            "GET", f"/api/v1/datasets/{urllib.parse.quote(dataset_id, safe='')}", query=query
+        )
+        return result
+
+    def create_dataset(
+        self,
+        project_id: str,
+        name: str,
+        cases: Sequence[str | Mapping[str, Any]],
+        *,
+        description: str | None = None,
+        tags: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        """Creates a dataset whose first version holds ``cases`` (scenario
+        names, or case objects). A name the project already uses raises
+        ``DATASET_EXISTS``."""
+        body: dict[str, Any] = {"project_id": project_id, "name": name, "cases": _cases(cases)}
+        if description is not None:
+            body["description"] = description
+        if tags is not None:
+            body["tags"] = list(tags)
+        result: dict[str, Any] = self.request("POST", "/api/v1/datasets", json_body=body)
+        return result
+
+    def add_dataset_cases(
+        self, dataset_id: str, cases: Sequence[str | Mapping[str, Any]], *, note: str | None = None
+    ) -> dict[str, Any]:
+        """Adds or updates cases: a new version when anything changed, the
+        latest one otherwise."""
+        body: dict[str, Any] = {"cases": _cases(cases)}
+        if note is not None:
+            body["note"] = note
+        result: dict[str, Any] = self.request(
+            "POST", f"/api/v1/datasets/{urllib.parse.quote(dataset_id, safe='')}/cases", json_body=body
+        )
+        return result
+
+    def start_eval_run(
+        self,
+        project_id: str,
+        agent: str,
+        baseline_version: str,
+        candidate_version: str,
+        *,
+        dataset_id: str | None = None,
+        dataset_version: int | None = None,
+        scenarios: Sequence[str] | None = None,
+        tags: Sequence[str] | None = None,
+        seed: int | None = None,
+        release_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Queues an evaluation of a candidate version against its baseline
+        on one suite: a dataset (its latest version unless
+        ``dataset_version``), or scenarios and tags (every scenario when
+        neither is given). With ``idempotency_key`` a retried request returns
+        the run the first attempt created."""
+        body: dict[str, Any] = {
+            "project_id": project_id,
+            "agent": agent,
+            "baseline_version": baseline_version,
+            "candidate_version": candidate_version,
+        }
+        optional = (
+            ("dataset_id", dataset_id),
+            ("dataset_version", dataset_version),
+            ("scenarios", list(scenarios) if scenarios is not None else None),
+            ("tags", list(tags) if tags is not None else None),
+            ("seed", seed),
+            ("release_id", release_id),
+        )
+        body |= {k: v for k, v in optional if v is not None}
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        result: dict[str, Any] = self.request("POST", "/api/v1/eval-runs", json_body=body, headers=headers)
+        return result
+
+    def eval_run(self, eval_run_id: str) -> dict[str, Any]:
+        """An evaluation run with its summary and compared cases."""
+        result: dict[str, Any] = self.request(
+            "GET", f"/api/v1/eval-runs/{urllib.parse.quote(eval_run_id, safe='')}"
+        )
+        return result
+
+    def wait_for_eval_run(
+        self, eval_run_id: str, *, timeout_s: float = 900.0, interval_s: float = 2.0
+    ) -> dict[str, Any]:
+        """Polls until the evaluation run is COMPLETED, FAILED or CANCELLED."""
+        deadline = time.monotonic() + timeout_s
+        while True:
+            detail = self.eval_run(eval_run_id)
+            status = str((detail.get("run") or {}).get("status"))
+            if status in _FINAL_RUN_STATUSES:
+                return detail
+            if time.monotonic() >= deadline:
+                raise APIError(
+                    0, "TIMEOUT", f"evaluation run {eval_run_id} is still {status} after {timeout_s:.0f}s"
+                )
+            time.sleep(interval_s)
+
     def record_outcome(self, trace_id: str, outcome: Mapping[str, Any]) -> dict[str, Any]:
         result: dict[str, Any] = self.request(
             "POST", f"/api/v1/traces/{trace_id.lower()}/outcome", json_body=dict(outcome)
         )
         return result
+
+
+def _cases(cases: Sequence[str | Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [{"scenario": c} if isinstance(c, str) else dict(c) for c in cases]
 
 
 def _api_error(err: urllib.error.HTTPError) -> APIError:

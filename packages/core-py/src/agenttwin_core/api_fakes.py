@@ -467,6 +467,144 @@ def run_detail(run_: Mapping[str, Any], cases: list[dict[str, Any]]) -> dict[str
     return {"run": dict(run_), "cases": cases, "transitions": []}
 
 
+def dataset(**over: Any) -> dict[str, Any]:
+    """A dataset (evaluation API ``Dataset``)."""
+    return {
+        "id": uuid(0xB001),
+        "organization_id": ORGANIZATION,
+        "project_id": PROJECT,
+        "name": "refund-regression-suite",
+        "description": None,
+        "owner": None,
+        "tags": [],
+        "latest_version": 1,
+        "archived": False,
+        "created_by": ACTOR,
+        "created_at": NOW,
+        "updated_at": NOW,
+    } | over
+
+
+def dataset_detail(dataset_: Mapping[str, Any], names: Sequence[str]) -> dict[str, Any]:
+    """``createDataset``, ``getDataset``, ``addDatasetCases``: the dataset and
+    its latest version with ``names`` as synthetic cases."""
+    version = int(dataset_["latest_version"])
+    summary: dict[str, Any] = {
+        "version": version,
+        "case_count": len(names),
+        "note": None,
+        "created_by": ACTOR,
+        "created_at": NOW,
+    }
+    cases: list[dict[str, Any]] = [
+        {
+            "scenario": name,
+            "tags": [],
+            "source": "manual",
+            "trace_id": None,
+            "privacy": "synthetic",
+            "note": None,
+            "added_by": ACTOR,
+            "added_at": NOW,
+            "last_result": None,
+        }
+        for name in names
+    ]
+    return {"dataset": dict(dataset_), "version": summary | {"cases": cases}, "versions": [summary]}
+
+
+def eval_run(**over: Any) -> dict[str, Any]:
+    """An evaluation run (evaluation API ``EvalRun``), queued unless
+    overridden."""
+    status = over.get("status", "QUEUED")
+    return {
+        "id": uuid(0xB101),
+        "organization_id": ORGANIZATION,
+        "project_id": PROJECT,
+        "agent_name": "support-refund-agent",
+        "baseline_version": "1.2.4",
+        "candidate_version": "1.3.0",
+        "seed": None,
+        "release_id": None,
+        "status": status,
+        "requested_by": ACTOR,
+        "cancel_requested": False,
+        "attempts": 0 if status == "QUEUED" else 1,
+        "baseline_run_id": None,
+        "candidate_run_id": None,
+        "case_count": 0,
+        "error": None,
+        "created_at": NOW,
+        "started_at": None if status == "QUEUED" else NOW,
+        "finished_at": NOW if status in _FINAL else None,
+        "updated_at": NOW,
+        "selection": {"scenarios": None, "tags": None, "dataset": None},
+        "counts": {"NEW_CRITICAL_FAILURE": 0, "REGRESSED": 0, "IMPROVED": 0, "UNCHANGED": 0, "INCOMPLETE": 0},
+        "pinning": None,
+        "judge": None,
+        "budget": None,
+    } | over
+
+
+def eval_run_summary(
+    *,
+    new_critical_failures: Mapping[str, Sequence[str]] | None = None,
+    regressed: Sequence[str] = (),
+    improved: Sequence[str] = (),
+    incomplete: Sequence[str] = (),
+    unchanged: int = 0,
+) -> dict[str, Any]:
+    """An evaluation run's summary (``EvalRunSummary``): the named cases per
+    class (``new_critical_failures`` maps a scenario to its expectations) and
+    ``unchanged`` more; side totals count the cases only."""
+    critical = dict(new_critical_failures or {})
+    counts = {
+        "NEW_CRITICAL_FAILURE": len(critical),
+        "REGRESSED": len(regressed),
+        "IMPROVED": len(improved),
+        "UNCHANGED": unchanged,
+        "INCOMPLETE": len(incomplete),
+    }
+    side = {
+        "cases": sum(counts.values()),
+        "passed": 0,
+        "failed": 0,
+        "incomplete": 0,
+        "critical_failures": 0,
+        "policy_violations": 0,
+        "retries": 0,
+        "duplicate_side_effects": 0,
+        "escalations": 0,
+        "tool_calls": 0,
+        "latency_ms_p50": None,
+        "latency_ms_p95": None,
+        "tokens": None,
+        "tokens_known": 0,
+        "cost_usd": None,
+        "cost_known": 0,
+        "semantic_score": None,
+    }
+    return {
+        "counts": counts,
+        "baseline": side,
+        "candidate": dict(side),
+        "new_critical_failures": [
+            {"scenario_name": name, "expectations": list(expectations)}
+            for name, expectations in critical.items()
+        ],
+        "regressed": list(regressed),
+        "improved": list(improved),
+        "incomplete": list(incomplete),
+        "slices": {"failure_class": {}},
+    }
+
+
+def eval_run_detail(run_: Mapping[str, Any], summary: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """``getEvalRun``: the run, its summary (``None`` until it is evaluated),
+    no cases and no transitions."""
+    return {"run": dict(run_), "summary": dict(summary) if summary else None, "cases": [], "transitions": []}
+
+
 def tool_step(seq: int, tool: str, arguments: Mapping[str, Any] | None = None, **over: Any) -> dict[str, Any]:
     """A tool call as the twin recorded it (a ``Step`` of ``getSimulationCase``).
     ``over`` sets fields of the record; ``latency_ms`` sets the step's."""
@@ -687,6 +825,10 @@ _ROUTES: tuple[tuple[str, str], ...] = (
     ("/api/v1/simulations", "simulation-service"),
     ("/twin/v1", "simulation-service"),
     ("/internal/v1/simulation-pairs", "simulation-service"),
+    ("/api/v1/datasets", "evaluation-service"),
+    ("/api/v1/eval-runs", "evaluation-service"),
+    ("/api/v1/reviews", "evaluation-service"),
+    ("/api/v1/judges", "evaluation-service"),
     ("/internal/v1", "control-plane"),
     ("/api/v1", "control-plane"),
 )

@@ -41,6 +41,25 @@ x-simulation-env: &simulation-env
   DEMO_AGENT_TOKEN: ${DEMO_AGENT_TOKEN}
   SIMULATION_WORKER_CONCURRENCY: ${SIMULATION_WORKER_CONCURRENCY:-2}
 
+x-evaluation-build: &evaluation-build
+  context: .
+  dockerfile: infra/docker/python.Dockerfile
+  target: evaluation-service
+  args:
+    PACKAGE: agenttwin-evaluation
+
+x-evaluation-env: &evaluation-env
+  <<: *service-env
+  SIMULATION_SERVICE_URL: http://simulation-service:8084
+  TRACE_SERVICE_URL: http://trace-service:8081
+  # The judge of semantic expectations (ADR-0022): the deterministic fake
+  # unless JUDGE_PROVIDER=anthropic|openai with JUDGE_MODEL and JUDGE_API_KEY.
+  JUDGE_PROVIDER: ${JUDGE_PROVIDER:-fake}
+  JUDGE_MODEL: ${JUDGE_MODEL:-}
+  JUDGE_API_KEY: ${JUDGE_API_KEY:-}
+  JUDGE_BASE_URL: ${JUDGE_BASE_URL:-}
+  EVALUATION_JUDGE_BUDGET_USD: ${EVALUATION_JUDGE_BUDGET_USD:-5}
+
 x-demo-env: &demo-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DEMO_TOOLS_URL: http://demo-tools:8091
@@ -138,6 +157,7 @@ services:
       AGENTTWIN_DEMO_API_KEY: ${AGENTTWIN_DEMO_API_KEY}
       TRACE_SERVICE_URL: http://trace-service:8081
       SIMULATION_SERVICE_URL: http://simulation-service:8084
+      EVALUATION_SERVICE_URL: http://evaluation-service:8083
     ports: ["127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}:8080"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -180,6 +200,31 @@ services:
       PORT: "8085"
     depends_on:
       simulation-service: {condition: service_healthy}
+    <<: *hardening
+
+  evaluation-service:
+    build: *evaluation-build
+    image: agenttwin/evaluation-service:${AGENTTWIN_VERSION:-dev}
+    command: ["serve"]
+    environment:
+      <<: *evaluation-env
+      PORT: "8083"
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    <<: *hardening
+
+  # Evaluates runs and calibrates judges; separate from the API so a slow
+  # judge never blocks it (same image, `worker` role).
+  evaluation-worker:
+    build: *evaluation-build
+    image: agenttwin/evaluation-service:${AGENTTWIN_VERSION:-dev}
+    command: ["worker"]
+    environment:
+      <<: *evaluation-env
+      PORT: "8087"
+    depends_on:
+      evaluation-service: {condition: service_healthy}
     <<: *hardening
 
   web:
@@ -241,15 +286,22 @@ services:
     <<: *hardening
 
   # `make seed` — registers the demo agent manifests, the tool twin and the
-  # scenarios, sends a batch of verified production traffic and simulates the
-  # scenario suite for the given versions. Idempotent for manifests, twins
-  # and scenarios.
+  # scenarios, sends a batch of verified production traffic, simulates the
+  # scenario suite for the given versions, keeps the regression suite dataset
+  # and evaluates the candidate against its baseline on it. Idempotent for
+  # manifests, twins, scenarios and the dataset.
   seed:
     build: *demo-build
     image: agenttwin/demo:${AGENTTWIN_VERSION:-dev}
     profiles: [seed]
     command:
-      ["seed", "--count", "${SEED_TRAFFIC_COUNT:-40}", "--simulate", "${SEED_SIMULATE_VERSIONS-1.2.4,1.3.0}"]
+      - seed
+      - --count
+      - ${SEED_TRAFFIC_COUNT:-40}
+      - --simulate
+      - ${SEED_SIMULATE_VERSIONS-1.2.4,1.3.0}
+      - --evaluate
+      - ${SEED_EVALUATE-1.2.4:1.3.0}
     environment:
       <<: *demo-env
       DEMO_AGENT_URL: http://demo-agent:8090
@@ -259,6 +311,8 @@ services:
       demo-agent: {condition: service_healthy}
       simulation-service: {condition: service_healthy}
       simulation-worker: {condition: service_healthy}
+      evaluation-service: {condition: service_healthy}
+      evaluation-worker: {condition: service_healthy}
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]

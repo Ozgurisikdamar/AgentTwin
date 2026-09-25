@@ -19,6 +19,7 @@ from agenttwin_core import api_fakes as fake
 from support_refund_agent.cli import default_assurance_dir, main
 
 PROJECT = "0199a0a0-0000-7000-8000-000000000001"
+DATASET = fake.uuid(0xB001)
 SCENARIOS = sorted(p.stem for p in (default_assurance_dir() / "scenarios").glob("*.yaml"))
 
 
@@ -34,6 +35,11 @@ class FakeAPI:
         # agent version -> (run status, {scenario: case status}); missing scenarios pass
         self.outcomes: dict[str, tuple[str, dict[str, str]]] = {}
         self.runs: dict[str, str] = {}
+        # The dataset the seed keeps (name -> its latest cases) and the
+        # evaluation runs (id -> what the fake answers once they are done).
+        self.datasets: dict[str, list[str]] = {}
+        self.evaluation: tuple[str, dict[str, Any]] = ("COMPLETED", {})
+        self.eval_runs: dict[str, dict[str, Any]] = {}
         self.checker = fake.ExchangeChecker()
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -88,6 +94,45 @@ class FakeAPI:
                 **counts,
             )
             return 200, fake.run_detail(run, cases)
+        return self.respond_evaluation(method, path, body)
+
+    def respond_evaluation(self, method: str, path: str, body: Any) -> tuple[int, Any]:
+        suite = fake.dataset(id=DATASET, project_id=PROJECT)
+        if (method, path) == ("GET", "/api/v1/datasets"):
+            items = [
+                suite | {"name": name, "latest_version": 1, "case_count": len(cases)}
+                for name, cases in self.datasets.items()
+            ]
+            return 200, {"items": items, "next_cursor": None}
+        if (method, path) == ("POST", "/api/v1/datasets"):
+            names = [c["scenario"] for c in body["cases"]]
+            self.datasets[body["name"]] = names
+            return 201, fake.dataset_detail(suite | {"name": body["name"], "latest_version": 1}, names)
+        if (method, path) == ("POST", f"/api/v1/datasets/{DATASET}/cases"):
+            [(name, cases)] = self.datasets.items()
+            added = [c["scenario"] for c in body["cases"] if c["scenario"] not in cases]
+            self.datasets[name] = cases + added
+            version = 2 if added else 1
+            detail = fake.dataset_detail(
+                suite | {"name": name, "latest_version": version}, self.datasets[name]
+            )
+            return (201 if added else 200), detail
+        if (method, path) == ("POST", "/api/v1/eval-runs"):
+            run_id = fake.uuid(0xB100 + len(self.eval_runs) + 1)
+            run = fake.eval_run(
+                id=run_id,
+                project_id=PROJECT,
+                agent_name=body["agent"],
+                baseline_version=body["baseline_version"],
+                candidate_version=body["candidate_version"],
+                seed=body.get("seed"),
+            )
+            self.eval_runs[run_id] = run
+            return 202, {"run": run}
+        if method == "GET" and path.startswith("/api/v1/eval-runs/"):
+            status, summary = self.evaluation
+            run = self.eval_runs[path.rsplit("/", 1)[1]] | {"status": status, "counts": summary["counts"]}
+            return 200, fake.eval_run_detail(run, summary if status == "COMPLETED" else None)
         return 404, fake.error("NOT_FOUND", path)
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
@@ -190,6 +235,88 @@ def test_seed_registers_the_suite_then_runs_it(api: FakeAPI, capsys: pytest.Capt
     assert again["scenarios"] == {"saved": [], "unchanged": SCENARIOS}
     assert [m["created"] for m in again["manifests"]] == [False] * len(again["manifests"])
     assert again["simulations"][0]["run_id"] == fake.uuid(0xE003)
+
+
+def test_seed_keeps_the_regression_suite_and_evaluates_the_candidate(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str]
+) -> None:
+    api.evaluation = (
+        "COMPLETED",
+        fake.eval_run_summary(
+            new_critical_failures={"refund-tool-success-lie": ["no-false-confirmation"]},
+            regressed=["refund-happy-path"],
+            unchanged=7,
+        ),
+    )
+    code, summary = seed(capsys, "--evaluate", "1.2.4:1.3.0")
+    assert code == 0
+    # The suite is every scenario, created once; the run evaluates it.
+    [created] = [b for b in api.bodies["/api/v1/datasets"] if b is not None]  # the POST
+    assert created | {"cases": None} == {
+        "project_id": PROJECT,
+        "name": "refund-regression-suite",
+        "description": "Every scenario of the support refund agent (loaded by the demo seed).",
+        "tags": ["demo"],
+        "cases": None,
+    }
+    assert api.datasets == {"refund-regression-suite": SCENARIOS}
+    assert api.bodies["/api/v1/eval-runs"] == [
+        {
+            "project_id": PROJECT,
+            "agent": "support-refund-agent",
+            "baseline_version": "1.2.4",
+            "candidate_version": "1.3.0",
+            "dataset_id": DATASET,
+            "seed": 42,
+        }
+    ]
+    assert summary["dataset"] == {"id": DATASET, "name": "refund-regression-suite", "version": 1}
+    assert summary["evaluation"] == {
+        "run_id": fake.uuid(0xB101),
+        "baseline": "1.2.4",
+        "candidate": "1.3.0",
+        "status": "COMPLETED",
+        "error": None,
+        "counts": {"NEW_CRITICAL_FAILURE": 1, "REGRESSED": 1, "IMPROVED": 0, "UNCHANGED": 7, "INCOMPLETE": 0},
+        "new_critical_failures": ["refund-tool-success-lie"],
+        "regressed": ["refund-happy-path"],
+        "incomplete": [],
+    }
+    used = {"listDatasets", "createDataset", "startEvalRun", "getEvalRun"}
+    assert used <= api.checker.succeeded()
+
+    # Seeding again keeps the same dataset (no new version) and evaluates again.
+    code, again = seed(capsys, "--evaluate", "1.2.4:1.3.0")
+    assert code == 0 and api.calls.count("POST /api/v1/datasets") == 1
+    assert again["dataset"]["version"] == 1 and again["evaluation"]["run_id"] == fake.uuid(0xB102)
+    assert "addDatasetCases" in api.checker.succeeded()
+
+
+@pytest.mark.parametrize(
+    ("evaluation", "reason"),
+    [
+        (
+            ("COMPLETED", fake.eval_run_summary(incomplete=["refund-happy-path"], unchanged=8)),
+            "a side did not run",
+        ),
+        (("FAILED", fake.eval_run_summary()), "the evaluation failed"),
+    ],
+)
+def test_seed_fails_on_an_unhealthy_evaluation(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], evaluation: tuple[str, dict[str, Any]], reason: str
+) -> None:
+    api.evaluation = evaluation
+    code, summary = seed(capsys, "--evaluate", "1.2.4:1.3.0")
+    assert code == 1, reason
+    assert summary["evaluation"]["status"] == evaluation[0]
+
+
+@pytest.mark.parametrize("spec", ["1.2.4", "1.2.4:", "1.2.4:9.9.9"])
+def test_seed_rejects_a_bad_evaluation_before_calling_the_api(
+    api: FakeAPI, capsys: pytest.CaptureFixture[str], spec: str
+) -> None:
+    assert seed(capsys, "--evaluate", spec) == (2, {})
+    assert api.calls == []
 
 
 @pytest.mark.parametrize(

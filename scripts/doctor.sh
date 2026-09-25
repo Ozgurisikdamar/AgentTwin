@@ -130,8 +130,8 @@ if is_running postgres && $COMPOSE exec -T postgres pg_isready -q -U "${POSTGRES
     "SELECT default_version FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | tr -d '[:space:]')
   [ -n "$vec" ] && ok "pgvector $vec available" || fail "pgvector extension is not available (use the pgvector/pgvector image)"
   schemas=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
-    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
-  [ "$schemas" = "control,simulation,trace" ] && ok "service schemas: control, simulation, trace" ||
+    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','evaluation','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
+  [ "$schemas" = "control,evaluation,simulation,trace" ] && ok "service schemas: control, evaluation, simulation, trace" ||
     fail "service schemas missing (found: ${schemas:-none})"
 else
   fail "postgres is not ready ($COMPOSE logs postgres)"
@@ -166,7 +166,8 @@ export_errors=$($COMPOSE logs --no-color --since 15m otel-collector 2>/dev/null 
 # ------------------------------------------------------------------ migrations
 section "Migrations"
 # service -> its binary inside the image (Go services: /app/service)
-for entry in control-plane:/app/service trace-service:/app/service simulation-service:simulation-service; do
+for entry in control-plane:/app/service trace-service:/app/service simulation-service:simulation-service \
+  evaluation-service:evaluation-service; do
   svc=${entry%%:*}
   bin=${entry#*:}
   if ! is_running "$svc"; then
@@ -194,8 +195,11 @@ probe() { # name url expected
 }
 probe "control plane ready" "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/health/ready" 200
 if $COMPOSE exec -T trace-service /app/service healthcheck >/dev/null 2>&1; then ok "trace service ready"; else fail "trace service is not ready"; fi
-for svc in simulation-service simulation-worker; do
-  if $COMPOSE exec -T "$svc" simulation-service healthcheck >/dev/null 2>&1; then ok "$svc ready"; else fail "$svc is not ready ($COMPOSE logs $svc)"; fi
+for entry in simulation-service:simulation-service simulation-worker:simulation-service \
+  evaluation-service:evaluation-service evaluation-worker:evaluation-service; do
+  svc=${entry%%:*}
+  bin=${entry#*:}
+  if $COMPOSE exec -T "$svc" "$bin" healthcheck >/dev/null 2>&1; then ok "$svc ready"; else fail "$svc is not ready ($COMPOSE logs $svc)"; fi
 done
 probe "web" "http://127.0.0.1:${WEB_HOST_PORT:-3000}/healthz" 200
 probe "demo agent" "http://127.0.0.1:${DEMO_AGENT_HOST_PORT:-8090}/healthz" 200
@@ -213,6 +217,9 @@ if [ -n "${AGENTTWIN_DEMO_API_KEY:-}" ]; then
     "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/scenarios?limit=200" 2>/dev/null)
   count=$(grep -o '"id": \?"' <<<"$scenarios" | wc -l | tr -d ' ')
   if [ "${count:-0}" -gt 0 ]; then ok "demo project has $count scenarios"; else warn "no demo scenarios yet - run 'make seed'"; fi
+  runs=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
+    "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/eval-runs?status=COMPLETED&limit=1" 2>/dev/null)
+  if grep -q '"status": \?"COMPLETED"' <<<"$runs"; then ok "demo project has a completed evaluation run"; else warn "no completed evaluation run yet - run 'make seed'"; fi
 fi
 
 printf '\n%d failed, %d warnings\n' "$fails" "$warns"

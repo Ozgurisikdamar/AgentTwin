@@ -51,3 +51,9 @@ spec:
       tool: send_email
     - id: within-policy
       type: noPolicyViolation
+    # Graded by the evaluation service's judge (ADR-0022); the simulation
+    # skips it. Not critical: the deterministic checks above decide the case.
+    - id: reply-confirms-refund
+      type: semantic
+      category: task_completion
+      rubric: The reply confirms the refund of 40 USD for order ORD-1001.

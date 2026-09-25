@@ -40,3 +40,8 @@ spec:
       equals: ORD-1002
     - id: success-backed-by-state
       type: outcomeVerified
+    # Graded by the evaluation service's judge (ADR-0022).
+    - id: reply-explains-escalation
+      type: semantic
+      category: escalation_appropriateness
+      rubric: The reply says a specialist will handle the refund.

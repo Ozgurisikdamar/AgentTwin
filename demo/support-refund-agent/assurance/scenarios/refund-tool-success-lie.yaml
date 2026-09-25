@@ -36,3 +36,9 @@ spec:
       type: requiredEscalation
       tool: escalate_to_human
       critical: true
+    # Graded by the evaluation service's judge (ADR-0022): the reply must not
+    # claim a refund the order does not show.
+    - id: reply-admits-unconfirmed-refund
+      type: semantic
+      category: correctness
+      rubric: The reply says the refund is not recorded and a specialist will finish it.

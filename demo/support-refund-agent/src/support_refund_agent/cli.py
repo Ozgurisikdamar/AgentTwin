@@ -6,7 +6,9 @@ support-refund-agent run TEXT      one conversation; prints the result and trace
 support-refund-agent traffic       production-like traffic (optionally verified)
 support-refund-agent seed          load the demo workspace: register the agent
                                    manifests, the tool twin and the scenarios, run
-                                   simulations and send verified production traffic
+                                   simulations, keep the regression suite (a dataset)
+                                   and evaluate a candidate against its baseline on
+                                   it, and send verified production traffic
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ from support_refund_agent.traffic import TrafficGenerator
 from support_refund_agent.world import INTERNAL_API_KEY
 
 DEFAULT_TOOLS_URL = "http://127.0.0.1:8091"
+# The dataset the seed keeps: every scenario of the demo's assurance directory.
+SUITE = "refund-regression-suite"
 
 
 def _telemetry() -> AgentTwin:
@@ -253,6 +257,62 @@ def _register_assurance(client: Client, project_id: str, directory: Path) -> dic
     return {"twin": twin_summary, "scenarios": {"saved": saved, "unchanged": unchanged}}
 
 
+def _ensure_suite(client: Client, project_id: str, scenarios: Sequence[str]) -> dict[str, Any]:
+    """The regression suite with every registered scenario: created the first
+    time, a new version when scenarios were added (unchanged otherwise)."""
+    found = client.datasets(project_id, name=SUITE)
+    if found:
+        detail = client.add_dataset_cases(str(found[0]["id"]), scenarios, note="seeded")
+    else:
+        detail = client.create_dataset(
+            project_id,
+            SUITE,
+            scenarios,
+            description="Every scenario of the support refund agent (loaded by the demo seed).",
+            tags=["demo"],
+        )
+    dataset, version = detail.get("dataset") or {}, detail.get("version") or {}
+    logging.info(
+        "dataset %s v%s (%d cases)", dataset.get("name"), version.get("version"), version.get("case_count", 0)
+    )
+    return {"id": dataset.get("id"), "name": dataset.get("name"), "version": version.get("version")}
+
+
+def _evaluation_summary(detail: Mapping[str, Any]) -> dict[str, Any]:
+    run = detail.get("run") or {}
+    summary = detail.get("summary") or {}
+    return {
+        "run_id": run.get("id"),
+        "baseline": run.get("baseline_version"),
+        "candidate": run.get("candidate_version"),
+        "status": run.get("status"),
+        "error": run.get("error"),
+        "counts": run.get("counts"),
+        "new_critical_failures": sorted(
+            str(n.get("scenario_name")) for n in summary.get("new_critical_failures") or ()
+        ),
+        "regressed": sorted(str(n) for n in summary.get("regressed") or ()),
+        "incomplete": sorted(str(n) for n in summary.get("incomplete") or ()),
+    }
+
+
+def _evaluation_healthy(evaluation: Mapping[str, Any]) -> bool:
+    """A comparison the demo can show: every case was compared. Regressions
+    are expected (the eager candidate has them); an incomplete case means a
+    side could not run."""
+    return evaluation.get("status") == "COMPLETED" and not evaluation.get("incomplete")
+
+
+def _parse_pair(spec: str) -> tuple[str, str] | None:
+    """``BASELINE:CANDIDATE`` (``""`` for none)."""
+    if not spec.strip():
+        return None
+    baseline, sep, candidate = spec.partition(":")
+    if not sep or not baseline.strip() or not candidate.strip():
+        raise ValueError(f"--evaluate expects BASELINE:CANDIDATE, got {spec!r}")
+    return baseline.strip(), candidate.strip()
+
+
 def _simulation_summary(version: str, detail: Mapping[str, Any]) -> dict[str, Any]:
     run = detail.get("run") or {}
     cases = detail.get("cases") or []
@@ -287,7 +347,17 @@ def cmd_seed(args: argparse.Namespace) -> int:
     if unknown:
         logging.error("--simulate: unknown agent version(s) %s; known: %s", unknown, store.versions)
         return 2
+    try:
+        pair = _parse_pair(args.evaluate)
+    except ValueError as err:
+        logging.error("%s", err)
+        return 2
+    if pair is not None and any(v not in store.versions for v in pair):
+        logging.error("--evaluate: unknown agent version(s) in %s; known: %s", pair, store.versions)
+        return 2
     started: list[tuple[str, str]] = []
+    suite: dict[str, Any] | None = None
+    evaluation_id: str | None = None
     try:
         client = Client.from_config(cfg, timeout_s=30)
         client.wait_ready(timeout_s=args.wait)
@@ -312,6 +382,20 @@ def cmd_seed(args: argparse.Namespace) -> int:
             logging.info(
                 "simulation of %s queued: %s (%d cases)", version, run_id, len(res.get("cases") or [])
             )
+        if pair is not None:
+            names = [*assurance["scenarios"]["saved"], *assurance["scenarios"]["unchanged"]]
+            suite = _ensure_suite(client, project_id, names)
+            baseline, candidate = pair
+            res = client.start_eval_run(
+                project_id,
+                store.get(candidate).name,
+                baseline,
+                candidate,
+                dataset_id=str(suite["id"]),
+                seed=args.seed,
+            )
+            evaluation_id = str(res["run"]["id"])
+            logging.info("evaluation of %s against %s queued: %s", candidate, baseline, evaluation_id)
     except APIError as err:
         logging.error("seed failed: %s", err)
         return 1
@@ -342,12 +426,30 @@ def cmd_seed(args: argparse.Namespace) -> int:
                 sim.get("errored_scenarios") or sim.get("error"),
             )
 
+    evaluation: dict[str, Any] | None = None
+    if evaluation_id is not None:
+        try:
+            detail = client.wait_for_eval_run(evaluation_id, timeout_s=args.evaluation_timeout)
+            evaluation = _evaluation_summary(detail)
+        except APIError as err:
+            logging.error("evaluation %s: %s", evaluation_id, err)
+            evaluation = {"run_id": evaluation_id, "status": None, "error": str(err)}
+        if not _evaluation_healthy(evaluation):
+            logging.error(
+                "evaluation %s is not healthy: status %s, incomplete %s",
+                evaluation_id,
+                evaluation.get("status"),
+                evaluation.get("incomplete") or evaluation.get("error"),
+            )
+
     verified = [r["verified_outcome"] for r in records if r.get("verified_outcome")]
     summary = {
         "project_id": project_id,
         "manifests": registered,
         **assurance,
         "simulations": simulations,
+        "dataset": suite,
+        "evaluation": evaluation,
         "conversations": len(records),
         "verified_outcomes": len(verified),
         "verified_outcomes_reported": sum(1 for v in verified if v.get("reported")),
@@ -362,7 +464,11 @@ def cmd_seed(args: argparse.Namespace) -> int:
     ui = os.environ.get("AGENTTWIN_UI_URL")
     if ui:
         print(f"\nOpen {ui.rstrip('/')}/traces to explore the demo traces.")
-    ok = len(records) == args.count and all(_healthy(s) for s in simulations)
+    ok = (
+        len(records) == args.count
+        and all(_healthy(s) for s in simulations)
+        and (evaluation is None or _evaluation_healthy(evaluation))
+    )
     return 0 if ok else 1
 
 
@@ -457,6 +563,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         default=600.0,
         help="seconds to wait for each simulation run to finish",
+    )
+    s.add_argument(
+        "--evaluate",
+        default="",
+        metavar="BASELINE:CANDIDATE",
+        help=f"evaluate CANDIDATE against BASELINE on the {SUITE} dataset (kept by the seed)",
+    )
+    s.add_argument(
+        "--evaluation-timeout",
+        type=float,
+        default=900.0,
+        help="seconds to wait for the evaluation run to finish",
     )
     s.set_defaults(fn=cmd_seed)
 

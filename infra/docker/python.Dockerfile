@@ -62,3 +62,14 @@ ENV AGENTTWIN_SCHEMA_DIR=/app/schemas
 HEALTHCHECK --interval=5s --timeout=5s --start-period=10s --retries=24 CMD ["simulation-service", "healthcheck"]
 ENTRYPOINT ["simulation-service"]
 CMD ["serve"]
+
+# The evaluation service (PACKAGE=agenttwin-evaluation). One image, two roles:
+# `serve` (datasets, evaluation runs, reviews, judge calibrations) and
+# `worker` (prepares, waits for and evaluates runs; runs calibrations).
+FROM runtime AS evaluation-service
+COPY packages/contracts /app/schemas/contracts
+COPY services/evaluation-service/migrations /app/services/evaluation-service/migrations
+ENV AGENTTWIN_SCHEMA_DIR=/app/schemas
+HEALTHCHECK --interval=5s --timeout=5s --start-period=10s --retries=24 CMD ["evaluation-service", "healthcheck"]
+ENTRYPOINT ["evaluation-service"]
+CMD ["serve"]

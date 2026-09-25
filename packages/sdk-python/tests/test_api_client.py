@@ -2,7 +2,7 @@
 
 The stub answers as the services' contracts document
 (``packages/contracts/openapi``: control plane, trace service, simulation
-service), and every exchange is checked against the contract of the service
+and evaluation services), and every exchange is checked against the contract of the service
 that owns the path (ADR-0021): a request the service would reject, or a stub
 answer the service could not give, fails the test that sees it.
 """
@@ -24,6 +24,8 @@ KEY = "atk_test0000_secret-value-that-must-not-leak"
 PROJECT = fake.PROJECT
 RUN = fake.uuid(0xA001)
 STUCK = fake.uuid(0xA002)
+EVAL = fake.uuid(0xA003)
+DATASET = fake.uuid(0xA004)
 
 
 class Stub:
@@ -31,6 +33,7 @@ class Stub:
         self.requests: list[dict[str, Any]] = []
         self.ready_after = 0  # number of 503s before /health/ready answers 200
         self.polls = 0
+        self.eval_polls = 0
         self.checker = fake.ExchangeChecker()
 
     def check(self, h: BaseHTTPRequestHandler, body: bytes, status: int, payload: Any) -> None:
@@ -95,6 +98,32 @@ class Stub:
                 self.polls += 1
                 status = "COMPLETED" if self.polls >= 3 else "RUNNING"
             return 200, fake.run_detail(fake.run(id=h.path.rsplit("/", 1)[1], status=status), [])
+        return self.evaluation(h, body)
+
+    def evaluation(self, h: BaseHTTPRequestHandler, body: bytes) -> tuple[int, Any]:
+        suite = fake.dataset(id=DATASET)
+        if h.command == "GET" and h.path.startswith("/api/v1/datasets?"):
+            return 200, {"items": [suite | {"case_count": 2}], "next_cursor": None}
+        if h.command == "POST" and h.path == "/api/v1/datasets":
+            req = json.loads(body)
+            if req["name"] == "taken":
+                return 409, fake.error("DATASET_EXISTS", "This project already has a dataset named 'taken'.")
+            names = [c["scenario"] for c in req["cases"]]
+            return 201, fake.dataset_detail(suite | {"name": req["name"]}, names)
+        if h.command == "POST" and h.path == f"/api/v1/datasets/{DATASET}/cases":
+            names = [c["scenario"] for c in json.loads(body)["cases"]]
+            return 201, fake.dataset_detail(suite | {"latest_version": 2}, names)
+        if h.command == "GET" and h.path.startswith(f"/api/v1/datasets/{DATASET}"):
+            return 200, fake.dataset_detail(suite, ["refund-happy-path"])
+        if h.command == "POST" and h.path == "/api/v1/eval-runs":
+            req = json.loads(body)
+            dataset = {"id": DATASET, "name": suite["name"], "version": 1} if "dataset_id" in req else None
+            selection = {"scenarios": req.get("scenarios"), "tags": req.get("tags"), "dataset": dataset}
+            return 202, {"run": fake.eval_run(id=EVAL, seed=req.get("seed"), selection=selection)}
+        if h.command == "GET" and h.path == f"/api/v1/eval-runs/{EVAL}":
+            self.eval_polls += 1
+            status = "COMPLETED" if self.eval_polls >= 2 else "RUNNING"
+            return 200, fake.eval_run_detail(fake.eval_run(id=EVAL, status=status))
         return 404, fake.error("NOT_FOUND", "Not found.")
 
 
@@ -262,6 +291,68 @@ def test_twins_scenarios_and_simulations(stub: tuple[Stub, str]) -> None:
     assert e.value.code == "TIMEOUT"
     # Every simulation API call the client makes was checked against the contract.
     used = {"registerTwin", "validateScenario", "saveScenario", "startSimulation", "getSimulation"}
+    assert used <= state.checker.succeeded()
+
+
+def test_datasets_and_evaluation_runs(stub: tuple[Stub, str]) -> None:
+    state, url = stub
+    client = Client(url, KEY)
+    [found] = client.datasets(PROJECT, name="refund-regression-suite")
+    assert found["id"] == DATASET
+    assert client.datasets(PROJECT, name="another-suite") == []
+    assert "q=another-suite" in state.requests[-1]["path"]
+
+    created = client.create_dataset(
+        PROJECT,
+        "smoke",
+        ["refund-happy-path", {"scenario": "refund-over-limit", "tags": ["limits"]}],
+        description="The smoke suite.",
+        tags=["smoke"],
+    )
+    assert created["dataset"]["name"] == "smoke" and created["version"]["case_count"] == 2
+    assert json.loads(state.requests[-1]["body"]) == {
+        "project_id": PROJECT,
+        "name": "smoke",
+        "cases": [{"scenario": "refund-happy-path"}, {"scenario": "refund-over-limit", "tags": ["limits"]}],
+        "description": "The smoke suite.",
+        "tags": ["smoke"],
+    }
+    with pytest.raises(APIError) as e:
+        client.create_dataset(PROJECT, "taken", ["refund-happy-path"])
+    assert (e.value.status, e.value.code) == (409, "DATASET_EXISTS")
+    added = client.add_dataset_cases(DATASET, ["refund-rate-limited"], note="rate limits")
+    assert added["dataset"]["latest_version"] == 2
+    assert json.loads(state.requests[-1]["body"]) == {
+        "cases": [{"scenario": "refund-rate-limited"}],
+        "note": "rate limits",
+    }
+    assert client.dataset(DATASET, version=1)["version"]["version"] == 1
+    assert state.requests[-1]["path"] == f"/api/v1/datasets/{DATASET}?version=1"
+
+    started = client.start_eval_run(
+        PROJECT,
+        "support-refund-agent",
+        "1.2.4",
+        "1.3.0",
+        dataset_id=DATASET,
+        seed=42,
+        idempotency_key="ci-7:eval",
+    )
+    assert started["run"]["status"] == "QUEUED" and started["run"]["selection"]["dataset"]["id"] == DATASET
+    assert json.loads(state.requests[-1]["body"]) == {
+        "project_id": PROJECT,
+        "agent": "support-refund-agent",
+        "baseline_version": "1.2.4",
+        "candidate_version": "1.3.0",
+        "dataset_id": DATASET,
+        "seed": 42,
+    }
+    assert state.requests[-1]["headers"]["idempotency-key"] == "ci-7:eval"
+    client.start_eval_run(PROJECT, "support-refund-agent", "1.2.4", "1.3.0", scenarios=["refund-happy-path"])
+    assert json.loads(state.requests[-1]["body"])["scenarios"] == ["refund-happy-path"]
+    done = client.wait_for_eval_run(EVAL, timeout_s=10, interval_s=0.01)
+    assert done["run"]["status"] == "COMPLETED" and state.eval_polls == 2
+    used = {"listDatasets", "createDataset", "addDatasetCases", "getDataset", "startEvalRun", "getEvalRun"}
     assert used <= state.checker.succeeded()
 
 

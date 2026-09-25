@@ -189,7 +189,7 @@ func QueryInt(r *http.Request, key string, def, min, max int) (int, error) {
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil || n < min || n > max {
-		return 0, Invalid("INVALID_PARAMETER", "Query parameter "+key+" must be an integer between "+strconv.Itoa(min)+" and "+strconv.Itoa(max)+".", map[string]any{"parameter": key})
+		return 0, Invalid("INVALID_PARAMETER", "Query parameter "+key+" must be an integer between "+strconv.Itoa(min)+" and "+strconv.Itoa(max)+".", map[string]any{"field": key})
 	}
 	return n, nil
 }

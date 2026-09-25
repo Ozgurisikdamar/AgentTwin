@@ -43,7 +43,9 @@ EVENTS = ROOT / "packages" / "contracts" / "events"
 BASELINE = EVENTS / ".baseline.json"
 OPENAPI = ROOT / "packages" / "contracts" / "openapi"
 OPENAPI_BASELINE = OPENAPI / ".baseline.json"
-METHODS = ("get", "put", "post", "delete", "patch")
+# Every operation an OpenAPI 3.1 path item can hold: one left out here would
+# be left out of the baseline, and could then change without being noticed.
+METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 
 Fingerprint = dict[str, dict[str, list[str]]]
 

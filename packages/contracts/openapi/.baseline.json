@@ -1,4 +1,5579 @@
 {
+  "control-plane": {
+    "GET /api/v1/agents/{agent_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:agent_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "version_count"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/latest_version": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/version_count": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/agents/{agent_id}/versions": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:agent_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "version"
+            ],
+            "/items/[]/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/items/[]/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/items/[]/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/items/[]/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/agent_id": [
+              "string"
+            ],
+            "/items/[]/agent_name": [
+              "string"
+            ],
+            "/items/[]/branch": [
+              "string"
+            ],
+            "/items/[]/commit_sha": [
+              "string"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/manifest": [
+              "object"
+            ],
+            "/items/[]/manifest/content_mode": [
+              "string"
+            ],
+            "/items/[]/manifest/dependencies": [
+              "array"
+            ],
+            "/items/[]/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/items/[]/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/items/[]/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/items/[]/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/items/[]/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/items/[]/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/items/[]/manifest/description": [
+              "string"
+            ],
+            "/items/[]/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/items/[]/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/items/[]/manifest/labels": [
+              "object"
+            ],
+            "/items/[]/manifest/limits": [
+              "object"
+            ],
+            "/items/[]/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/items/[]/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/items/[]/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/items/[]/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/items/[]/manifest/model": [
+              "object"
+            ],
+            "/items/[]/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/items/[]/manifest/model/name": [
+              "string"
+            ],
+            "/items/[]/manifest/model/params": [
+              "object"
+            ],
+            "/items/[]/manifest/model/provider": [
+              "string"
+            ],
+            "/items/[]/manifest/model/temperature": [
+              "number"
+            ],
+            "/items/[]/manifest/name": [
+              "string"
+            ],
+            "/items/[]/manifest/pii_mode": [
+              "string"
+            ],
+            "/items/[]/manifest/prompt_name": [
+              "string"
+            ],
+            "/items/[]/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/items/[]/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/items/[]/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/items/[]/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/items/[]/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/items/[]/manifest/tools/[]": [
+              "object"
+            ],
+            "/items/[]/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/items/[]/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/items/[]/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/items/[]/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/items/[]/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/items/[]/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/items/[]/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/items/[]/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/items/[]/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/items/[]/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/items/[]/manifest/version": [
+              "string"
+            ],
+            "/items/[]/manifest_sha256": [
+              "string"
+            ],
+            "/items/[]/model_name": [
+              "string"
+            ],
+            "/items/[]/model_params": [
+              "object"
+            ],
+            "/items/[]/model_provider": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/prompt_sha256": [
+              "string"
+            ],
+            "/items/[]/prompt_text": [
+              "string"
+            ],
+            "/items/[]/prompt_version_id": [
+              "string"
+            ],
+            "/items/[]/repo_url": [
+              "string"
+            ],
+            "/items/[]/runtime_endpoint": [
+              "string"
+            ],
+            "/items/[]/version": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/agents/{agent_id}/versions/{version}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:agent_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:version": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "tools",
+              "version"
+            ],
+            "/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ],
+            "/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "tool_version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_id": [
+              "string"
+            ],
+            "/agent_name": [
+              "string"
+            ],
+            "/branch": [
+              "string"
+            ],
+            "/commit_sha": [
+              "string"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/manifest": [
+              "object"
+            ],
+            "/manifest/content_mode": [
+              "string"
+            ],
+            "/manifest/dependencies": [
+              "array"
+            ],
+            "/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/manifest/description": [
+              "string"
+            ],
+            "/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/manifest/labels": [
+              "object"
+            ],
+            "/manifest/limits": [
+              "object"
+            ],
+            "/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/manifest/model": [
+              "object"
+            ],
+            "/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/manifest/model/name": [
+              "string"
+            ],
+            "/manifest/model/params": [
+              "object"
+            ],
+            "/manifest/model/provider": [
+              "string"
+            ],
+            "/manifest/model/temperature": [
+              "number"
+            ],
+            "/manifest/name": [
+              "string"
+            ],
+            "/manifest/pii_mode": [
+              "string"
+            ],
+            "/manifest/prompt_name": [
+              "string"
+            ],
+            "/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/manifest/tools/[]": [
+              "object"
+            ],
+            "/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/manifest/version": [
+              "string"
+            ],
+            "/manifest_sha256": [
+              "string"
+            ],
+            "/model_name": [
+              "string"
+            ],
+            "/model_params": [
+              "object"
+            ],
+            "/model_provider": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/prompt_sha256": [
+              "string"
+            ],
+            "/prompt_text": [
+              "string"
+            ],
+            "/prompt_version_id": [
+              "string"
+            ],
+            "/repo_url": [
+              "string"
+            ],
+            "/runtime_endpoint": [
+              "string"
+            ],
+            "/tools": [
+              "array"
+            ],
+            "/tools/[]": [
+              "object"
+            ],
+            "/tools/[]/approval_condition": [
+              "string"
+            ],
+            "/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/tools/[]/input_schema": [
+              "object"
+            ],
+            "/tools/[]/name": [
+              "string"
+            ],
+            "/tools/[]/risk": [
+              "string"
+            ],
+            "/tools/[]/tool_version": [
+              "integer"
+            ],
+            "/version": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/audit": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:action": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:resource_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:resource_type": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "action",
+              "actor",
+              "entry_hash",
+              "id",
+              "metadata",
+              "occurred_at",
+              "organization_id",
+              "resource_id",
+              "resource_type",
+              "seq",
+              "source_service"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/action": [
+              "string"
+            ],
+            "/items/[]/actor": [
+              "string"
+            ],
+            "/items/[]/after_hash": [
+              "string"
+            ],
+            "/items/[]/before_hash": [
+              "string"
+            ],
+            "/items/[]/entry_hash": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/metadata": [
+              "object"
+            ],
+            "/items/[]/occurred_at": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/prev_hash": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/reason": [
+              "string"
+            ],
+            "/items/[]/request_id": [
+              "string"
+            ],
+            "/items/[]/resource_id": [
+              "string"
+            ],
+            "/items/[]/resource_type": [
+              "string"
+            ],
+            "/items/[]/seq": [
+              "integer"
+            ],
+            "/items/[]/source_event_id": [
+              "string"
+            ],
+            "/items/[]/source_service": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/audit/verify": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "entries",
+              "valid"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/broken_at_seq": [
+              "integer"
+            ],
+            "/entries": [
+              "integer"
+            ],
+            "/reason": [
+              "string"
+            ],
+            "/valid": [
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/auth/config": {
+      "parameters": {},
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/demo_users/[]/role": [
+              "\"ADMIN\"",
+              "\"API_KEY\"",
+              "\"ENGINEER\"",
+              "\"OWNER\"",
+              "\"REVIEWER\"",
+              "\"SERVICE\"",
+              "\"VIEWER\""
+            ],
+            "/mode": [
+              "\"dev\"",
+              "\"oidc\""
+            ]
+          },
+          "required": {
+            "/": [
+              "mode"
+            ],
+            "/demo_users/[]": [
+              "email",
+              "name",
+              "role"
+            ],
+            "/oidc": [
+              "audience",
+              "client_id",
+              "issuer"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/demo_users": [
+              "array"
+            ],
+            "/demo_users/[]": [
+              "object"
+            ],
+            "/demo_users/[]/email": [
+              "string"
+            ],
+            "/demo_users/[]/name": [
+              "string"
+            ],
+            "/demo_users/[]/role": [
+              "string"
+            ],
+            "/mode": [
+              "string"
+            ],
+            "/oidc": [
+              "object"
+            ],
+            "/oidc/audience": [
+              "string"
+            ],
+            "/oidc/client_id": [
+              "string"
+            ],
+            "/oidc/issuer": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/me": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/memberships/[]/role": [
+              "\"ADMIN\"",
+              "\"API_KEY\"",
+              "\"ENGINEER\"",
+              "\"OWNER\"",
+              "\"REVIEWER\"",
+              "\"SERVICE\"",
+              "\"VIEWER\""
+            ],
+            "/permissions/[]": [
+              "\"agent.write\"",
+              "\"apikey.manage\"",
+              "\"approval.decide\"",
+              "\"eval.run\"",
+              "\"graph.write\"",
+              "\"policy.activate\"",
+              "\"policy.test\"",
+              "\"policy.write\"",
+              "\"read\"",
+              "\"regression.promote\"",
+              "\"release.override\"",
+              "\"release.write\"",
+              "\"review.write\"",
+              "\"runtime.invoke\"",
+              "\"scenario.write\"",
+              "\"settings.read\"",
+              "\"settings.write\"",
+              "\"simulation.run\"",
+              "\"trace.write\""
+            ],
+            "/principal/role": [
+              "\"ADMIN\"",
+              "\"API_KEY\"",
+              "\"ENGINEER\"",
+              "\"OWNER\"",
+              "\"REVIEWER\"",
+              "\"SERVICE\"",
+              "\"VIEWER\""
+            ],
+            "/principal/scopes/[]": [
+              "\"ci\"",
+              "\"read\"",
+              "\"runtime:invoke\"",
+              "\"traces:write\""
+            ]
+          },
+          "required": {
+            "/": [
+              "organization",
+              "permissions",
+              "principal"
+            ],
+            "/memberships/[]": [
+              "organization_id",
+              "organization_name",
+              "organization_slug",
+              "role"
+            ],
+            "/organization": [
+              "created_at",
+              "id",
+              "name",
+              "slug"
+            ],
+            "/principal": [
+              "org",
+              "role",
+              "sub"
+            ],
+            "/user": [
+              "display_name",
+              "email",
+              "id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/memberships": [
+              "array"
+            ],
+            "/memberships/[]": [
+              "object"
+            ],
+            "/memberships/[]/organization_id": [
+              "string"
+            ],
+            "/memberships/[]/organization_name": [
+              "string"
+            ],
+            "/memberships/[]/organization_slug": [
+              "string"
+            ],
+            "/memberships/[]/role": [
+              "string"
+            ],
+            "/organization": [
+              "object"
+            ],
+            "/organization/created_at": [
+              "string"
+            ],
+            "/organization/id": [
+              "string"
+            ],
+            "/organization/name": [
+              "string"
+            ],
+            "/organization/slug": [
+              "string"
+            ],
+            "/permissions": [
+              "array"
+            ],
+            "/permissions/[]": [
+              "string"
+            ],
+            "/principal": [
+              "object"
+            ],
+            "/principal/all_projects": [
+              "boolean"
+            ],
+            "/principal/email": [
+              "string"
+            ],
+            "/principal/org": [
+              "string"
+            ],
+            "/principal/projects": [
+              "array"
+            ],
+            "/principal/projects/[]": [
+              "string"
+            ],
+            "/principal/role": [
+              "string"
+            ],
+            "/principal/scopes": [
+              "array"
+            ],
+            "/principal/scopes/[]": [
+              "string"
+            ],
+            "/principal/sub": [
+              "string"
+            ],
+            "/user": [
+              "object"
+            ],
+            "/user/disabled_at": [
+              "string"
+            ],
+            "/user/display_name": [
+              "string"
+            ],
+            "/user/email": [
+              "string"
+            ],
+            "/user/id": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/members": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/role": [
+              "\"ADMIN\"",
+              "\"API_KEY\"",
+              "\"ENGINEER\"",
+              "\"OWNER\"",
+              "\"REVIEWER\"",
+              "\"SERVICE\"",
+              "\"VIEWER\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "display_name",
+              "email",
+              "id",
+              "role"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/disabled_at": [
+              "string"
+            ],
+            "/items/[]/display_name": [
+              "string"
+            ],
+            "/items/[]/email": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/role": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/projects": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "artifact_retention_days",
+              "content_mode",
+              "content_retention_days",
+              "created_at",
+              "created_by",
+              "description",
+              "gate_policy",
+              "id",
+              "name",
+              "organization_id",
+              "slug",
+              "store_prompt_text",
+              "trace_retention_days",
+              "updated_at",
+              "updated_by"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/artifact_retention_days": [
+              "integer"
+            ],
+            "/items/[]/content_mode": [
+              "string"
+            ],
+            "/items/[]/content_retention_days": [
+              "integer"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/description": [
+              "string"
+            ],
+            "/items/[]/gate_policy": [
+              "object"
+            ],
+            "/items/[]/gate_policy/allowReviewerOverride": [
+              "boolean"
+            ],
+            "/items/[]/gate_policy/alwaysRunTags": [
+              "array"
+            ],
+            "/items/[]/gate_policy/alwaysRunTags/[]": [
+              "string"
+            ],
+            "/items/[]/gate_policy/costRegressionPct": [
+              "number"
+            ],
+            "/items/[]/gate_policy/includeKnownRegressions": [
+              "boolean"
+            ],
+            "/items/[]/gate_policy/judgeMinAgreement": [
+              "number"
+            ],
+            "/items/[]/gate_policy/latencyRegressionMinMs": [
+              "number"
+            ],
+            "/items/[]/gate_policy/latencyRegressionPct": [
+              "number"
+            ],
+            "/items/[]/gate_policy/maxDepth": [
+              "integer"
+            ],
+            "/items/[]/gate_policy/maxGateCostUsd": [
+              "number"
+            ],
+            "/items/[]/gate_policy/maxProductionSamples": [
+              "integer"
+            ],
+            "/items/[]/gate_policy/semanticRegressionDrop": [
+              "number"
+            ],
+            "/items/[]/gate_policy/warnFailsCI": [
+              "boolean"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/slug": [
+              "string"
+            ],
+            "/items/[]/store_prompt_text": [
+              "boolean"
+            ],
+            "/items/[]/trace_retention_days": [
+              "integer"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/items/[]/updated_by": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/projects/{project_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ]
+          },
+          "required": {
+            "/": [
+              "artifact_retention_days",
+              "content_mode",
+              "content_retention_days",
+              "created_at",
+              "created_by",
+              "description",
+              "gate_policy",
+              "id",
+              "name",
+              "organization_id",
+              "slug",
+              "store_prompt_text",
+              "trace_retention_days",
+              "updated_at",
+              "updated_by"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/artifact_retention_days": [
+              "integer"
+            ],
+            "/content_mode": [
+              "string"
+            ],
+            "/content_retention_days": [
+              "integer"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/gate_policy": [
+              "object"
+            ],
+            "/gate_policy/allowReviewerOverride": [
+              "boolean"
+            ],
+            "/gate_policy/alwaysRunTags": [
+              "array"
+            ],
+            "/gate_policy/alwaysRunTags/[]": [
+              "string"
+            ],
+            "/gate_policy/costRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/includeKnownRegressions": [
+              "boolean"
+            ],
+            "/gate_policy/judgeMinAgreement": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionMinMs": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/maxDepth": [
+              "integer"
+            ],
+            "/gate_policy/maxGateCostUsd": [
+              "number"
+            ],
+            "/gate_policy/maxProductionSamples": [
+              "integer"
+            ],
+            "/gate_policy/semanticRegressionDrop": [
+              "number"
+            ],
+            "/gate_policy/warnFailsCI": [
+              "boolean"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/slug": [
+              "string"
+            ],
+            "/store_prompt_text": [
+              "boolean"
+            ],
+            "/trace_retention_days": [
+              "integer"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/updated_by": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/projects/{project_id}/agents": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "version_count"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/description": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/latest_version": [
+              "string"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/version_count": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/projects/{project_id}/api-keys": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/scopes/[]": [
+              "\"ci\"",
+              "\"read\"",
+              "\"runtime:invoke\"",
+              "\"traces:write\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "created_at",
+              "created_by",
+              "id",
+              "name",
+              "organization_id",
+              "prefix",
+              "project_id",
+              "scopes"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/expires_at": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/last_used_at": [
+              "string"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/prefix": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/revoked_at": [
+              "string"
+            ],
+            "/items/[]/revoked_by": [
+              "string"
+            ],
+            "/items/[]/rotated_from": [
+              "string"
+            ],
+            "/items/[]/scopes": [
+              "array"
+            ],
+            "/items/[]/scopes/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/projects/{project_id}/environments": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "created_at",
+              "id",
+              "is_production",
+              "name",
+              "project_id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/is_production": [
+              "boolean"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/projects/{project_id}/tools": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/items/[]/source": [
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OPENAPI\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items"
+            ],
+            "/items/[]": [
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "project_id",
+              "risk",
+              "source",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/description": [
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/input_schema": [
+              "object"
+            ],
+            "/items/[]/latest_version": [
+              "integer"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/risk": [
+              "string"
+            ],
+            "/items/[]/risk_dimensions": [
+              "object"
+            ],
+            "/items/[]/source": [
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /internal/v1/agent-versions": {
+      "parameters": {
+        "query:agent": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:version": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "tools",
+              "version"
+            ],
+            "/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ],
+            "/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "tool_version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_id": [
+              "string"
+            ],
+            "/agent_name": [
+              "string"
+            ],
+            "/branch": [
+              "string"
+            ],
+            "/commit_sha": [
+              "string"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/manifest": [
+              "object"
+            ],
+            "/manifest/content_mode": [
+              "string"
+            ],
+            "/manifest/dependencies": [
+              "array"
+            ],
+            "/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/manifest/description": [
+              "string"
+            ],
+            "/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/manifest/labels": [
+              "object"
+            ],
+            "/manifest/limits": [
+              "object"
+            ],
+            "/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/manifest/model": [
+              "object"
+            ],
+            "/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/manifest/model/name": [
+              "string"
+            ],
+            "/manifest/model/params": [
+              "object"
+            ],
+            "/manifest/model/provider": [
+              "string"
+            ],
+            "/manifest/model/temperature": [
+              "number"
+            ],
+            "/manifest/name": [
+              "string"
+            ],
+            "/manifest/pii_mode": [
+              "string"
+            ],
+            "/manifest/prompt_name": [
+              "string"
+            ],
+            "/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/manifest/tools/[]": [
+              "object"
+            ],
+            "/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/manifest/version": [
+              "string"
+            ],
+            "/manifest_sha256": [
+              "string"
+            ],
+            "/model_name": [
+              "string"
+            ],
+            "/model_params": [
+              "object"
+            ],
+            "/model_provider": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/prompt_sha256": [
+              "string"
+            ],
+            "/prompt_text": [
+              "string"
+            ],
+            "/prompt_version_id": [
+              "string"
+            ],
+            "/repo_url": [
+              "string"
+            ],
+            "/runtime_endpoint": [
+              "string"
+            ],
+            "/tools": [
+              "array"
+            ],
+            "/tools/[]": [
+              "object"
+            ],
+            "/tools/[]/approval_condition": [
+              "string"
+            ],
+            "/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/tools/[]/input_schema": [
+              "object"
+            ],
+            "/tools/[]/name": [
+              "string"
+            ],
+            "/tools/[]/risk": [
+              "string"
+            ],
+            "/tools/[]/tool_version": [
+              "integer"
+            ],
+            "/version": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /internal/v1/agent-versions/{version_id}": {
+      "parameters": {
+        "path:version_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ],
+            "/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "tools",
+              "version"
+            ],
+            "/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ],
+            "/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "tool_version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent_id": [
+              "string"
+            ],
+            "/agent_name": [
+              "string"
+            ],
+            "/branch": [
+              "string"
+            ],
+            "/commit_sha": [
+              "string"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/manifest": [
+              "object"
+            ],
+            "/manifest/content_mode": [
+              "string"
+            ],
+            "/manifest/dependencies": [
+              "array"
+            ],
+            "/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/manifest/description": [
+              "string"
+            ],
+            "/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/manifest/labels": [
+              "object"
+            ],
+            "/manifest/limits": [
+              "object"
+            ],
+            "/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/manifest/model": [
+              "object"
+            ],
+            "/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/manifest/model/name": [
+              "string"
+            ],
+            "/manifest/model/params": [
+              "object"
+            ],
+            "/manifest/model/provider": [
+              "string"
+            ],
+            "/manifest/model/temperature": [
+              "number"
+            ],
+            "/manifest/name": [
+              "string"
+            ],
+            "/manifest/pii_mode": [
+              "string"
+            ],
+            "/manifest/prompt_name": [
+              "string"
+            ],
+            "/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/manifest/tools/[]": [
+              "object"
+            ],
+            "/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/manifest/version": [
+              "string"
+            ],
+            "/manifest_sha256": [
+              "string"
+            ],
+            "/model_name": [
+              "string"
+            ],
+            "/model_params": [
+              "object"
+            ],
+            "/model_provider": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/prompt_sha256": [
+              "string"
+            ],
+            "/prompt_text": [
+              "string"
+            ],
+            "/prompt_version_id": [
+              "string"
+            ],
+            "/repo_url": [
+              "string"
+            ],
+            "/runtime_endpoint": [
+              "string"
+            ],
+            "/tools": [
+              "array"
+            ],
+            "/tools/[]": [
+              "object"
+            ],
+            "/tools/[]/approval_condition": [
+              "string"
+            ],
+            "/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/tools/[]/input_schema": [
+              "object"
+            ],
+            "/tools/[]/name": [
+              "string"
+            ],
+            "/tools/[]/risk": [
+              "string"
+            ],
+            "/tools/[]/tool_version": [
+              "integer"
+            ],
+            "/version": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /internal/v1/projects/{project_id}": {
+      "parameters": {
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ]
+          },
+          "required": {
+            "/": [
+              "artifact_retention_days",
+              "content_mode",
+              "content_retention_days",
+              "created_at",
+              "created_by",
+              "description",
+              "gate_policy",
+              "id",
+              "name",
+              "organization_id",
+              "slug",
+              "store_prompt_text",
+              "trace_retention_days",
+              "updated_at",
+              "updated_by"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/artifact_retention_days": [
+              "integer"
+            ],
+            "/content_mode": [
+              "string"
+            ],
+            "/content_retention_days": [
+              "integer"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/gate_policy": [
+              "object"
+            ],
+            "/gate_policy/allowReviewerOverride": [
+              "boolean"
+            ],
+            "/gate_policy/alwaysRunTags": [
+              "array"
+            ],
+            "/gate_policy/alwaysRunTags/[]": [
+              "string"
+            ],
+            "/gate_policy/costRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/includeKnownRegressions": [
+              "boolean"
+            ],
+            "/gate_policy/judgeMinAgreement": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionMinMs": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/maxDepth": [
+              "integer"
+            ],
+            "/gate_policy/maxGateCostUsd": [
+              "number"
+            ],
+            "/gate_policy/maxProductionSamples": [
+              "integer"
+            ],
+            "/gate_policy/semanticRegressionDrop": [
+              "number"
+            ],
+            "/gate_policy/warnFailsCI": [
+              "boolean"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/slug": [
+              "string"
+            ],
+            "/store_prompt_text": [
+              "boolean"
+            ],
+            "/trace_retention_days": [
+              "integer"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/updated_by": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "PATCH /api/v1/projects/{project_id}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ]
+          },
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/artifact_retention_days": [
+              "integer"
+            ],
+            "/content_mode": [
+              "string"
+            ],
+            "/content_retention_days": [
+              "integer"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/gate_policy": [
+              "object"
+            ],
+            "/gate_policy/allowReviewerOverride": [
+              "boolean"
+            ],
+            "/gate_policy/alwaysRunTags": [
+              "array"
+            ],
+            "/gate_policy/alwaysRunTags/[]": [
+              "string"
+            ],
+            "/gate_policy/costRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/includeKnownRegressions": [
+              "boolean"
+            ],
+            "/gate_policy/judgeMinAgreement": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionMinMs": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/maxDepth": [
+              "integer"
+            ],
+            "/gate_policy/maxGateCostUsd": [
+              "number"
+            ],
+            "/gate_policy/maxProductionSamples": [
+              "integer"
+            ],
+            "/gate_policy/semanticRegressionDrop": [
+              "number"
+            ],
+            "/gate_policy/warnFailsCI": [
+              "boolean"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/store_prompt_text": [
+              "boolean"
+            ],
+            "/trace_retention_days": [
+              "integer"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ]
+          },
+          "required": {
+            "/": [
+              "artifact_retention_days",
+              "content_mode",
+              "content_retention_days",
+              "created_at",
+              "created_by",
+              "description",
+              "gate_policy",
+              "id",
+              "name",
+              "organization_id",
+              "slug",
+              "store_prompt_text",
+              "trace_retention_days",
+              "updated_at",
+              "updated_by"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/artifact_retention_days": [
+              "integer"
+            ],
+            "/content_mode": [
+              "string"
+            ],
+            "/content_retention_days": [
+              "integer"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/gate_policy": [
+              "object"
+            ],
+            "/gate_policy/allowReviewerOverride": [
+              "boolean"
+            ],
+            "/gate_policy/alwaysRunTags": [
+              "array"
+            ],
+            "/gate_policy/alwaysRunTags/[]": [
+              "string"
+            ],
+            "/gate_policy/costRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/includeKnownRegressions": [
+              "boolean"
+            ],
+            "/gate_policy/judgeMinAgreement": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionMinMs": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/maxDepth": [
+              "integer"
+            ],
+            "/gate_policy/maxGateCostUsd": [
+              "number"
+            ],
+            "/gate_policy/maxProductionSamples": [
+              "integer"
+            ],
+            "/gate_policy/semanticRegressionDrop": [
+              "number"
+            ],
+            "/gate_policy/warnFailsCI": [
+              "boolean"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/slug": [
+              "string"
+            ],
+            "/store_prompt_text": [
+              "boolean"
+            ],
+            "/trace_retention_days": [
+              "integer"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/updated_by": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/agents/{agent_id}/versions": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:agent_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:branch": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:commit_sha": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:repo_url": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "embedded": {
+            "/oneOf[0]/manifest/oneOf[1]": [
+              "agent-manifest.v1"
+            ],
+            "/oneOf[1]": [
+              "agent-manifest.v1"
+            ]
+          },
+          "enums": {},
+          "required": {
+            "/oneOf[0]": [
+              "manifest"
+            ]
+          },
+          "types": {
+            "/oneOf[0]": [
+              "object"
+            ],
+            "/oneOf[0]/branch": [
+              "string"
+            ],
+            "/oneOf[0]/commit_sha": [
+              "string"
+            ],
+            "/oneOf[0]/manifest/oneOf[0]": [
+              "string"
+            ],
+            "/oneOf[0]/manifest/oneOf[1]": [
+              "object"
+            ],
+            "/oneOf[0]/repo_url": [
+              "string"
+            ],
+            "/oneOf[1]": [
+              "object"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/version/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "created",
+              "version"
+            ],
+            "/agent": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "version_count"
+            ],
+            "/version": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "version"
+            ],
+            "/version/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/version/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/version/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "object"
+            ],
+            "/agent/created_at": [
+              "string"
+            ],
+            "/agent/created_by": [
+              "string"
+            ],
+            "/agent/description": [
+              "string"
+            ],
+            "/agent/id": [
+              "string"
+            ],
+            "/agent/latest_version": [
+              "string"
+            ],
+            "/agent/name": [
+              "string"
+            ],
+            "/agent/organization_id": [
+              "string"
+            ],
+            "/agent/project_id": [
+              "string"
+            ],
+            "/agent/version_count": [
+              "integer"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/agent_id": [
+              "string"
+            ],
+            "/version/agent_name": [
+              "string"
+            ],
+            "/version/branch": [
+              "string"
+            ],
+            "/version/commit_sha": [
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/id": [
+              "string"
+            ],
+            "/version/manifest": [
+              "object"
+            ],
+            "/version/manifest/content_mode": [
+              "string"
+            ],
+            "/version/manifest/dependencies": [
+              "array"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/version/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/version/manifest/description": [
+              "string"
+            ],
+            "/version/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/version/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/version/manifest/labels": [
+              "object"
+            ],
+            "/version/manifest/limits": [
+              "object"
+            ],
+            "/version/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/version/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/version/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/version/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/version/manifest/model": [
+              "object"
+            ],
+            "/version/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/version/manifest/model/name": [
+              "string"
+            ],
+            "/version/manifest/model/params": [
+              "object"
+            ],
+            "/version/manifest/model/provider": [
+              "string"
+            ],
+            "/version/manifest/model/temperature": [
+              "number"
+            ],
+            "/version/manifest/name": [
+              "string"
+            ],
+            "/version/manifest/pii_mode": [
+              "string"
+            ],
+            "/version/manifest/prompt_name": [
+              "string"
+            ],
+            "/version/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/version/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/version/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/version/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/version/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/version/manifest/tools/[]": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/version/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/version/manifest/version": [
+              "string"
+            ],
+            "/version/manifest_sha256": [
+              "string"
+            ],
+            "/version/model_name": [
+              "string"
+            ],
+            "/version/model_params": [
+              "object"
+            ],
+            "/version/model_provider": [
+              "string"
+            ],
+            "/version/project_id": [
+              "string"
+            ],
+            "/version/prompt_sha256": [
+              "string"
+            ],
+            "/version/prompt_text": [
+              "string"
+            ],
+            "/version/prompt_version_id": [
+              "string"
+            ],
+            "/version/repo_url": [
+              "string"
+            ],
+            "/version/runtime_endpoint": [
+              "string"
+            ],
+            "/version/version": [
+              "string"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/version/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "created",
+              "version"
+            ],
+            "/agent": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "version_count"
+            ],
+            "/version": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "version"
+            ],
+            "/version/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/version/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/version/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "object"
+            ],
+            "/agent/created_at": [
+              "string"
+            ],
+            "/agent/created_by": [
+              "string"
+            ],
+            "/agent/description": [
+              "string"
+            ],
+            "/agent/id": [
+              "string"
+            ],
+            "/agent/latest_version": [
+              "string"
+            ],
+            "/agent/name": [
+              "string"
+            ],
+            "/agent/organization_id": [
+              "string"
+            ],
+            "/agent/project_id": [
+              "string"
+            ],
+            "/agent/version_count": [
+              "integer"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/agent_id": [
+              "string"
+            ],
+            "/version/agent_name": [
+              "string"
+            ],
+            "/version/branch": [
+              "string"
+            ],
+            "/version/commit_sha": [
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/id": [
+              "string"
+            ],
+            "/version/manifest": [
+              "object"
+            ],
+            "/version/manifest/content_mode": [
+              "string"
+            ],
+            "/version/manifest/dependencies": [
+              "array"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/version/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/version/manifest/description": [
+              "string"
+            ],
+            "/version/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/version/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/version/manifest/labels": [
+              "object"
+            ],
+            "/version/manifest/limits": [
+              "object"
+            ],
+            "/version/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/version/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/version/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/version/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/version/manifest/model": [
+              "object"
+            ],
+            "/version/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/version/manifest/model/name": [
+              "string"
+            ],
+            "/version/manifest/model/params": [
+              "object"
+            ],
+            "/version/manifest/model/provider": [
+              "string"
+            ],
+            "/version/manifest/model/temperature": [
+              "number"
+            ],
+            "/version/manifest/name": [
+              "string"
+            ],
+            "/version/manifest/pii_mode": [
+              "string"
+            ],
+            "/version/manifest/prompt_name": [
+              "string"
+            ],
+            "/version/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/version/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/version/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/version/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/version/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/version/manifest/tools/[]": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/version/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/version/manifest/version": [
+              "string"
+            ],
+            "/version/manifest_sha256": [
+              "string"
+            ],
+            "/version/model_name": [
+              "string"
+            ],
+            "/version/model_params": [
+              "object"
+            ],
+            "/version/model_provider": [
+              "string"
+            ],
+            "/version/project_id": [
+              "string"
+            ],
+            "/version/prompt_sha256": [
+              "string"
+            ],
+            "/version/prompt_text": [
+              "string"
+            ],
+            "/version/prompt_version_id": [
+              "string"
+            ],
+            "/version/repo_url": [
+              "string"
+            ],
+            "/version/runtime_endpoint": [
+              "string"
+            ],
+            "/version/version": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/api-keys/{key_id}/revoke": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:key_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": false,
+        "schema": {
+          "enums": {},
+          "required": {},
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/reason": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/scopes/[]": [
+              "\"ci\"",
+              "\"read\"",
+              "\"runtime:invoke\"",
+              "\"traces:write\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created_at",
+              "created_by",
+              "id",
+              "name",
+              "organization_id",
+              "prefix",
+              "project_id",
+              "scopes"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/last_used_at": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/prefix": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revoked_at": [
+              "string"
+            ],
+            "/revoked_by": [
+              "string"
+            ],
+            "/rotated_from": [
+              "string"
+            ],
+            "/scopes": [
+              "array"
+            ],
+            "/scopes/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/api-keys/{key_id}/rotate": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:key_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "201": {
+          "enums": {
+            "/scopes/[]": [
+              "\"ci\"",
+              "\"read\"",
+              "\"runtime:invoke\"",
+              "\"traces:write\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created_at",
+              "created_by",
+              "id",
+              "key",
+              "name",
+              "organization_id",
+              "prefix",
+              "project_id",
+              "scopes"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/key": [
+              "string"
+            ],
+            "/last_used_at": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/prefix": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revoked_at": [
+              "string"
+            ],
+            "/revoked_by": [
+              "string"
+            ],
+            "/rotated_from": [
+              "string"
+            ],
+            "/scopes": [
+              "array"
+            ],
+            "/scopes/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/auth/dev/login": {
+      "parameters": {},
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "email"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/email": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/role": [
+              "\"ADMIN\"",
+              "\"API_KEY\"",
+              "\"ENGINEER\"",
+              "\"OWNER\"",
+              "\"REVIEWER\"",
+              "\"SERVICE\"",
+              "\"VIEWER\""
+            ]
+          },
+          "required": {
+            "/": [
+              "expires_at",
+              "organization_id",
+              "role",
+              "token",
+              "user"
+            ],
+            "/user": [
+              "display_name",
+              "email",
+              "id"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/role": [
+              "string"
+            ],
+            "/token": [
+              "string"
+            ],
+            "/user": [
+              "object"
+            ],
+            "/user/disabled_at": [
+              "string"
+            ],
+            "/user/display_name": [
+              "string"
+            ],
+            "/user/email": [
+              "string"
+            ],
+            "/user/id": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/manifests/validate": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "embedded": {
+            "/oneOf[0]/manifest/oneOf[1]": [
+              "agent-manifest.v1"
+            ],
+            "/oneOf[1]": [
+              "agent-manifest.v1"
+            ]
+          },
+          "enums": {},
+          "required": {
+            "/oneOf[0]": [
+              "manifest"
+            ]
+          },
+          "types": {
+            "/oneOf[0]": [
+              "object"
+            ],
+            "/oneOf[0]/branch": [
+              "string"
+            ],
+            "/oneOf[0]/commit_sha": [
+              "string"
+            ],
+            "/oneOf[0]/manifest/oneOf[0]": [
+              "string"
+            ],
+            "/oneOf[0]/manifest/oneOf[1]": [
+              "object"
+            ],
+            "/oneOf[0]/repo_url": [
+              "string"
+            ],
+            "/oneOf[1]": [
+              "object"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/normalized/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "manifest_sha256",
+              "name",
+              "normalized",
+              "prompt_sha256",
+              "valid",
+              "version"
+            ],
+            "/normalized": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/normalized/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/normalized/model": [
+              "name",
+              "provider"
+            ],
+            "/normalized/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/manifest_sha256": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/normalized": [
+              "object"
+            ],
+            "/normalized/content_mode": [
+              "string"
+            ],
+            "/normalized/dependencies": [
+              "array"
+            ],
+            "/normalized/dependencies/[]": [
+              "object"
+            ],
+            "/normalized/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/normalized/dependencies/[]/kind": [
+              "string"
+            ],
+            "/normalized/dependencies/[]/name": [
+              "string"
+            ],
+            "/normalized/dependencies/[]/relation": [
+              "string"
+            ],
+            "/normalized/dependencies/[]/tool": [
+              "string"
+            ],
+            "/normalized/description": [
+              "string"
+            ],
+            "/normalized/expected_outcomes": [
+              "array"
+            ],
+            "/normalized/expected_outcomes/[]": [
+              "string"
+            ],
+            "/normalized/labels": [
+              "object"
+            ],
+            "/normalized/limits": [
+              "object"
+            ],
+            "/normalized/limits/max_cost_usd": [
+              "number"
+            ],
+            "/normalized/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/normalized/limits/max_steps": [
+              "integer"
+            ],
+            "/normalized/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/normalized/model": [
+              "object"
+            ],
+            "/normalized/model/max_tokens": [
+              "integer"
+            ],
+            "/normalized/model/name": [
+              "string"
+            ],
+            "/normalized/model/params": [
+              "object"
+            ],
+            "/normalized/model/provider": [
+              "string"
+            ],
+            "/normalized/model/temperature": [
+              "number"
+            ],
+            "/normalized/name": [
+              "string"
+            ],
+            "/normalized/pii_mode": [
+              "string"
+            ],
+            "/normalized/prompt_name": [
+              "string"
+            ],
+            "/normalized/prompt_sha256": [
+              "string"
+            ],
+            "/normalized/retrieval_sources": [
+              "array"
+            ],
+            "/normalized/retrieval_sources/[]": [
+              "string"
+            ],
+            "/normalized/runtime_endpoint": [
+              "string"
+            ],
+            "/normalized/tools": [
+              "array",
+              "null"
+            ],
+            "/normalized/tools/[]": [
+              "object"
+            ],
+            "/normalized/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/normalized/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/normalized/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/normalized/tools/[]/description": [
+              "string"
+            ],
+            "/normalized/tools/[]/dimensions": [
+              "object"
+            ],
+            "/normalized/tools/[]/input_schema": [
+              "object"
+            ],
+            "/normalized/tools/[]/name": [
+              "string"
+            ],
+            "/normalized/tools/[]/risk": [
+              "string"
+            ],
+            "/normalized/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/normalized/tools/[]/version": [
+              "string"
+            ],
+            "/normalized/version": [
+              "string"
+            ],
+            "/prompt_sha256": [
+              "string"
+            ],
+            "/valid": [
+              "boolean"
+            ],
+            "/version": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ]
+          },
+          "required": {
+            "/": [
+              "name",
+              "slug"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/content_mode": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/slug": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {
+            "/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ]
+          },
+          "required": {
+            "/": [
+              "artifact_retention_days",
+              "content_mode",
+              "content_retention_days",
+              "created_at",
+              "created_by",
+              "description",
+              "gate_policy",
+              "id",
+              "name",
+              "organization_id",
+              "slug",
+              "store_prompt_text",
+              "trace_retention_days",
+              "updated_at",
+              "updated_by"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/artifact_retention_days": [
+              "integer"
+            ],
+            "/content_mode": [
+              "string"
+            ],
+            "/content_retention_days": [
+              "integer"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/gate_policy": [
+              "object"
+            ],
+            "/gate_policy/allowReviewerOverride": [
+              "boolean"
+            ],
+            "/gate_policy/alwaysRunTags": [
+              "array"
+            ],
+            "/gate_policy/alwaysRunTags/[]": [
+              "string"
+            ],
+            "/gate_policy/costRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/includeKnownRegressions": [
+              "boolean"
+            ],
+            "/gate_policy/judgeMinAgreement": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionMinMs": [
+              "number"
+            ],
+            "/gate_policy/latencyRegressionPct": [
+              "number"
+            ],
+            "/gate_policy/maxDepth": [
+              "integer"
+            ],
+            "/gate_policy/maxGateCostUsd": [
+              "number"
+            ],
+            "/gate_policy/maxProductionSamples": [
+              "integer"
+            ],
+            "/gate_policy/semanticRegressionDrop": [
+              "number"
+            ],
+            "/gate_policy/warnFailsCI": [
+              "boolean"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/slug": [
+              "string"
+            ],
+            "/store_prompt_text": [
+              "boolean"
+            ],
+            "/trace_retention_days": [
+              "integer"
+            ],
+            "/updated_at": [
+              "string"
+            ],
+            "/updated_by": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects/{project_id}/agent-manifests": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:branch": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:commit_sha": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:repo_url": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "embedded": {
+            "/oneOf[0]/manifest/oneOf[1]": [
+              "agent-manifest.v1"
+            ],
+            "/oneOf[1]": [
+              "agent-manifest.v1"
+            ]
+          },
+          "enums": {},
+          "required": {
+            "/oneOf[0]": [
+              "manifest"
+            ]
+          },
+          "types": {
+            "/oneOf[0]": [
+              "object"
+            ],
+            "/oneOf[0]/branch": [
+              "string"
+            ],
+            "/oneOf[0]/commit_sha": [
+              "string"
+            ],
+            "/oneOf[0]/manifest/oneOf[0]": [
+              "string"
+            ],
+            "/oneOf[0]/manifest/oneOf[1]": [
+              "object"
+            ],
+            "/oneOf[0]/repo_url": [
+              "string"
+            ],
+            "/oneOf[1]": [
+              "object"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/version/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "created",
+              "version"
+            ],
+            "/agent": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "version_count"
+            ],
+            "/version": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "version"
+            ],
+            "/version/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/version/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/version/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "object"
+            ],
+            "/agent/created_at": [
+              "string"
+            ],
+            "/agent/created_by": [
+              "string"
+            ],
+            "/agent/description": [
+              "string"
+            ],
+            "/agent/id": [
+              "string"
+            ],
+            "/agent/latest_version": [
+              "string"
+            ],
+            "/agent/name": [
+              "string"
+            ],
+            "/agent/organization_id": [
+              "string"
+            ],
+            "/agent/project_id": [
+              "string"
+            ],
+            "/agent/version_count": [
+              "integer"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/agent_id": [
+              "string"
+            ],
+            "/version/agent_name": [
+              "string"
+            ],
+            "/version/branch": [
+              "string"
+            ],
+            "/version/commit_sha": [
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/id": [
+              "string"
+            ],
+            "/version/manifest": [
+              "object"
+            ],
+            "/version/manifest/content_mode": [
+              "string"
+            ],
+            "/version/manifest/dependencies": [
+              "array"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/version/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/version/manifest/description": [
+              "string"
+            ],
+            "/version/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/version/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/version/manifest/labels": [
+              "object"
+            ],
+            "/version/manifest/limits": [
+              "object"
+            ],
+            "/version/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/version/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/version/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/version/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/version/manifest/model": [
+              "object"
+            ],
+            "/version/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/version/manifest/model/name": [
+              "string"
+            ],
+            "/version/manifest/model/params": [
+              "object"
+            ],
+            "/version/manifest/model/provider": [
+              "string"
+            ],
+            "/version/manifest/model/temperature": [
+              "number"
+            ],
+            "/version/manifest/name": [
+              "string"
+            ],
+            "/version/manifest/pii_mode": [
+              "string"
+            ],
+            "/version/manifest/prompt_name": [
+              "string"
+            ],
+            "/version/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/version/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/version/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/version/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/version/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/version/manifest/tools/[]": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/version/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/version/manifest/version": [
+              "string"
+            ],
+            "/version/manifest_sha256": [
+              "string"
+            ],
+            "/version/model_name": [
+              "string"
+            ],
+            "/version/model_params": [
+              "object"
+            ],
+            "/version/model_provider": [
+              "string"
+            ],
+            "/version/project_id": [
+              "string"
+            ],
+            "/version/prompt_sha256": [
+              "string"
+            ],
+            "/version/prompt_text": [
+              "string"
+            ],
+            "/version/prompt_version_id": [
+              "string"
+            ],
+            "/version/repo_url": [
+              "string"
+            ],
+            "/version/runtime_endpoint": [
+              "string"
+            ],
+            "/version/version": [
+              "string"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/version/manifest/tools/[]/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "created",
+              "version"
+            ],
+            "/agent": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "version_count"
+            ],
+            "/version": [
+              "agent_id",
+              "agent_name",
+              "created_at",
+              "created_by",
+              "id",
+              "manifest",
+              "manifest_sha256",
+              "model_name",
+              "model_params",
+              "model_provider",
+              "project_id",
+              "version"
+            ],
+            "/version/manifest": [
+              "content_mode",
+              "limits",
+              "model",
+              "name",
+              "tools",
+              "version"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "kind",
+              "name",
+              "relation",
+              "tool"
+            ],
+            "/version/manifest/model": [
+              "name",
+              "provider"
+            ],
+            "/version/manifest/tools/[]": [
+              "definition_sha256",
+              "name",
+              "risk",
+              "risk_declared"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "object"
+            ],
+            "/agent/created_at": [
+              "string"
+            ],
+            "/agent/created_by": [
+              "string"
+            ],
+            "/agent/description": [
+              "string"
+            ],
+            "/agent/id": [
+              "string"
+            ],
+            "/agent/latest_version": [
+              "string"
+            ],
+            "/agent/name": [
+              "string"
+            ],
+            "/agent/organization_id": [
+              "string"
+            ],
+            "/agent/project_id": [
+              "string"
+            ],
+            "/agent/version_count": [
+              "integer"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/agent_id": [
+              "string"
+            ],
+            "/version/agent_name": [
+              "string"
+            ],
+            "/version/branch": [
+              "string"
+            ],
+            "/version/commit_sha": [
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/id": [
+              "string"
+            ],
+            "/version/manifest": [
+              "object"
+            ],
+            "/version/manifest/content_mode": [
+              "string"
+            ],
+            "/version/manifest/dependencies": [
+              "array"
+            ],
+            "/version/manifest/dependencies/[]": [
+              "object"
+            ],
+            "/version/manifest/dependencies/[]/criticality": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/kind": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/name": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/relation": [
+              "string"
+            ],
+            "/version/manifest/dependencies/[]/tool": [
+              "string"
+            ],
+            "/version/manifest/description": [
+              "string"
+            ],
+            "/version/manifest/expected_outcomes": [
+              "array"
+            ],
+            "/version/manifest/expected_outcomes/[]": [
+              "string"
+            ],
+            "/version/manifest/labels": [
+              "object"
+            ],
+            "/version/manifest/limits": [
+              "object"
+            ],
+            "/version/manifest/limits/max_cost_usd": [
+              "number"
+            ],
+            "/version/manifest/limits/max_duration_seconds": [
+              "number"
+            ],
+            "/version/manifest/limits/max_steps": [
+              "integer"
+            ],
+            "/version/manifest/limits/max_tool_calls": [
+              "integer"
+            ],
+            "/version/manifest/model": [
+              "object"
+            ],
+            "/version/manifest/model/max_tokens": [
+              "integer"
+            ],
+            "/version/manifest/model/name": [
+              "string"
+            ],
+            "/version/manifest/model/params": [
+              "object"
+            ],
+            "/version/manifest/model/provider": [
+              "string"
+            ],
+            "/version/manifest/model/temperature": [
+              "number"
+            ],
+            "/version/manifest/name": [
+              "string"
+            ],
+            "/version/manifest/pii_mode": [
+              "string"
+            ],
+            "/version/manifest/prompt_name": [
+              "string"
+            ],
+            "/version/manifest/prompt_sha256": [
+              "string"
+            ],
+            "/version/manifest/retrieval_sources": [
+              "array"
+            ],
+            "/version/manifest/retrieval_sources/[]": [
+              "string"
+            ],
+            "/version/manifest/runtime_endpoint": [
+              "string"
+            ],
+            "/version/manifest/tools": [
+              "array",
+              "null"
+            ],
+            "/version/manifest/tools/[]": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/approval_required_when": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/compensating_action": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/definition_sha256": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/description": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/dimensions": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/input_schema": [
+              "object"
+            ],
+            "/version/manifest/tools/[]/name": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk": [
+              "string"
+            ],
+            "/version/manifest/tools/[]/risk_declared": [
+              "boolean"
+            ],
+            "/version/manifest/tools/[]/version": [
+              "string"
+            ],
+            "/version/manifest/version": [
+              "string"
+            ],
+            "/version/manifest_sha256": [
+              "string"
+            ],
+            "/version/model_name": [
+              "string"
+            ],
+            "/version/model_params": [
+              "object"
+            ],
+            "/version/model_provider": [
+              "string"
+            ],
+            "/version/project_id": [
+              "string"
+            ],
+            "/version/prompt_sha256": [
+              "string"
+            ],
+            "/version/prompt_text": [
+              "string"
+            ],
+            "/version/prompt_version_id": [
+              "string"
+            ],
+            "/version/repo_url": [
+              "string"
+            ],
+            "/version/runtime_endpoint": [
+              "string"
+            ],
+            "/version/version": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects/{project_id}/agents": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "name"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {},
+          "required": {
+            "/": [
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "name",
+              "organization_id",
+              "project_id",
+              "version_count"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/latest_version": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/version_count": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects/{project_id}/api-keys": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/scopes/[]": [
+              "\"ci\"",
+              "\"read\"",
+              "\"runtime:invoke\"",
+              "\"traces:write\""
+            ]
+          },
+          "required": {
+            "/": [
+              "name",
+              "scopes"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/expires_in_days": [
+              "integer"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/scopes": [
+              "array"
+            ],
+            "/scopes/[]": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {
+            "/scopes/[]": [
+              "\"ci\"",
+              "\"read\"",
+              "\"runtime:invoke\"",
+              "\"traces:write\""
+            ]
+          },
+          "required": {
+            "/": [
+              "created_at",
+              "created_by",
+              "id",
+              "key",
+              "name",
+              "organization_id",
+              "prefix",
+              "project_id",
+              "scopes"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created_at": [
+              "string"
+            ],
+            "/created_by": [
+              "string"
+            ],
+            "/expires_at": [
+              "string"
+            ],
+            "/id": [
+              "string"
+            ],
+            "/key": [
+              "string"
+            ],
+            "/last_used_at": [
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/prefix": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/revoked_at": [
+              "string"
+            ],
+            "/revoked_by": [
+              "string"
+            ],
+            "/rotated_from": [
+              "string"
+            ],
+            "/scopes": [
+              "array"
+            ],
+            "/scopes/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/projects/{project_id}/tools": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/risk": [
+              "\"ADMIN\"",
+              "\"EXECUTE\"",
+              "\"READ\"",
+              "\"WRITE_IRREVERSIBLE\"",
+              "\"WRITE_REVERSIBLE\""
+            ]
+          },
+          "required": {
+            "/": [
+              "name"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/description": [
+              "string"
+            ],
+            "/input_schema": [
+              "object"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/risk": [
+              "string"
+            ],
+            "/risk_dimensions": [
+              "object"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "created",
+              "name",
+              "tool_id",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/tool_id": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ]
+          }
+        },
+        "201": {
+          "enums": {},
+          "required": {
+            "/": [
+              "created",
+              "name",
+              "tool_id",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/created": [
+              "boolean"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/tool_id": [
+              "string"
+            ],
+            "/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /internal/v1/api-keys/verify": {
+      "parameters": {},
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {},
+          "required": {
+            "/": [
+              "key"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/key": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/content_mode": [
+              "\"full\"",
+              "\"off\"",
+              "\"redacted\""
+            ],
+            "/scopes/[]": [
+              "\"ci\"",
+              "\"read\"",
+              "\"runtime:invoke\"",
+              "\"traces:write\""
+            ]
+          },
+          "required": {
+            "/": [
+              "valid"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/content_mode": [
+              "string"
+            ],
+            "/content_retention_days": [
+              "integer"
+            ],
+            "/key_id": [
+              "string"
+            ],
+            "/organization_id": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/scopes": [
+              "array"
+            ],
+            "/scopes/[]": [
+              "string"
+            ],
+            "/trace_retention_days": [
+              "integer"
+            ],
+            "/valid": [
+              "boolean"
+            ]
+          }
+        }
+      }
+    }
+  },
   "simulation-service": {
     "GET /api/v1/scenarios": {
       "parameters": {

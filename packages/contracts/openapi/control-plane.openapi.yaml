@@ -1,0 +1,2321 @@
+openapi: 3.1.0
+info:
+  title: AgentTwin control plane API
+  version: 1.0.0
+  summary: Identity, projects, API keys, the agent and tool registry and the audit log.
+  description: |
+    The control plane is the edge of AgentTwin: it authenticates every
+    request, applies rate limits and `Idempotency-Key`, serves the resources
+    it owns (this document) and forwards the rest of `/api/v1` to the service
+    that owns it (ADR-0009). The forwarded operations are described by the
+    owning service's document (for example `simulation-service.openapi.yaml`
+    for `/api/v1/scenarios`, `/api/v1/simulations` and `/api/v1/twins`,
+    `trace-service.openapi.yaml` for `/api/v1/traces` and `/api/v1/trace-stats`).
+
+    **Conventions.**
+    * Every response carries `X-Request-Id`; errors are
+      `{"error": {"code", "message", "request_id", "details"?}}` with a stable
+      machine-readable `code`.
+    * Request bodies are strict: unknown fields are rejected (`400
+      INVALID_JSON`). Responses may gain fields: clients ignore fields and
+      enum values they do not know.
+    * Malformed ids in the path answer `400 INVALID_PARAMETER` with
+      `details.field`; resources outside the caller's projects answer `404`,
+      never `403`, so their existence cannot be probed.
+    * Lists answer `{"items": [...]}`; paginated lists add an opaque
+      `next_cursor`, `null` on the last page.
+
+    **Internal operations.** The `/internal/v1` paths are not public: other
+    services call them with a short-lived internal token (ADR-0009).
+
+    Compatibility and the checks that keep this document true are described
+    in `packages/contracts/README.md`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: The control plane of a local stack (`make dev`).
+tags:
+  - name: Authentication
+    description: How to sign in, and who the caller is.
+  - name: Projects
+    description: Projects, their environments and settings.
+  - name: API keys
+    description: Project API keys for SDKs, CI and the runtime gateway.
+  - name: Agents
+    description: Agents and their immutable versions, registered from manifests.
+  - name: Tools
+    description: The project's tool registry.
+  - name: Audit
+    description: The append-only, hash-chained audit log.
+  - name: Internal
+    description: Lookups for other AgentTwin services (internal token).
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  /api/v1/auth/config:
+    get:
+      operationId: getAuthConfig
+      tags: [Authentication]
+      summary: How to sign in
+      description: |
+        The sign-in mode of this control plane. In `dev` mode it lists the
+        seeded demo accounts; in `oidc` mode it names the identity provider.
+      security: []
+      responses:
+        '200':
+          description: The sign-in configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfig'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/auth/dev/login:
+    post:
+      operationId: devLogin
+      tags: [Authentication]
+      summary: Sign in as a demo user
+      description: |
+        Issues a session token for a seeded demo account. Only in `dev` mode:
+        other modes answer `404`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevLoginRequest'
+      responses:
+        '200':
+          description: A session for the account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: No demo account has that email (`UNKNOWN_DEMO_USER`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/me:
+    get:
+      operationId: getMe
+      tags: [Authentication]
+      summary: Who is calling
+      description: The caller's identity, organization and permissions.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/members:
+    get:
+      operationId: listMembers
+      tags: [Authentication]
+      summary: List the organization's members
+      description: Requires `settings.read`.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The members, ordered by email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects:
+    post:
+      operationId: createProject
+      tags: [Projects]
+      summary: Create a project
+      description: |
+        Creates a project with the `dev`, `staging` and `production`
+        environments. Requires `settings.write`. The slug is unique within the
+        organization (`409 PROJECT_EXISTS`).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: The project.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    get:
+      operationId: listProjects
+      tags: [Projects]
+      summary: List projects
+      description: |
+        The projects the caller can access, ordered by slug. Their
+        `gate_policy` is visible with `settings.read` only (others see `{}`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The projects.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: getProject
+      tags: [Projects]
+      summary: Get a project
+      description: |
+        One project. Its `gate_policy` is visible with `settings.read` only
+        (others see `{}`).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    patch:
+      operationId: updateProject
+      tags: [Projects]
+      summary: Change a project's settings
+      description: |
+        Changes the given settings and leaves the others as they are.
+        Requires `settings.write`. Invalid values answer `400
+        INVALID_SETTINGS`; an invalid gate policy `400 INVALID_GATE_POLICY`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectSettings'
+      responses:
+        '200':
+          description: The project after the change.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}/environments:
+    get:
+      operationId: listEnvironments
+      tags: [Projects]
+      summary: List a project's environments
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The environments, ordered by name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: createApiKey
+      tags: [API keys]
+      summary: Create an API key
+      description: |
+        Creates a project API key with the given scopes. The key itself is in
+        the response once and is never shown again (only its prefix is
+        stored in the clear). Requires `apikey.manage`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: The key, with its secret.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedApiKey'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    get:
+      operationId: listApiKeys
+      tags: [API keys]
+      summary: List a project's API keys
+      description: Revoked keys included; secrets never. Requires `apikey.manage`.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The keys, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/api-keys/{key_id}/revoke:
+    post:
+      operationId: revokeApiKey
+      tags: [API keys]
+      summary: Revoke an API key
+      description: |
+        The key stops working immediately. Revoking a revoked key keeps its
+        first revocation. Requires `apikey.manage`.
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeApiKeyRequest'
+      responses:
+        '200':
+          description: The revoked key.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/api-keys/{key_id}/rotate:
+    post:
+      operationId: rotateApiKey
+      tags: [API keys]
+      summary: Rotate an API key
+      description: |
+        Issues a new key with the same name, scopes and expiry (its
+        `rotated_from` names the old one) and revokes the old key: rotation
+        replaces a secret, it does not extend a key's lifetime. A revoked or
+        expired key cannot be rotated (`409 API_KEY_REVOKED`,
+        `API_KEY_EXPIRED`). Requires `apikey.manage`.
+      parameters:
+        - $ref: '#/components/parameters/KeyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '201':
+          description: The new key, with its secret.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedApiKey'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}/agents:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: createAgent
+      tags: [Agents]
+      summary: Create an agent
+      description: |
+        Creates an agent without versions; registering a manifest creates
+        the agent as well. The name is unique within the project (`409
+        AGENT_EXISTS`). Requires `agent.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: The agent.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    get:
+      operationId: listAgents
+      tags: [Agents]
+      summary: List a project's agents
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The agents, ordered by name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}/agent-manifests:
+    post:
+      operationId: registerManifest
+      tags: [Agents]
+      summary: Register an agent version from its manifest
+      description: |
+        Registers the version a manifest (`agent-manifest.v1`) declares,
+        creating the agent and its tools in the registry as needed. Versions
+        are immutable: the same content again answers the stored version
+        (`200`, `created: false`); different content under a registered
+        version number answers `409 VERSION_EXISTS`. An invalid manifest
+        answers `400 INVALID_MANIFEST` with `details.problems`. Requires
+        `agent.write`.
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/CommitSha'
+        - $ref: '#/components/parameters/RepoUrl'
+        - $ref: '#/components/parameters/Branch'
+      requestBody:
+        $ref: '#/components/requestBodies/Manifest'
+      responses:
+        '201':
+          description: A new version was registered.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredVersion'
+        '200':
+          description: The version was already registered with this content.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/manifests/validate:
+    post:
+      operationId: validateManifest
+      tags: [Agents]
+      summary: Validate a manifest
+      description: |
+        Validates and normalizes a manifest without storing anything (the
+        CLI's `agent validate`, the UI's preview). An invalid manifest answers
+        `400 INVALID_MANIFEST` with `details.problems`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        $ref: '#/components/requestBodies/Manifest'
+      responses:
+        '200':
+          description: The manifest is valid.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestValidation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/agents/{agent_id}:
+    get:
+      operationId: getAgent
+      tags: [Agents]
+      summary: Get an agent
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/agents/{agent_id}/versions:
+    parameters:
+      - $ref: '#/components/parameters/AgentId'
+    post:
+      operationId: createAgentVersion
+      tags: [Agents]
+      summary: Register a version of this agent
+      description: |
+        As `registerManifest`, for a manifest whose `metadata.name` must name
+        this agent (`400 MANIFEST_AGENT_MISMATCH` otherwise).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/CommitSha'
+        - $ref: '#/components/parameters/RepoUrl'
+        - $ref: '#/components/parameters/Branch'
+      requestBody:
+        $ref: '#/components/requestBodies/Manifest'
+      responses:
+        '201':
+          description: A new version was registered.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredVersion'
+        '200':
+          description: The version was already registered with this content.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    get:
+      operationId: listAgentVersions
+      tags: [Agents]
+      summary: List an agent's versions
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The versions, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentVersionList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/agents/{agent_id}/versions/{version}:
+    get:
+      operationId: getAgentVersion
+      tags: [Agents]
+      summary: Get an agent version
+      description: One version with the tool versions it is bound to.
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - name: version
+          in: path
+          required: true
+          description: The version string of the manifest (e.g. `1.2.4`).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentVersionDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/projects/{project_id}/tools:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listTools
+      tags: [Tools]
+      summary: List the tool registry
+      description: Every tool of the project with its latest version.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The tools, ordered by name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+    post:
+      operationId: createTool
+      tags: [Tools]
+      summary: Register a tool
+      description: |
+        Adds a tool to the registry by hand, or a new version of it when its
+        definition changed (`201`); a definition equal to the latest version
+        stores nothing (`200`, `created: false`). A tool without a declared
+        risk is `WRITE_IRREVERSIBLE`: an unknown tool is assumed to change
+        something that cannot be undone. Requires `agent.write`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateToolRequest'
+      responses:
+        '201':
+          description: A new tool version was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedTool'
+        '200':
+          description: The definition equals the latest version; nothing was stored.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedTool'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/audit:
+    get:
+      operationId: listAudit
+      tags: [Audit]
+      summary: List audit entries
+      description: |
+        Governance actions of the organization, newest first. Requires
+        `settings.read`.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - name: project_id
+          in: query
+          description: Only the entries of this project.
+          schema:
+            type: string
+            maxLength: 64
+        - name: resource_type
+          in: query
+          description: Only entries about this kind of resource (e.g. `api_key`).
+          schema:
+            type: string
+            maxLength: 100
+        - name: resource_id
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: action
+          in: query
+          description: Only entries of this action (e.g. `api_key.revoked`).
+          schema:
+            type: string
+            maxLength: 100
+        - $ref: '#/components/parameters/Limit'
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+            pattern: ^[0-9]{1,19}$
+      responses:
+        '200':
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /api/v1/audit/verify:
+    get:
+      operationId: verifyAudit
+      tags: [Audit]
+      summary: Verify the audit hash chain
+      description: |
+        Recomputes the organization's hash chain from the first entry. A
+        broken chain (an entry changed, removed or inserted) answers `valid:
+        false` with the first sequence number that does not match. Requires
+        `settings.read`.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+      responses:
+        '200':
+          description: The result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChainReport'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /internal/v1/api-keys/verify:
+    post:
+      operationId: verifyApiKeyInternal
+      tags: [Internal]
+      summary: Verify an API key
+      description: |
+        For services that accept API keys themselves (trace ingestion, the
+        runtime gateway): the key's project, scopes and the project's content
+        settings, or `valid: false` for a key that is unknown, revoked or
+        expired. Service callers only.
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyApiKeyRequest'
+      responses:
+        '200':
+          description: The verification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyVerification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /internal/v1/projects/{project_id}:
+    get:
+      operationId: getProjectInternal
+      tags: [Internal]
+      summary: Get a project
+      description: |
+        A project, for a service acting for an organization, or for a
+        platform-level caller before the organization is known.
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /internal/v1/agent-versions/{version_id}:
+    get:
+      operationId: getAgentVersionInternal
+      tags: [Internal]
+      summary: Get an agent version by id
+      security:
+        - internalToken: []
+      parameters:
+        - name: version_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: The version with its tools.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentVersionDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+  /internal/v1/agent-versions:
+    get:
+      operationId: findAgentVersionInternal
+      tags: [Internal]
+      summary: Find an agent version by name
+      description: |
+        Resolves a project, agent name and version string to the version with
+        its tools (a simulation run pins the agent version under test with
+        it). Missing or malformed parameters answer `400 INVALID_QUERY`.
+      security:
+        - internalToken: []
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - name: agent
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+      responses:
+        '200':
+          description: The version with its tools.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentVersionDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/Internal'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A session token (dev login), an OIDC access token or an API key.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-AgentTwin-Api-Key
+      description: A project API key.
+    internalToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A short-lived internal token minted by another AgentTwin service for
+        the principal it acts for (audience `control-plane`, ADR-0009).
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        One key per user action (ADR-0019). A repeat of the same request
+        returns the stored response with `Idempotent-Replayed: true`; the same
+        key with a different request answers `422`; while the first request
+        runs, `409`. Keys expire after 24 hours.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9._:-]{8,128}$
+    Organization:
+      name: X-AgentTwin-Org
+      in: header
+      required: false
+      description: The organization to act in, for users who belong to several.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    KeyId:
+      name: key_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    AgentId:
+      name: agent_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    CommitSha:
+      name: commit_sha
+      in: query
+      description: The git commit the manifest was built from (a JSON envelope's field wins).
+      schema:
+        $ref: '#/components/schemas/CommitSha'
+    RepoUrl:
+      name: repo_url
+      in: query
+      schema:
+        type: string
+        maxLength: 2000
+    Branch:
+      name: branch
+      in: query
+      schema:
+        type: string
+        maxLength: 500
+
+  requestBodies:
+    Manifest:
+      required: true
+      description: |
+        An `agent-manifest.v1` document: as YAML (or JSON) text with the
+        commit metadata in query parameters, or as a JSON envelope. At most
+        512 KiB.
+      content:
+        application/yaml:
+          schema:
+            type: string
+        text/yaml:
+          schema:
+            type: string
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ManifestEnvelope'
+              - type: object
+                description: The manifest itself, as a JSON document.
+                x-agenttwin-schema: agent-manifest.v1
+
+  headers:
+    IdempotentReplayed:
+      description: '`true` when the response is the stored answer to an earlier request with the same `Idempotency-Key`.'
+      schema:
+        type: string
+        enum: ['true']
+
+  responses:
+    BadRequest:
+      description: |
+        The request is invalid. `INVALID_JSON` (a malformed body or an unknown
+        field; `details.reason`), `EMPTY_BODY`, `INVALID_PARAMETER`
+        (`details.field`), `INVALID_CURSOR`, `INVALID_IDEMPOTENCY_KEY` or an
+        operation-specific code (`INVALID_PROJECT`, `INVALID_SETTINGS`,
+        `INVALID_GATE_POLICY`, `INVALID_API_KEY`, `INVALID_AGENT`,
+        `INVALID_TOOL`, `INVALID_MANIFEST` with `details.problems`,
+        `INVALID_COMMIT`, `MANIFEST_AGENT_MISMATCH`, `INVALID_QUERY`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: No valid credential (`UNAUTHENTICATED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: |
+        The credential lacks the permission (`FORBIDDEN`;
+        `details.required_permission`), or the user is not a member of the
+        organization it asked for.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The resource does not exist or is outside the caller's projects (`NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: |
+        The request conflicts with a stored resource (`PROJECT_EXISTS`,
+        `AGENT_EXISTS`, `VERSION_EXISTS`, `API_KEY_REVOKED`,
+        `API_KEY_EXPIRED`), or the first
+        request with this `Idempotency-Key` is still running
+        (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyInProgress:
+      description: The first request with this `Idempotency-Key` is still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: The request body is too large (`PAYLOAD_TOO_LARGE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsupportedMediaType:
+      description: The body is not `application/json` (`UNSUPPORTED_MEDIA_TYPE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyKeyReused:
+      description: The `Idempotency-Key` was used for a different request (`IDEMPOTENCY_KEY_REUSED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests (`RATE_LIMITED`).
+      headers:
+        Retry-After:
+          description: Seconds to wait.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Internal:
+      description: An unexpected error (`INTERNAL`); quote the `request_id`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    Sha256:
+      type: string
+      description: A SHA-256 digest, hex.
+      pattern: ^[0-9a-f]{64}$
+    CommitSha:
+      type: string
+      description: A lower-case hex git commit sha.
+      pattern: ^[0-9a-f]{7,64}$
+    Actor:
+      type: string
+      description: Who acted, `user:<id>`, `apikey:<id>` or `service:<name>`.
+      examples: ['user:0190f3b4-0000-7000-8000-000000000001']
+    Role:
+      type: string
+      description: |
+        A member's role; an API key acts as `API_KEY` (its scopes decide) and
+        an AgentTwin service as `SERVICE`.
+      enum: [OWNER, ADMIN, ENGINEER, REVIEWER, VIEWER, API_KEY, SERVICE]
+    Scope:
+      type: string
+      description: |
+        What an API key may do: `traces:write` (send traces and outcomes),
+        `runtime:invoke` (call tools through the runtime gateway), `read`,
+        `ci` (register agents, run simulations and gates).
+      enum: ['traces:write', 'runtime:invoke', read, ci]
+    Permission:
+      type: string
+      enum: [read, settings.read, settings.write, apikey.manage, agent.write, scenario.write, simulation.run,
+             eval.run, release.write, release.override, review.write, regression.promote, approval.decide,
+             policy.write, policy.activate, policy.test, trace.write, runtime.invoke, graph.write]
+    ContentMode:
+      type: string
+      description: |
+        What of prompts, completions and tool payloads is stored with traces:
+        nothing (`off`), with secrets and personal data removed (`redacted`),
+        or everything (`full`).
+      enum: ['off', redacted, full]
+    Risk:
+      type: string
+      description: How much damage a tool can do, from reading to administering.
+      enum: [READ, WRITE_REVERSIBLE, WRITE_IRREVERSIBLE, EXECUTE, ADMIN]
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable (e.g. `PROJECT_EXISTS`).
+              pattern: ^[A-Z][A-Z0-9_]*$
+            message:
+              type: string
+              description: For people; may change.
+            request_id:
+              type: string
+              description: Equals the `X-Request-Id` response header.
+            details:
+              type: object
+              description: Code-specific context (field names, problems).
+
+    AuthConfig:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [dev, oidc]
+        oidc:
+          type: object
+          description: The identity provider (`oidc` mode).
+          required: [issuer, client_id, audience]
+          properties:
+            issuer:
+              type: string
+            client_id:
+              type: string
+            audience:
+              type: string
+        demo_users:
+          type: array
+          description: The seeded accounts (`dev` mode).
+          items:
+            type: object
+            required: [email, name, role]
+            properties:
+              email:
+                type: string
+              name:
+                type: string
+              role:
+                $ref: '#/components/schemas/Role'
+
+    DevLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          maxLength: 320
+
+    Session:
+      type: object
+      required: [token, expires_at, user, organization_id, role]
+      properties:
+        token:
+          type: string
+          description: 'Send as `Authorization: Bearer <token>`.'
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        user:
+          $ref: '#/components/schemas/User'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        role:
+          $ref: '#/components/schemas/Role'
+
+    User:
+      type: object
+      required: [id, email, display_name]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        email:
+          type: string
+        display_name:
+          type: string
+        disabled_at:
+          $ref: '#/components/schemas/Timestamp'
+
+    Organization:
+      type: object
+      required: [id, slug, name, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        slug:
+          type: string
+        name:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+
+    Membership:
+      type: object
+      required: [organization_id, organization_slug, organization_name, role]
+      properties:
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        organization_slug:
+          type: string
+        organization_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+
+    Principal:
+      type: object
+      description: The caller as the platform sees it.
+      required: [org, sub, role]
+      properties:
+        org:
+          $ref: '#/components/schemas/Uuid'
+        sub:
+          $ref: '#/components/schemas/Actor'
+        email:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        projects:
+          type: array
+          description: The projects an API key is bound to.
+          items:
+            $ref: '#/components/schemas/Uuid'
+        all_projects:
+          type: boolean
+          description: Whether the caller can access every project of the organization.
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scope'
+
+    Me:
+      type: object
+      required: [principal, organization, permissions]
+      properties:
+        principal:
+          $ref: '#/components/schemas/Principal'
+        user:
+          $ref: '#/components/schemas/User'
+        organization:
+          $ref: '#/components/schemas/Organization'
+        memberships:
+          type: array
+          description: Every organization the user belongs to.
+          items:
+            $ref: '#/components/schemas/Membership'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+
+    Member:
+      type: object
+      required: [id, email, display_name, role]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        email:
+          type: string
+        display_name:
+          type: string
+        disabled_at:
+          $ref: '#/components/schemas/Timestamp'
+        role:
+          $ref: '#/components/schemas/Role'
+    MemberList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+
+    GatePolicy:
+      type: object
+      additionalProperties: false
+      description: |
+        The project's release-gate settings; an empty policy means the
+        documented defaults.
+      properties:
+        alwaysRunTags:
+          type: array
+          description: Scenario tags that run in every gate.
+          items:
+            type: string
+        maxProductionSamples:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        includeKnownRegressions:
+          type: boolean
+        maxDepth:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: How far the blast radius follows dependencies.
+        maxGateCostUsd:
+          type: number
+          minimum: 0
+          maximum: 100000
+        latencyRegressionPct:
+          type: number
+          minimum: 0
+          maximum: 1000
+        latencyRegressionMinMs:
+          type: number
+          minimum: 0
+          maximum: 600000
+        costRegressionPct:
+          type: number
+          minimum: 0
+          maximum: 1000
+        semanticRegressionDrop:
+          type: number
+          minimum: 0
+          maximum: 1
+        judgeMinAgreement:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: The calibration agreement a judge needs before its verdict may block.
+        allowReviewerOverride:
+          type: boolean
+        warnFailsCI:
+          type: boolean
+
+    Project:
+      type: object
+      required: [id, organization_id, slug, name, description, content_mode, store_prompt_text,
+                 trace_retention_days, content_retention_days, artifact_retention_days, gate_policy,
+                 created_by, updated_by, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        slug:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{1,62}$
+        name:
+          type: string
+        description:
+          type: string
+        content_mode:
+          $ref: '#/components/schemas/ContentMode'
+        store_prompt_text:
+          type: boolean
+          description: Whether registered manifests keep their instructions' text (else only its hash).
+        trace_retention_days:
+          type: integer
+        content_retention_days:
+          type: integer
+        artifact_retention_days:
+          type: integer
+        gate_policy:
+          $ref: '#/components/schemas/GatePolicy'
+        created_by:
+          $ref: '#/components/schemas/Actor'
+        updated_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    ProjectList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{1,62}$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+        content_mode:
+          $ref: '#/components/schemas/ContentMode'
+    ProjectSettings:
+      type: object
+      additionalProperties: false
+      description: The settings to change; the others stay as they are.
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        content_mode:
+          $ref: '#/components/schemas/ContentMode'
+        store_prompt_text:
+          type: boolean
+        trace_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+        content_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+        artifact_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+        gate_policy:
+          $ref: '#/components/schemas/GatePolicy'
+
+    Environment:
+      type: object
+      required: [id, project_id, name, is_production, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        is_production:
+          type: boolean
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    EnvironmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Environment'
+
+    ApiKey:
+      type: object
+      description: An API key without its secret.
+      required: [id, organization_id, project_id, name, prefix, scopes, created_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        prefix:
+          type: string
+          description: The public start of the key, to recognize it (`atk_<prefix>_…`).
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scope'
+        created_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        revoked_at:
+          $ref: '#/components/schemas/Timestamp'
+        revoked_by:
+          $ref: '#/components/schemas/Actor'
+        last_used_at:
+          $ref: '#/components/schemas/Timestamp'
+        rotated_from:
+          $ref: '#/components/schemas/Uuid'
+    CreatedApiKey:
+      description: An API key with its secret, shown once.
+      allOf:
+        - $ref: '#/components/schemas/ApiKey'
+        - type: object
+          required: [key]
+          properties:
+            key:
+              type: string
+              description: 'The secret. Send it as `X-AgentTwin-Api-Key` or `Authorization: Bearer`.'
+    ApiKeyList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKey'
+    CreateApiKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [name, scopes]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        scopes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Scope'
+        expires_in_days:
+          type: integer
+          minimum: 1
+          maximum: 730
+    RevokeApiKeyRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Recorded in the audit log.
+
+    Agent:
+      type: object
+      required: [id, organization_id, project_id, name, description, created_by, created_at, version_count]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        description:
+          type: string
+        created_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        version_count:
+          type: integer
+          minimum: 0
+        latest_version:
+          type: string
+          description: The version registered last (absent before the first).
+    AgentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agent'
+    CreateAgentRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        description:
+          type: string
+
+    ManifestEnvelope:
+      type: object
+      additionalProperties: false
+      required: [manifest]
+      properties:
+        manifest:
+          description: The manifest, as YAML or JSON text or as a JSON document.
+          oneOf:
+            - type: string
+            - type: object
+              x-agenttwin-schema: agent-manifest.v1
+        commit_sha:
+          $ref: '#/components/schemas/CommitSha'
+        repo_url:
+          type: string
+          maxLength: 2000
+        branch:
+          type: string
+          maxLength: 500
+
+    ManifestTool:
+      type: object
+      description: A tool as the manifest declares it, normalized.
+      required: [name, risk, risk_declared, definition_sha256]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        risk:
+          $ref: '#/components/schemas/Risk'
+        risk_declared:
+          type: boolean
+          description: False when the manifest did not declare a risk (the default applied).
+        dimensions:
+          type: object
+          description: Risk dimensions (e.g. `reversibility`).
+          additionalProperties:
+            type: string
+        compensating_action:
+          type: object
+          description: How the tool's effect is undone.
+        approval_required_when:
+          type: string
+          description: The condition under which a call needs a human approval.
+        input_schema:
+          type: object
+          description: The JSON Schema of the tool's arguments.
+        definition_sha256:
+          $ref: '#/components/schemas/Sha256'
+
+    NormalizedManifest:
+      type: object
+      description: |
+        A manifest after validation and normalization: what the platform
+        registers, hashes (`manifest_sha256`) and pins. The instructions'
+        text is not part of it, only their hash.
+      required: [name, version, model, limits, tools, content_mode]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        prompt_sha256:
+          $ref: '#/components/schemas/Sha256'
+        prompt_name:
+          type: string
+        model:
+          type: object
+          required: [provider, name]
+          properties:
+            provider:
+              type: string
+            name:
+              type: string
+            temperature:
+              type: number
+            max_tokens:
+              type: integer
+            params:
+              type: object
+        limits:
+          type: object
+          properties:
+            max_steps:
+              type: integer
+            max_tool_calls:
+              type: integer
+            max_duration_seconds:
+              type: number
+            max_cost_usd:
+              type: number
+        tools:
+          type: [array, 'null']
+          description: The tools, ordered by name (`null` when the manifest declares none).
+          items:
+            $ref: '#/components/schemas/ManifestTool'
+        retrieval_sources:
+          type: array
+          items:
+            type: string
+        content_mode:
+          type: string
+        pii_mode:
+          type: string
+        runtime_endpoint:
+          type: string
+        expected_outcomes:
+          type: array
+          items:
+            type: string
+        dependencies:
+          type: array
+          description: Systems a tool depends on (the dependency graph).
+          items:
+            type: object
+            required: [tool, kind, name, relation]
+            properties:
+              tool:
+                type: string
+              kind:
+                type: string
+              name:
+                type: string
+              relation:
+                type: string
+              criticality:
+                type: string
+
+    AgentVersion:
+      type: object
+      description: An immutable registration of an agent.
+      required: [id, agent_id, agent_name, project_id, version, manifest, manifest_sha256, model_provider,
+                 model_name, model_params, created_by, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        agent_id:
+          $ref: '#/components/schemas/Uuid'
+        agent_name:
+          type: string
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        version:
+          type: string
+        manifest:
+          $ref: '#/components/schemas/NormalizedManifest'
+        manifest_sha256:
+          $ref: '#/components/schemas/Sha256'
+        prompt_version_id:
+          $ref: '#/components/schemas/Uuid'
+        prompt_sha256:
+          $ref: '#/components/schemas/Sha256'
+        prompt_text:
+          type: string
+          description: |
+            The instructions' text, when the project stores it and the caller
+            holds `settings.read`.
+        model_provider:
+          type: string
+        model_name:
+          type: string
+        model_params:
+          type: object
+          description: Temperature, token limit and other model parameters.
+        runtime_endpoint:
+          type: string
+        commit_sha:
+          $ref: '#/components/schemas/CommitSha'
+        repo_url:
+          type: string
+        branch:
+          type: string
+        created_by:
+          $ref: '#/components/schemas/Actor'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    AgentVersionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentVersion'
+    VersionTool:
+      type: object
+      description: A tool version an agent version is bound to.
+      required: [name, tool_version, risk, definition_sha256]
+      properties:
+        name:
+          type: string
+        tool_version:
+          type: integer
+          minimum: 1
+        risk:
+          $ref: '#/components/schemas/Risk'
+        definition_sha256:
+          $ref: '#/components/schemas/Sha256'
+        approval_condition:
+          type: string
+        input_schema:
+          type: object
+    AgentVersionDetail:
+      allOf:
+        - $ref: '#/components/schemas/AgentVersion'
+        - type: object
+          required: [tools]
+          properties:
+            tools:
+              type: array
+              items:
+                $ref: '#/components/schemas/VersionTool'
+
+    RegisteredVersion:
+      type: object
+      required: [agent, version, created]
+      properties:
+        agent:
+          $ref: '#/components/schemas/Agent'
+        version:
+          $ref: '#/components/schemas/AgentVersion'
+        created:
+          type: boolean
+          description: False when the version was already registered with this content.
+
+    ManifestValidation:
+      type: object
+      required: [valid, name, version, manifest_sha256, prompt_sha256, normalized]
+      properties:
+        valid:
+          type: boolean
+          const: true
+        name:
+          type: string
+        version:
+          type: string
+        manifest_sha256:
+          $ref: '#/components/schemas/Sha256'
+        prompt_sha256:
+          type: string
+          description: The instructions' hash, empty when the manifest has none.
+          pattern: ^([0-9a-f]{64})?$
+        normalized:
+          $ref: '#/components/schemas/NormalizedManifest'
+
+    Tool:
+      type: object
+      description: A registry entry with its latest version.
+      required: [id, project_id, name, description, risk, source, latest_version, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        description:
+          type: string
+        risk:
+          $ref: '#/components/schemas/Risk'
+        source:
+          type: string
+          description: Where the tool came from.
+          enum: [MANIFEST, OPENAPI, MCP, MANUAL]
+        latest_version:
+          type: integer
+          minimum: 0
+        input_schema:
+          type: object
+        risk_dimensions:
+          type: object
+          additionalProperties:
+            type: string
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    ToolList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tool'
+    CreateToolRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+        description:
+          type: string
+        risk:
+          $ref: '#/components/schemas/Risk'
+        risk_dimensions:
+          type: object
+          additionalProperties:
+            type: string
+        input_schema:
+          type: object
+    CreatedTool:
+      type: object
+      required: [tool_id, name, version, created]
+      properties:
+        tool_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        created:
+          type: boolean
+          description: False when the definition equals the latest version (nothing was stored).
+
+    AuditEntry:
+      type: object
+      required: [id, organization_id, actor, action, resource_type, resource_id, occurred_at, metadata,
+                 source_service, entry_hash, seq]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        actor:
+          $ref: '#/components/schemas/Actor'
+        action:
+          type: string
+          description: '`<resource>.<verb>` (e.g. `api_key.revoked`).'
+          pattern: ^[a-z_]+\.[a-z_]+$
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+        request_id:
+          type: string
+        before_hash:
+          $ref: '#/components/schemas/Sha256'
+        after_hash:
+          $ref: '#/components/schemas/Sha256'
+        reason:
+          type: string
+        metadata:
+          type: object
+        source_service:
+          type: string
+          description: The service that recorded the action.
+        source_event_id:
+          $ref: '#/components/schemas/Uuid'
+        prev_hash:
+          $ref: '#/components/schemas/Sha256'
+        entry_hash:
+          $ref: '#/components/schemas/Sha256'
+        seq:
+          type: integer
+          minimum: 1
+    AuditPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        next_cursor:
+          type: [string, 'null']
+          description: The cursor of the next page; `null` on the last page.
+    ChainReport:
+      type: object
+      required: [entries, valid]
+      properties:
+        entries:
+          type: integer
+          minimum: 0
+        valid:
+          type: boolean
+        broken_at_seq:
+          type: integer
+          description: The first entry that does not match its chain (`valid` is false).
+        reason:
+          type: string
+
+    VerifyApiKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [key]
+      properties:
+        key:
+          type: string
+          maxLength: 1024
+    ApiKeyVerification:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        key_id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scope'
+        content_mode:
+          $ref: '#/components/schemas/ContentMode'
+        trace_retention_days:
+          type: integer
+        content_retention_days:
+          type: integer
+      if:
+        properties:
+          valid:
+            const: true
+      then:
+        required: [key_id, organization_id, project_id, scopes, content_mode, trace_retention_days,
+                   content_retention_days]

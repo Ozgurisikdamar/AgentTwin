@@ -92,6 +92,11 @@ def test_removed_event_type_is_breaking() -> None:
     ]
 
 
+# Every operation an OpenAPI 3.1 path item can hold, not only those the
+# fingerprint knows about.
+_OPERATIONS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+
+
 def test_committed_baseline_matches_the_repository(capsys: pytest.CaptureFixture[str]) -> None:
     # The real check against the committed baselines: every published schema
     # and API document is compatible, and the baselines record all of them.
@@ -102,7 +107,15 @@ def test_committed_baseline_matches_the_repository(capsys: pytest.CaptureFixture
     assert apis == cc.current_openapi()  # up to date, not only compatible
     out = capsys.readouterr().out
     assert "event schemas compatible with the baseline" in out
-    assert "API documents (17 operations) compatible with the baseline" in out
+    # Counted here from the documents themselves, not from the fingerprints
+    # the check prints: an operation the fingerprint lost would show.
+    documents = sorted(cc.OPENAPI.glob("*.openapi.yaml"))
+    operations = 0
+    for path in documents:
+        doc = cc.load_yaml(path.read_text(encoding="utf-8"), max_bytes=4 << 20, max_nodes=200_000)
+        operations += len(doc.get("webhooks") or {})
+        operations += sum(1 for item in doc["paths"].values() for method in item if method in _OPERATIONS)
+    assert f"{len(documents)} API documents ({operations} operations) compatible with the baseline" in out
 
 
 # ---------------------------------------------------------------- OpenAPI
@@ -229,6 +242,30 @@ def test_openapi_fingerprint_merges_allof_and_reads_null_unions() -> None:
         },
     }
     assert api_check(flat) == []
+
+
+def test_every_kind_of_operation_is_in_the_fingerprint() -> None:
+    # An operation the fingerprint skips is not in the baseline, and could be
+    # removed or changed without the check noticing.
+    new = copy.deepcopy(API)
+    for method in ("put", "delete", "options", "head", "patch", "trace"):
+        new["paths"]["/runs"][method] = {"responses": {"204": {"description": method}}}
+    assert set(cc.openapi_fingerprint(new)) == {
+        "GET /runs",
+        "PUT /runs",
+        "POST /runs",
+        "DELETE /runs",
+        "OPTIONS /runs",
+        "HEAD /runs",
+        "PATCH /runs",
+        "TRACE /runs",
+        "WEBHOOK agentRun",
+    }
+    old = {"svc": cc.openapi_fingerprint(new)}
+    del new["paths"]["/runs"]["head"]
+    assert cc.openapi_breaking_changes(old, {"svc": cc.openapi_fingerprint(new)}) == [
+        "svc HEAD /runs: the operation was removed"
+    ]
 
 
 def test_openapi_additive_changes_are_compatible() -> None:

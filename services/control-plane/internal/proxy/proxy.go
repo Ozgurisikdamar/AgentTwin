@@ -41,7 +41,6 @@ var Routes = []Route{
 	{"/api/v1/scenarios", "simulation-service"},
 	{"/api/v1/simulations", "simulation-service"},
 	{"/api/v1/twins", "simulation-service"},
-	{"/api/v1/artifacts", "simulation-service"},
 	{"/api/v1/policies", "runtime-gateway"},
 	{"/api/v1/approvals", "runtime-gateway"},
 	{"/api/v1/policy-decisions", "runtime-gateway"},

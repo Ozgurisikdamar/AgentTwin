@@ -78,6 +78,9 @@ func (a *App) ListProjects(ctx context.Context, p authn.Principal) ([]store.Proj
 	out := all[:0]
 	for _, pr := range all {
 		if p.CanAccessProject(pr.ID) {
+			if !p.Can(authn.PermSettingsRead) {
+				pr.GatePolicy = json.RawMessage(`{}`) // as GetProject
+			}
 			out = append(out, pr)
 		}
 	}
@@ -103,6 +106,9 @@ func (a *App) GetProject(ctx context.Context, p authn.Principal, id string) (sto
 func (a *App) UpdateProjectSettings(ctx context.Context, p authn.Principal, id string, in store.ProjectSettings) (store.Project, error) {
 	if err := requireProject(p, authn.PermSettingsWrite, id); err != nil {
 		return store.Project{}, err
+	}
+	if in.Name != nil && (*in.Name == "" || len(*in.Name) > 200) {
+		return store.Project{}, httpx.Invalid("INVALID_SETTINGS", "name must be 1-200 characters.", map[string]any{"field": "name"})
 	}
 	if in.ContentMode != nil {
 		switch *in.ContentMode {
@@ -184,24 +190,24 @@ func (a *App) CreateAPIKey(ctx context.Context, p authn.Principal, projectID str
 	if err := validateKeyInput(in); err != nil {
 		return CreatedAPIKey{}, err
 	}
-	return a.insertKey(ctx, p, projectID, in, nil)
-}
-
-func (a *App) insertKey(ctx context.Context, p authn.Principal, projectID string, in CreateAPIKeyInput, rotatedFrom *string) (CreatedAPIKey, error) {
-	gen, err := auth.GenerateAPIKey(a.Pepper)
-	if err != nil {
-		return CreatedAPIKey{}, err
-	}
 	var expires *time.Time
 	if in.ExpiresInDays != nil {
 		t := a.Now().Add(time.Duration(*in.ExpiresInDays) * 24 * time.Hour)
 		expires = &t
 	}
+	return a.insertKey(ctx, p, projectID, in.Name, in.Scopes, expires, nil)
+}
+
+func (a *App) insertKey(ctx context.Context, p authn.Principal, projectID, name string, scopes []authn.Scope, expires *time.Time, rotatedFrom *string) (CreatedAPIKey, error) {
+	gen, err := auth.GenerateAPIKey(a.Pepper)
+	if err != nil {
+		return CreatedAPIKey{}, err
+	}
 	var out CreatedAPIKey
 	err = a.Store.Tx(ctx, func(tx pgx.Tx) error {
 		k, err := a.Store.InsertAPIKey(ctx, tx, store.APIKey{
-			ID: newID(), OrganizationID: p.OrgID, ProjectID: projectID, Name: in.Name, Prefix: gen.Prefix,
-			SecretHash: gen.SecretHash, Scopes: in.Scopes, CreatedBy: p.Actor, ExpiresAt: expires, RotatedFrom: rotatedFrom,
+			ID: newID(), OrganizationID: p.OrgID, ProjectID: projectID, Name: name, Prefix: gen.Prefix,
+			SecretHash: gen.SecretHash, Scopes: scopes, CreatedBy: p.Actor, ExpiresAt: expires, RotatedFrom: rotatedFrom,
 		})
 		if err != nil {
 			return err
@@ -246,7 +252,9 @@ func (a *App) RevokeAPIKey(ctx context.Context, p authn.Principal, keyID, reason
 	return out, err
 }
 
-// RotateAPIKey issues a replacement with the same scopes and revokes the old key.
+// RotateAPIKey issues a replacement with the same name, scopes and expiry and
+// revokes the old key. Rotation replaces a secret; it does not extend a key's
+// lifetime, so an expired key cannot be rotated.
 func (a *App) RotateAPIKey(ctx context.Context, p authn.Principal, keyID string) (CreatedAPIKey, error) {
 	old, err := a.Store.GetAPIKey(ctx, p.OrgID, keyID)
 	if err != nil {
@@ -258,7 +266,10 @@ func (a *App) RotateAPIKey(ctx context.Context, p authn.Principal, keyID string)
 	if old.RevokedAt != nil {
 		return CreatedAPIKey{}, httpx.NewError(http.StatusConflict, "API_KEY_REVOKED", "A revoked key cannot be rotated; create a new key instead.")
 	}
-	created, err := a.insertKey(ctx, p, old.ProjectID, CreateAPIKeyInput{Name: old.Name, Scopes: old.Scopes}, &old.ID)
+	if old.ExpiresAt != nil && !old.ExpiresAt.After(a.Now()) {
+		return CreatedAPIKey{}, httpx.NewError(http.StatusConflict, "API_KEY_EXPIRED", "An expired key cannot be rotated; create a new key instead.")
+	}
+	created, err := a.insertKey(ctx, p, old.ProjectID, old.Name, old.Scopes, old.ExpiresAt, &old.ID)
 	if err != nil {
 		return CreatedAPIKey{}, err
 	}

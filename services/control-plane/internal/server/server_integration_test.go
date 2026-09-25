@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,10 +18,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Ozgurisikdamar/AgentTwin/packages/contracts"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/config"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/db"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/openapicheck"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/testutil"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/auth"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/server"
@@ -32,6 +36,31 @@ const (
 	pepper         = "test-pepper-0123456789abcdef-0123456789"
 	demoKey        = "atk_demo0000_test-demo-secret-0123456789abcdef"
 )
+
+// contract is the control plane's API contract (ADR-0021). Every exchange of
+// a documented operation in these tests is held to it, and the suite fails
+// when a documented operation had no checked successful exchange (TestMain).
+var contract = func() *openapicheck.Contract {
+	c, err := openapicheck.Load(contracts.OpenAPI, "openapi/control-plane.openapi.yaml")
+	if err != nil {
+		panic(err)
+	}
+	return c
+}()
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	code := m.Run()
+	// Coverage is only meaningful for a full run against real infrastructure.
+	full := os.Getenv("AGENTTWIN_TEST_DATABASE_URL") != "" && flag.Lookup("test.run").Value.String() == ""
+	if code == 0 && full {
+		if missing := contract.Uncovered(); len(missing) > 0 {
+			fmt.Fprintf(os.Stderr, "control-plane contract: no checked successful exchange for %s\n", strings.Join(missing, ", "))
+			code = 1
+		}
+	}
+	os.Exit(code)
+}
 
 type harness struct {
 	t      *testing.T
@@ -86,16 +115,19 @@ type resp struct {
 
 func (h *harness) request(method, path string, body any, headers map[string]string) resp {
 	h.t.Helper()
-	var rdr io.Reader
+	var payload []byte
 	switch b := body.(type) {
 	case nil:
 	case []byte:
-		rdr = bytes.NewReader(b)
+		payload = b
 	case string:
-		rdr = strings.NewReader(b)
+		payload = []byte(b)
 	default:
-		raw, _ := json.Marshal(b)
-		rdr = bytes.NewReader(raw)
+		payload, _ = json.Marshal(b)
+	}
+	var rdr io.Reader
+	if body != nil {
+		rdr = bytes.NewReader(payload)
 	}
 	req, err := http.NewRequest(method, h.srv.URL+path, rdr)
 	if err != nil {
@@ -113,6 +145,11 @@ func (h *harness) request(method, path string, body any, headers map[string]stri
 	}
 	defer func() { _ = res.Body.Close() }()
 	raw, _ := io.ReadAll(res.Body)
+	if _, _, documented := contract.Find(method, req.URL.Path); documented {
+		if err := contract.CheckExchange(req, payload, res.StatusCode, res.Header, raw); err != nil {
+			h.t.Errorf("%s %s: %v", method, path, err)
+		}
+	}
 	out := resp{Status: res.StatusCode, Header: res.Header, Raw: raw}
 	_ = json.Unmarshal(raw, &out.Body)
 	return out
@@ -619,5 +656,215 @@ func TestSessionExpiry(t *testing.T) {
 	h.s.Auth.SetClock(func() time.Time { return time.Now().Add(auth.SessionTTL + time.Minute) })
 	if r := h.request("GET", "/api/v1/me", nil, bearer(tok)); r.Status != http.StatusUnauthorized {
 		t.Fatalf("expired session = %d, want 401", r.Status)
+	}
+}
+
+// items returns the "items" list of a list response.
+func items(t *testing.T, r resp) []map[string]any {
+	t.Helper()
+	list, ok := r.Body["items"].([]any)
+	if !ok {
+		t.Fatalf("no items: %d %s", r.Status, r.Raw)
+	}
+	out := make([]map[string]any, 0, len(list))
+	for _, it := range list {
+		out = append(out, it.(map[string]any))
+	}
+	return out
+}
+
+// TestAPIContractWalk calls the operations of the API contract the other
+// tests leave out (TestMain requires every one to be exercised), and holds
+// the promises of the contract: malformed ids answer 400, settings are
+// validated, a gate policy is visible with settings.read only, lists page
+// to a null cursor, an unchanged tool definition answers 200, and rotation
+// does not extend a key's lifetime.
+func TestAPIContractWalk(t *testing.T) {
+	h := newHarness(t, nil)
+	pid := h.s.Demo.ProjectID
+	owner := h.login("owner@demo.agenttwin.dev")
+	viewer := h.login("viewer@demo.agenttwin.dev")
+
+	if r := h.request("GET", "/api/v1/auth/config", nil, nil); r.Status != 200 || r.Body["mode"] != "dev" {
+		t.Fatalf("auth config: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("GET", "/api/v1/members", nil, bearer(owner)); r.Status != 200 || len(items(t, r)) < 5 {
+		t.Fatalf("members: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("GET", "/api/v1/members", nil, bearer(viewer)); r.Status != 403 {
+		t.Fatalf("members as viewer: %d", r.Status)
+	}
+
+	// Settings: a change, a gate policy, and an invalid name (a 400, not a
+	// database error).
+	r := h.request("PATCH", "/api/v1/projects/"+pid, map[string]any{
+		"description": "Support agents", "trace_retention_days": 14,
+		"gate_policy": map[string]any{"maxDepth": 3, "alwaysRunTags": []string{"smoke"}},
+	}, bearer(owner))
+	if r.Status != 200 || r.Body["trace_retention_days"].(float64) != 14 {
+		t.Fatalf("update settings: %d %s", r.Status, r.Raw)
+	}
+	for _, bad := range []map[string]any{{"name": ""}, {"name": strings.Repeat("n", 201)}} {
+		if r := h.request("PATCH", "/api/v1/projects/"+pid, bad, bearer(owner)); r.Status != 400 || errCode(r) != "INVALID_SETTINGS" {
+			t.Fatalf("invalid name: %d %s", r.Status, r.Raw)
+		}
+	}
+	if r := h.request("PATCH", "/api/v1/projects/"+pid, map[string]any{"gate_policy": map[string]any{"maxDepth": 99}}, bearer(owner)); r.Status != 400 || errCode(r) != "INVALID_GATE_POLICY" {
+		t.Fatalf("invalid gate policy: %d %s", r.Status, r.Raw)
+	}
+	// The gate policy is visible with settings.read only, in a list as in a get.
+	gate := func(tok string) (listed, got map[string]any) {
+		for _, p := range items(t, h.request("GET", "/api/v1/projects", nil, bearer(tok))) {
+			if p["id"] == pid {
+				listed = p["gate_policy"].(map[string]any)
+			}
+		}
+		return listed, h.request("GET", "/api/v1/projects/"+pid, nil, bearer(tok)).Body["gate_policy"].(map[string]any)
+	}
+	if listed, got := gate(owner); listed["maxDepth"] != 3.0 || got["maxDepth"] != 3.0 {
+		t.Fatalf("owner gate policy: %v %v", listed, got)
+	}
+	if listed, got := gate(viewer); len(listed) != 0 || len(got) != 0 {
+		t.Fatalf("a viewer sees the gate policy: %v %v", listed, got)
+	}
+	if r := h.request("GET", "/api/v1/projects/"+pid+"/environments", nil, bearer(viewer)); r.Status != 200 || len(items(t, r)) != 3 {
+		t.Fatalf("environments: %d %s", r.Status, r.Raw)
+	}
+
+	// Malformed ids answer 400 INVALID_PARAMETER instead of reaching the database.
+	for _, c := range []struct{ method, path, field string }{
+		{"GET", "/api/v1/projects/nope", "project_id"},
+		{"GET", "/api/v1/projects/nope/tools", "project_id"},
+		{"GET", "/api/v1/agents/nope", "agent_id"},
+		{"GET", "/api/v1/agents/nope/versions/1.0.0", "agent_id"},
+		{"POST", "/api/v1/api-keys/nope/rotate", "key_id"},
+	} {
+		r := h.request(c.method, c.path, nil, bearer(owner))
+		details, _ := r.Body["error"].(map[string]any)["details"].(map[string]any)
+		if r.Status != 400 || errCode(r) != "INVALID_PARAMETER" || details["field"] != c.field {
+			t.Fatalf("%s %s: %d %s", c.method, c.path, r.Status, r.Raw)
+		}
+	}
+
+	// Agents: one created directly, one from its manifest with a second
+	// version registered through the agent.
+	r = h.request("POST", "/api/v1/projects/"+pid+"/agents", map[string]any{"name": "triage-agent", "description": "Routes tickets."}, bearer(owner))
+	if r.Status != 201 || r.Body["version_count"].(float64) != 0 || r.Body["latest_version"] != nil {
+		t.Fatalf("create agent: %d %s", r.Status, r.Raw)
+	}
+	triage := r.Body["id"].(string)
+	if r := h.request("GET", "/api/v1/agents/"+triage, nil, bearer(viewer)); r.Status != 200 || r.Body["name"] != "triage-agent" {
+		t.Fatalf("get agent: %d %s", r.Status, r.Raw)
+	}
+	r = h.registerManifest(owner, pid, readManifest(t, "1.2.4"))
+	if r.Status != 201 {
+		t.Fatalf("register: %d %s", r.Status, r.Raw)
+	}
+	agent := r.Body["agent"].(map[string]any)["id"].(string)
+	r = h.request("POST", "/api/v1/agents/"+agent+"/versions", readManifest(t, "1.3.0"),
+		map[string]string{"Authorization": "Bearer " + owner, "Content-Type": "application/yaml"})
+	if r.Status != 201 || r.Body["version"].(map[string]any)["version"] != "1.3.0" {
+		t.Fatalf("version through the agent: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("POST", "/api/v1/agents/"+triage+"/versions", readManifest(t, "1.3.1"),
+		map[string]string{"Authorization": "Bearer " + owner, "Content-Type": "application/yaml"}); r.Status != 400 || errCode(r) != "MANIFEST_AGENT_MISMATCH" {
+		t.Fatalf("manifest of another agent: %d %s", r.Status, r.Raw)
+	}
+	if list := items(t, h.request("GET", "/api/v1/projects/"+pid+"/agents", nil, bearer(viewer))); len(list) != 2 {
+		t.Fatalf("agents: %v", list)
+	}
+	versions := items(t, h.request("GET", "/api/v1/agents/"+agent+"/versions", nil, bearer(viewer)))
+	if len(versions) != 2 || versions[0]["version"] != "1.3.0" {
+		t.Fatalf("versions, newest first: %v", versions)
+	}
+	r = h.request("GET", "/api/v1/agents/"+agent+"/versions/1.2.4", nil, bearer(viewer))
+	if r.Status != 200 || len(r.Body["tools"].([]any)) != 7 {
+		t.Fatalf("get version: %d %s", r.Status, r.Raw)
+	}
+	versionID := r.Body["id"].(string)
+	if r := h.request("GET", "/api/v1/agents/"+agent+"/versions/9.9.9", nil, bearer(viewer)); r.Status != 404 {
+		t.Fatalf("unknown version: %d", r.Status)
+	}
+
+	// Validation takes the JSON envelope too; the envelope is strict.
+	manifest := string(readManifest(t, "1.3.1"))
+	r = h.request("POST", "/api/v1/manifests/validate", map[string]any{"manifest": manifest}, bearer(viewer))
+	if r.Status != 200 || r.Body["valid"] != true || r.Body["normalized"].(map[string]any)["version"] != "1.3.1" {
+		t.Fatalf("validate: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("POST", "/api/v1/manifests/validate", map[string]any{"manifest": manifest, "commit": "abc1234"}, bearer(viewer)); r.Status != 400 || errCode(r) != "INVALID_JSON" {
+		t.Fatalf("unknown envelope field: %d %s", r.Status, r.Raw)
+	}
+
+	// Tools: a new definition is stored (201); the same again stores nothing (200).
+	tool := map[string]any{"name": "escalate_ticket", "description": "Hands a ticket to a person.", "risk": "WRITE_REVERSIBLE",
+		"input_schema": map[string]any{"type": "object", "properties": map[string]any{"ticket_id": map[string]any{"type": "string"}}}}
+	if r := h.request("POST", "/api/v1/projects/"+pid+"/tools", tool, bearer(owner)); r.Status != 201 || r.Body["created"] != true {
+		t.Fatalf("create tool: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("POST", "/api/v1/projects/"+pid+"/tools", tool, bearer(owner)); r.Status != 200 || r.Body["created"] != false {
+		t.Fatalf("unchanged tool: %d %s", r.Status, r.Raw)
+	}
+
+	// Rotation keeps the expiry; an expired key cannot be rotated.
+	r = h.request("POST", "/api/v1/projects/"+pid+"/api-keys", map[string]any{"name": "ci", "scopes": []string{"ci"}, "expires_in_days": 30}, bearer(owner))
+	if r.Status != 201 {
+		t.Fatalf("create key: %d %s", r.Status, r.Raw)
+	}
+	keyID, expires := r.Body["id"].(string), r.Body["expires_at"]
+	if r := h.request("POST", "/api/v1/api-keys/"+keyID+"/rotate", nil, bearer(owner)); r.Status != 201 || r.Body["expires_at"] != expires {
+		t.Fatalf("rotation extended the key's lifetime: %v -> %d %s", expires, r.Status, r.Raw)
+	}
+	r = h.request("POST", "/api/v1/projects/"+pid+"/api-keys", map[string]any{"name": "old", "scopes": []string{"read"}, "expires_in_days": 1}, bearer(owner))
+	expired := r.Body["id"].(string)
+	if _, err := h.pool.Exec(context.Background(), `UPDATE control.api_key SET expires_at = now() - interval '1 hour' WHERE id = $1`, expired); err != nil {
+		t.Fatal(err)
+	}
+	if r := h.request("POST", "/api/v1/api-keys/"+expired+"/rotate", nil, bearer(owner)); r.Status != 409 || errCode(r) != "API_KEY_EXPIRED" {
+		t.Fatalf("rotate an expired key: %d %s", r.Status, r.Raw)
+	}
+	// A revocation without a body.
+	if r := h.request("POST", "/api/v1/api-keys/"+expired+"/revoke", nil, bearer(owner)); r.Status != 200 || r.Body["revoked_at"] == nil {
+		t.Fatalf("revoke without a body: %d %s", r.Status, r.Raw)
+	}
+
+	// The audit log pages newest first to a null cursor.
+	seen, cursor := 0, ""
+	for page := 0; ; page++ {
+		path := "/api/v1/audit?limit=4"
+		if cursor != "" {
+			path += "&cursor=" + cursor
+		}
+		r := h.request("GET", path, nil, bearer(owner))
+		if r.Status != 200 {
+			t.Fatalf("audit page: %d %s", r.Status, r.Raw)
+		}
+		seen += len(items(t, r))
+		next, isString := r.Body["next_cursor"].(string)
+		if !isString {
+			if r.Body["next_cursor"] != nil {
+				t.Fatalf("next_cursor: %s", r.Raw)
+			}
+			break
+		}
+		cursor = next
+		if page > 50 {
+			t.Fatal("the audit log does not end")
+		}
+	}
+	if want := h.count(`SELECT count(*) FROM control.audit_event`); seen != want || seen < 8 {
+		t.Fatalf("audit entries paged = %d, stored = %d", seen, want)
+	}
+
+	// The internal lookup of a version by id, for a service acting for the organization.
+	tok, err := h.tokens.Mint(authn.ServicePrincipal("simulation-service", h.s.Demo.OrganizationID), "control-plane", "rid-12345678")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := h.request("GET", "/internal/v1/agent-versions/"+versionID, nil, bearer(tok)); r.Status != 200 || r.Body["version"] != "1.2.4" {
+		t.Fatalf("internal version lookup: %d %s", r.Status, r.Raw)
+	}
+	if r := h.request("GET", "/internal/v1/agent-versions/nope", nil, bearer(tok)); r.Status != 400 || errCode(r) != "INVALID_PARAMETER" {
+		t.Fatalf("internal lookup of a malformed id: %d %s", r.Status, r.Raw)
 	}
 }

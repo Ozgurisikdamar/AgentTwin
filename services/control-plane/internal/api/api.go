@@ -3,8 +3,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -20,6 +22,13 @@ import (
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/store"
 )
 
+// Router is what routes are registered on: an *http.ServeMux, or a recorder
+// in the test that holds the routes to the API contract.
+type Router interface {
+	Handle(pattern string, handler http.Handler)
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
+
 // Server holds dependencies for handlers.
 type Server struct {
 	App      *app.App
@@ -27,7 +36,7 @@ type Server struct {
 	Tokens   *authn.TokenService
 	Proxy    *proxy.Proxy
 	Log      *slog.Logger
-	Extra    func(mux *http.ServeMux) // later phases register more routes
+	Extra    func(mux Router) // later phases register more routes
 	AuthMode auth.Mode
 	OIDC     map[string]string
 }
@@ -37,8 +46,32 @@ func principal(r *http.Request) authn.Principal {
 	return p
 }
 
+// pathID returns the path value name, which must be a UUID: a malformed id
+// answers 400 INVALID_PARAMETER instead of reaching the database.
+func pathID(r *http.Request, name, field string) (string, error) {
+	v := r.PathValue(name)
+	if !ids.Valid(v) {
+		return "", httpx.Invalid("INVALID_PARAMETER", field+" must be a UUID.", map[string]any{"field": field})
+	}
+	return strings.ToLower(v), nil
+}
+
+// decodeOptionalJSON decodes a JSON body when there is one; an absent or
+// empty body leaves dst as it is.
+func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64) error {
+	body, err := httpx.ReadLimited(w, r, maxBytes)
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	return httpx.DecodeJSON(w, r, dst, maxBytes)
+}
+
 // PublicRoutes registers the public API on mux (behind authentication).
-func (s *Server) PublicRoutes(mux *http.ServeMux) {
+func (s *Server) PublicRoutes(mux Router) {
 	h := httpx.Handle
 	mux.HandleFunc("GET /api/v1/auth/config", h(s.authConfig))
 	mux.HandleFunc("POST /api/v1/auth/dev/login", h(s.devLogin))
@@ -163,7 +196,11 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) getProject(w http.ResponseWriter, r *http.Request) error {
-	pr, err := s.App.GetProject(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	pr, err := s.App.GetProject(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -172,11 +209,15 @@ func (s *Server) getProject(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
 	var in store.ProjectSettings
 	if err := httpx.DecodeJSON(w, r, &in, 0); err != nil {
 		return err
 	}
-	pr, err := s.App.UpdateProjectSettings(r.Context(), principal(r), r.PathValue("id"), in)
+	pr, err := s.App.UpdateProjectSettings(r.Context(), principal(r), id, in)
 	if err != nil {
 		return err
 	}
@@ -185,7 +226,11 @@ func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) listEnvironments(w http.ResponseWriter, r *http.Request) error {
-	es, err := s.App.ListEnvironments(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	es, err := s.App.ListEnvironments(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -194,11 +239,15 @@ func (s *Server) listEnvironments(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
 	var in app.CreateAPIKeyInput
 	if err := httpx.DecodeJSON(w, r, &in, 0); err != nil {
 		return err
 	}
-	k, err := s.App.CreateAPIKey(r.Context(), principal(r), r.PathValue("id"), in)
+	k, err := s.App.CreateAPIKey(r.Context(), principal(r), id, in)
 	if err != nil {
 		return err
 	}
@@ -207,7 +256,11 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request) error {
-	ks, err := s.App.ListAPIKeys(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	ks, err := s.App.ListAPIKeys(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -216,15 +269,17 @@ func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "key_id")
+	if err != nil {
+		return err
+	}
 	var in struct {
 		Reason string `json:"reason"`
 	}
-	if r.ContentLength > 0 {
-		if err := httpx.DecodeJSON(w, r, &in, 4096); err != nil {
-			return err
-		}
+	if err := decodeOptionalJSON(w, r, &in, 4096); err != nil {
+		return err
 	}
-	k, err := s.App.RevokeAPIKey(r.Context(), principal(r), r.PathValue("id"), in.Reason)
+	k, err := s.App.RevokeAPIKey(r.Context(), principal(r), id, in.Reason)
 	if err != nil {
 		return err
 	}
@@ -233,7 +288,11 @@ func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) error {
-	k, err := s.App.RotateAPIKey(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "key_id")
+	if err != nil {
+		return err
+	}
+	k, err := s.App.RotateAPIKey(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -242,11 +301,15 @@ func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
 	var in app.CreateAgentInput
 	if err := httpx.DecodeJSON(w, r, &in, 0); err != nil {
 		return err
 	}
-	a, err := s.App.CreateAgent(r.Context(), principal(r), r.PathValue("id"), in)
+	a, err := s.App.CreateAgent(r.Context(), principal(r), id, in)
 	if err != nil {
 		return err
 	}
@@ -255,7 +318,11 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) error {
-	as, err := s.App.ListAgents(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	as, err := s.App.ListAgents(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -265,6 +332,7 @@ func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) error {
 
 // readManifestRequest accepts either a raw YAML/JSON manifest (commit metadata
 // in query parameters) or a JSON envelope {"manifest": ..., "commit_sha": ...}.
+// An envelope is strict like every JSON body: unknown fields are rejected.
 func readManifestRequest(w http.ResponseWriter, r *http.Request) ([]byte, app.VersionMetadata, error) {
 	body, err := httpx.ReadLimited(w, r, domain.MaxManifestBytes+4096)
 	if err != nil {
@@ -272,14 +340,20 @@ func readManifestRequest(w http.ResponseWriter, r *http.Request) ([]byte, app.Ve
 	}
 	meta := app.VersionMetadata{CommitSHA: r.URL.Query().Get("commit_sha"), RepoURL: r.URL.Query().Get("repo_url"), Branch: r.URL.Query().Get("branch")}
 	ct := strings.ToLower(r.Header.Get("Content-Type"))
-	if strings.HasPrefix(ct, "application/json") {
+	var probe map[string]json.RawMessage
+	if strings.HasPrefix(ct, "application/json") && json.Unmarshal(body, &probe) == nil && probe["manifest"] != nil {
 		var env struct {
 			Manifest  json.RawMessage `json:"manifest"`
 			CommitSHA string          `json:"commit_sha"`
 			RepoURL   string          `json:"repo_url"`
 			Branch    string          `json:"branch"`
 		}
-		if err := json.Unmarshal(body, &env); err == nil && len(env.Manifest) > 0 {
+		dec := json.NewDecoder(bytes.NewReader(body))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&env); err != nil {
+			return nil, meta, httpx.ErrInvalidJSON.WithDetails(map[string]any{"reason": err.Error()})
+		}
+		if len(env.Manifest) > 0 {
 			var asString string
 			raw := []byte(env.Manifest)
 			if json.Unmarshal(env.Manifest, &asString) == nil {
@@ -301,11 +375,15 @@ func readManifestRequest(w http.ResponseWriter, r *http.Request) ([]byte, app.Ve
 }
 
 func (s *Server) registerManifest(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
 	raw, meta, err := readManifestRequest(w, r)
 	if err != nil {
 		return err
 	}
-	res, err := s.App.RegisterManifest(r.Context(), principal(r), r.PathValue("id"), raw, meta)
+	res, err := s.App.RegisterManifest(r.Context(), principal(r), id, raw, meta)
 	if err != nil {
 		return err
 	}
@@ -331,7 +409,11 @@ func (s *Server) validateManifest(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) error {
-	a, err := s.App.GetAgent(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "agent_id")
+	if err != nil {
+		return err
+	}
+	a, err := s.App.GetAgent(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -340,7 +422,11 @@ func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) error {
-	agent, err := s.App.GetAgent(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "agent_id")
+	if err != nil {
+		return err
+	}
+	agent, err := s.App.GetAgent(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -365,7 +451,11 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) listVersions(w http.ResponseWriter, r *http.Request) error {
-	vs, err := s.App.ListVersions(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "agent_id")
+	if err != nil {
+		return err
+	}
+	vs, err := s.App.ListVersions(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -374,7 +464,11 @@ func (s *Server) listVersions(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) error {
-	v, err := s.App.GetVersion(r.Context(), principal(r), r.PathValue("id"), r.PathValue("version"))
+	id, err := pathID(r, "id", "agent_id")
+	if err != nil {
+		return err
+	}
+	v, err := s.App.GetVersion(r.Context(), principal(r), id, r.PathValue("version"))
 	if err != nil {
 		return err
 	}
@@ -383,7 +477,11 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) listTools(w http.ResponseWriter, r *http.Request) error {
-	ts, err := s.App.ListTools(r.Context(), principal(r), r.PathValue("id"))
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	ts, err := s.App.ListTools(r.Context(), principal(r), id)
 	if err != nil {
 		return err
 	}
@@ -392,15 +490,25 @@ func (s *Server) listTools(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) createTool(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
 	var in app.CreateToolInput
 	if err := httpx.DecodeJSON(w, r, &in, 256<<10); err != nil {
 		return err
 	}
-	res, err := s.App.CreateTool(r.Context(), principal(r), r.PathValue("id"), in)
+	res, err := s.App.CreateTool(r.Context(), principal(r), id, in)
 	if err != nil {
 		return err
 	}
-	httpx.WriteJSON(w, http.StatusCreated, res)
+	// As for manifests: 201 when a version was stored, 200 when the
+	// definition equals the latest version.
+	status := http.StatusCreated
+	if created, _ := res["created"].(bool); !created {
+		status = http.StatusOK
+	}
+	httpx.WriteJSON(w, status, res)
 	return nil
 }
 
@@ -424,9 +532,10 @@ func (s *Server) listAudit(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	next := ""
+	var next *string // null on the last page
 	if len(items) == limit {
-		next = strconv.FormatInt(items[len(items)-1].Seq, 10)
+		c := strconv.FormatInt(items[len(items)-1].Seq, 10)
+		next = &c
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next})
 	return nil
@@ -442,7 +551,7 @@ func (s *Server) verifyAudit(w http.ResponseWriter, r *http.Request) error {
 }
 
 // InternalRoutes registers /internal/v1 endpoints (internal JWT required).
-func (s *Server) InternalRoutes(mux *http.ServeMux) {
+func (s *Server) InternalRoutes(mux Router) {
 	h := httpx.Handle
 	mux.HandleFunc("POST /internal/v1/api-keys/verify", h(s.internalVerifyKey))
 	mux.HandleFunc("GET /internal/v1/projects/{id}", h(s.internalProject))
@@ -485,11 +594,11 @@ func (s *Server) internalVerifyKey(w http.ResponseWriter, r *http.Request) error
 
 func (s *Server) internalProject(w http.ResponseWriter, r *http.Request) error {
 	p := principal(r)
-	id := r.PathValue("id")
-	var (
-		pr  store.Project
-		err error
-	)
+	id, err := pathID(r, "id", "project_id")
+	if err != nil {
+		return err
+	}
+	var pr store.Project
 	switch {
 	case p.Role == authn.RoleService && p.OrgID == authn.SystemOrg:
 		// Platform-level lookups (e.g. trace ingestion resolving an API key's
@@ -512,7 +621,11 @@ func (s *Server) internalProject(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) internalAgentVersion(w http.ResponseWriter, r *http.Request) error {
 	p := principal(r)
-	v, err := s.App.Store.GetAgentVersionByID(r.Context(), s.App.Store.Pool, p.OrgID, r.PathValue("id"))
+	id, err := pathID(r, "id", "version_id")
+	if err != nil {
+		return err
+	}
+	v, err := s.App.Store.GetAgentVersionByID(r.Context(), s.App.Store.Pool, p.OrgID, id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return httpx.ErrNotFound

@@ -123,7 +123,7 @@ func (a *App) WhoAmI(ctx context.Context, p authn.Principal) (Me, error) {
 	if err != nil {
 		return Me{}, notFoundOr(err)
 	}
-	me := Me{Principal: p, Organization: org}
+	me := Me{Principal: p, Organization: org, Permissions: []string{}}
 	for _, perm := range allPermissions {
 		if p.Can(perm) {
 			me.Permissions = append(me.Permissions, string(perm))

@@ -184,7 +184,22 @@ func run(t *testing.T, f *fakeControlPlane, vars map[string]string, args ...stri
 	return result{code: code, stdout: stdout.String(), stderr: stderr.String()}
 }
 
-const demoProjectID = "01a0d8ef-40e9-72ad-a388-8fd4afeb0b91"
+// demoProjectID is the project of the captured responses.
+var demoProjectID = func() string {
+	raw, err := os.ReadFile(filepath.Join("testdata", "projects-ci.json"))
+	if err != nil {
+		panic(err)
+	}
+	var page struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &page); err != nil || len(page.Items) == 0 {
+		panic("testdata/projects-ci.json names no project")
+	}
+	return page.Items[0].ID
+}()
 
 var checkArgs = []string{"release", "check", "--project", demoProjectID, "--baseline", "support-refund-agent@1.2.4",
 	"--candidate", "support-refund-agent@1.3.0", "--poll-interval", "1ms"}

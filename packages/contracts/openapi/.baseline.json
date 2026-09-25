@@ -3494,6 +3494,7 @@
               "baseline",
               "candidate",
               "change_set_id",
+              "changes",
               "ci_url",
               "commit_sha",
               "created_at",
@@ -3514,6 +3515,13 @@
             "/items/[]/candidate": [
               "id",
               "version"
+            ],
+            "/items/[]/changes": [
+              "breaking",
+              "confidence",
+              "items",
+              "kinds",
+              "seeds"
             ],
             "/items/[]/gate": [
               "decided_at",
@@ -3589,6 +3597,24 @@
             ],
             "/items/[]/change_set_id": [
               "string"
+            ],
+            "/items/[]/changes": [
+              "object"
+            ],
+            "/items/[]/changes/breaking": [
+              "integer"
+            ],
+            "/items/[]/changes/confidence": [
+              "object"
+            ],
+            "/items/[]/changes/items": [
+              "integer"
+            ],
+            "/items/[]/changes/kinds": [
+              "object"
+            ],
+            "/items/[]/changes/seeds": [
+              "integer"
             ],
             "/items/[]/ci_url": [
               "null",
@@ -3807,6 +3833,7 @@
               "baseline",
               "candidate",
               "change_set_id",
+              "changes",
               "ci_url",
               "commit_sha",
               "created_at",
@@ -3827,6 +3854,13 @@
             "/release/candidate": [
               "id",
               "version"
+            ],
+            "/release/changes": [
+              "breaking",
+              "confidence",
+              "items",
+              "kinds",
+              "seeds"
             ],
             "/release/gate": [
               "decided_at",
@@ -3933,6 +3967,24 @@
             ],
             "/release/change_set_id": [
               "string"
+            ],
+            "/release/changes": [
+              "object"
+            ],
+            "/release/changes/breaking": [
+              "integer"
+            ],
+            "/release/changes/confidence": [
+              "object"
+            ],
+            "/release/changes/items": [
+              "integer"
+            ],
+            "/release/changes/kinds": [
+              "object"
+            ],
+            "/release/changes/seeds": [
+              "integer"
             ],
             "/release/ci_url": [
               "null",
@@ -11944,6 +11996,7 @@
               "baseline",
               "candidate",
               "change_set_id",
+              "changes",
               "ci_url",
               "commit_sha",
               "created_at",
@@ -11964,6 +12017,13 @@
             "/release/candidate": [
               "id",
               "version"
+            ],
+            "/release/changes": [
+              "breaking",
+              "confidence",
+              "items",
+              "kinds",
+              "seeds"
             ],
             "/release/gate": [
               "decided_at",
@@ -13006,6 +13066,24 @@
             ],
             "/release/change_set_id": [
               "string"
+            ],
+            "/release/changes": [
+              "object"
+            ],
+            "/release/changes/breaking": [
+              "integer"
+            ],
+            "/release/changes/confidence": [
+              "object"
+            ],
+            "/release/changes/items": [
+              "integer"
+            ],
+            "/release/changes/kinds": [
+              "object"
+            ],
+            "/release/changes/seeds": [
+              "integer"
             ],
             "/release/ci_url": [
               "null",

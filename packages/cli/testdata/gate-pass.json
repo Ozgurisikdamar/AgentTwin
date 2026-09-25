@@ -1,6 +1,6 @@
 {
   "ci_fails": false,
-  "decided_at": "2026-09-25T14:15:45.44781Z",
+  "decided_at": "2026-09-25T14:48:00.572395Z",
   "decision": {
     "ci_fails": false,
     "counts": {
@@ -124,17 +124,17 @@
     "summary": "Every required scenario passed (9 of 9); no rule triggered."
   },
   "effective_outcome": "PASS",
-  "eval_run_id": "01a0d8ec-13e8-7198-9c99-6a666d7c2cf5",
-  "evidence_sha256": "de10ec1da43c61dbc0a7611993ef09288cfba05ddde7a22c1bbbbd8173f7c77d",
+  "eval_run_id": "01a0d909-9b19-7424-9c87-44c759bed9ca",
+  "evidence_sha256": "0ec35dbbc0cc1b9065cfa63fcc8d12c810b4015d908dbe75b4710f68b091cb4a",
   "evidence_verified": true,
   "exit_code": 0,
   "impact": {
     "agent": "support-refund-agent",
     "base_version": "1.2.4",
     "candidate_version": "1.3.0",
-    "change_set_id": "01a0d8ec-1397-7286-8f9b-c1bd93d07fa1",
+    "change_set_id": "01a0d909-9ae8-75d8-8105-e0a9ba6a55ba",
     "complete": true,
-    "computed_at": "2026-09-25T14:15:45.329359385Z",
+    "computed_at": "2026-09-25T14:48:00.50864873Z",
     "counts": {
       "always_run": 0,
       "graph": 1,
@@ -272,7 +272,7 @@
       "max_depth": 4
     },
     "problems": [],
-    "project_id": "01a0d8ec-1354-7cdd-97b9-d8a6c1f0b184",
+    "project_id": "01a0d909-9ab6-7201-8769-04af525481bb",
     "scenarios": [
       {
         "agent": "support-refund-agent",
@@ -682,10 +682,10 @@
     "semantic_regression_drop": 0.1,
     "warn_fails_ci": false
   },
-  "release_evaluation_id": "01a0d8ec-13c8-77fe-957c-aba888ee6da1",
-  "release_id": "01a0d8ec-13a9-7bc4-b3cc-0a9f950fd372",
-  "requested_at": "2026-09-25T14:15:45.353759Z",
-  "requested_by": "user:01a0d8ec-1352-7ac2-8907-8cc3418ad170",
+  "release_evaluation_id": "01a0d909-9b07-7e95-8670-9d01a1883f17",
+  "release_id": "01a0d909-9af4-75f8-a06e-ccdcf36dd064",
+  "requested_at": "2026-09-25T14:48:00.520051Z",
+  "requested_by": "user:01a0d909-9ab3-7bdb-9408-260a752c0540",
   "revision": 1,
   "status": "DECIDED",
   "suite": [

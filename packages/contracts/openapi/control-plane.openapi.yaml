@@ -3987,7 +3987,7 @@ components:
     Release:
       type: object
       required: [id, project_id, agent, change_set_id, baseline, candidate, title, commit_sha, ci_url, created_by,
-        created_at, gate]
+        created_at, changes, gate]
       properties:
         id:
           $ref: '#/components/schemas/Uuid'
@@ -4013,6 +4013,9 @@ components:
           $ref: '#/components/schemas/Actor'
         created_at:
           $ref: '#/components/schemas/Timestamp'
+        changes:
+          description: What the release's change set counts (its changed components, by kind).
+          $ref: '#/components/schemas/ChangeCounts'
         gate:
           description: The gate of the latest evaluation; `null` before one.
           oneOf:

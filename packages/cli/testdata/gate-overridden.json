@@ -1,6 +1,6 @@
 {
   "ci_fails": false,
-  "decided_at": "2026-09-25T14:15:44.957836Z",
+  "decided_at": "2026-09-25T14:48:00.176659Z",
   "decision": {
     "ci_fails": true,
     "counts": {
@@ -336,17 +336,17 @@
     "summary": "Blocked: an action took effect twice (1); success the final state disproves (1); a new policy violation (1); a critical expectation fails (3); a non-critical expectation newly fails (3); costlier than the baseline (1); answers judged worse (1)."
   },
   "effective_outcome": "OVERRIDDEN",
-  "eval_run_id": "01a0d8ec-121d-740c-935b-e112956423e3",
-  "evidence_sha256": "a58fefa0feac9c8f88cc8863f0692cb607a6cc48f1187fe919dc781f7550bc70",
+  "eval_run_id": "01a0d909-9985-769d-b5ce-6e8fa0e02a98",
+  "evidence_sha256": "27651a3ed4fdb929f75999084210e4072edc9a749c784777216a6c3d2a12bdf3",
   "evidence_verified": true,
   "exit_code": 0,
   "impact": {
     "agent": "support-refund-agent",
     "base_version": "1.2.4",
     "candidate_version": "1.3.0",
-    "change_set_id": "01a0d8ec-11ee-7c72-a88d-b7cb2e5577da",
+    "change_set_id": "01a0d909-994f-707c-8fb5-6800b06a5773",
     "complete": true,
-    "computed_at": "2026-09-25T14:15:44.89591602Z",
+    "computed_at": "2026-09-25T14:48:00.096793756Z",
     "counts": {
       "always_run": 0,
       "graph": 1,
@@ -484,7 +484,7 @@
       "max_depth": 4
     },
     "problems": [],
-    "project_id": "01a0d8ec-11c2-7942-9658-0005d161ed16",
+    "project_id": "01a0d909-9910-7d49-864f-63943fc09887",
     "scenarios": [
       {
         "agent": "support-refund-agent",
@@ -878,11 +878,11 @@
   },
   "override": {
     "active": true,
-    "actor": "user:01a0d8ec-11c0-7672-8366-176a29f2b8bc",
-    "created_at": "2026-09-25T14:15:44.984566Z",
-    "expires_at": "2026-09-26T14:15:44Z",
-    "gate_decision_id": "01a0d8ec-1240-759d-ae60-0b376d7b0ebd",
-    "id": "01a0d8ec-1259-79cb-8f79-573d4453540a",
+    "actor": "user:01a0d909-990e-7617-9db3-10c8dca4fb8d",
+    "created_at": "2026-09-25T14:48:00.213376Z",
+    "expires_at": "2026-09-26T14:48:00Z",
+    "gate_decision_id": "01a0d909-99b3-70f5-87d9-1eb6fa03733f",
+    "id": "01a0d909-99d7-7988-aecc-8d5d325c385b",
     "original_outcome": "BLOCK",
     "reason": "Hotfix for the outage, reviewed by the refunds team.",
     "ticket_url": "https://tickets.example.com/OPS-12"
@@ -904,10 +904,10 @@
     "semantic_regression_drop": 0.1,
     "warn_fails_ci": false
   },
-  "release_evaluation_id": "01a0d8ec-1211-775b-acc4-f9be4cbc19f9",
-  "release_id": "01a0d8ec-11f9-79c9-9c9e-a3af819c25d9",
-  "requested_at": "2026-09-25T14:15:44.91359Z",
-  "requested_by": "user:01a0d8ec-11c0-7046-9349-5d7f28f69bc3",
+  "release_evaluation_id": "01a0d909-9978-729c-affa-9f91f9b1b617",
+  "release_id": "01a0d909-995b-769a-ba68-36d14c550b9e",
+  "requested_at": "2026-09-25T14:48:00.120373Z",
+  "requested_by": "user:01a0d909-990d-7503-a7a1-26f2476022e1",
   "revision": 1,
   "status": "DECIDED",
   "suite": [

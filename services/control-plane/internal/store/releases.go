@@ -30,6 +30,9 @@ type Release struct {
 	CIURL       *string          `json:"ci_url"`
 	CreatedBy   string           `json:"created_by"`
 	CreatedAt   time.Time        `json:"created_at"`
+	// Changes are the counts of the release's change set (what lists show
+	// as its changed components).
+	Changes json.RawMessage `json:"changes"`
 }
 
 // Revision summarizes one evaluation of a release, with its decision and
@@ -132,16 +135,17 @@ func enc(v any) []byte {
 }
 
 const releaseCols = `r.id, r.project_id, r.agent_id, a.name, r.change_set_id, r.baseline_version_id, bv.version,
-	r.candidate_version_id, cv.version, r.title, r.commit_sha, r.ci_url, r.created_by, r.created_at`
+	r.candidate_version_id, cv.version, r.title, r.commit_sha, r.ci_url, r.created_by, r.created_at, c.summary`
 
 const releaseFrom = ` FROM control.release r
 	JOIN control.agent a ON a.id = r.agent_id
 	JOIN control.agent_version bv ON bv.id = r.baseline_version_id
-	JOIN control.agent_version cv ON cv.id = r.candidate_version_id `
+	JOIN control.agent_version cv ON cv.id = r.candidate_version_id
+	JOIN control.change_set c ON c.id = r.change_set_id `
 
 func releaseDest(r *Release) []any {
 	return []any{&r.ID, &r.ProjectID, &r.Agent.ID, &r.Agent.Name, &r.ChangeSetID, &r.Baseline.ID, &r.Baseline.Version,
-		&r.Candidate.ID, &r.Candidate.Version, &r.Title, &r.CommitSHA, &r.CIURL, &r.CreatedBy, &r.CreatedAt}
+		&r.Candidate.ID, &r.Candidate.Version, &r.Title, &r.CommitSHA, &r.CIURL, &r.CreatedBy, &r.CreatedAt, &r.Changes}
 }
 
 // InsertRelease stores a release.

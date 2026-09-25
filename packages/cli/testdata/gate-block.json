@@ -1,6 +1,6 @@
 {
   "ci_fails": true,
-  "decided_at": "2026-09-25T14:15:44.604027Z",
+  "decided_at": "2026-09-25T14:47:59.80241Z",
   "decision": {
     "ci_fails": true,
     "counts": {
@@ -336,17 +336,17 @@
     "summary": "Blocked: an action took effect twice (1); success the final state disproves (1); a new policy violation (1); a critical expectation fails (3); a non-critical expectation newly fails (3); costlier than the baseline (1); answers judged worse (1)."
   },
   "effective_outcome": "BLOCK",
-  "eval_run_id": "01a0d8ec-10b0-7c4f-b350-9130f8d990c8",
-  "evidence_sha256": "205cd96470fcf8cf34dfe26204f55ef9d1b90338612baceab51fc1d61a3a38b3",
+  "eval_run_id": "01a0d909-9809-766a-a561-ea98afcf9fb5",
+  "evidence_sha256": "df7a342585a1046a81970b736ff3dd44c9652ea9da26e5ccfbd94807f7b89945",
   "evidence_verified": true,
   "exit_code": 3,
   "impact": {
     "agent": "support-refund-agent",
     "base_version": "1.2.4",
     "candidate_version": "1.3.0",
-    "change_set_id": "01a0d8ec-1078-7b29-8b31-93a3b5ea7b1d",
+    "change_set_id": "01a0d909-97b6-77e5-941d-347847b3074d",
     "complete": true,
-    "computed_at": "2026-09-25T14:15:44.512309175Z",
+    "computed_at": "2026-09-25T14:47:59.681527483Z",
     "counts": {
       "always_run": 0,
       "graph": 1,
@@ -484,7 +484,7 @@
       "max_depth": 4
     },
     "problems": [],
-    "project_id": "01a0d8ec-102d-72e8-8b86-6a560ad0bbfb",
+    "project_id": "01a0d909-9750-7300-8d2e-32e77bc2a3e9",
     "scenarios": [
       {
         "agent": "support-refund-agent",
@@ -894,10 +894,10 @@
     "semantic_regression_drop": 0.1,
     "warn_fails_ci": false
   },
-  "release_evaluation_id": "01a0d8ec-108e-79ff-b840-d88d35002708",
-  "release_id": "01a0d8ec-107a-7e95-b614-81eead58ac7c",
-  "requested_at": "2026-09-25T14:15:44.526747Z",
-  "requested_by": "user:01a0d8ec-102a-7655-84e9-bcb6119d9c01",
+  "release_evaluation_id": "01a0d909-97d8-73da-8819-d455378b6bdf",
+  "release_id": "01a0d909-97b8-7731-8057-c6ab0ff84ad0",
+  "requested_at": "2026-09-25T14:47:59.70432Z",
+  "requested_by": "user:01a0d909-974b-7d96-a13c-4b47d6523598",
   "revision": 1,
   "status": "DECIDED",
   "suite": [

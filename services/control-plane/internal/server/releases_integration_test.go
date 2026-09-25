@@ -343,6 +343,12 @@ func TestABadCandidateIsBlocked(t *testing.T) {
 		rel["candidate"].(map[string]any)["version"] != "1.3.0" {
 		t.Fatalf("release = %s", created.Raw)
 	}
+	// The release carries its change set's counts: 1.3.0 changed the
+	// prompt, and CI reported a changed file.
+	if changes := rel["changes"].(map[string]any); changes["items"] != 2.0 ||
+		changes["kinds"].(map[string]any)["prompt"] != 1.0 || changes["kinds"].(map[string]any)["code"] != 1.0 {
+		t.Fatalf("release changes = %v", changes)
+	}
 	gate := created.Body["gate"].(map[string]any)
 	if gate["status"] != "EVALUATING" || gate["effective_outcome"] != "PENDING" || gate["exit_code"] != nil ||
 		gate["decision"] != nil || gate["revision"] != 1.0 {
@@ -477,7 +483,8 @@ func TestABadCandidateIsBlocked(t *testing.T) {
 	}
 	list := h.request("GET", "/api/v1/releases?project_id="+fx.pid, nil, bearer(fx.eng))
 	if list.Status != 200 || len(list.Body["items"].([]any)) != 1 ||
-		list.Body["items"].([]any)[0].(map[string]any)["gate"].(map[string]any)["outcome"] != "BLOCK" {
+		list.Body["items"].([]any)[0].(map[string]any)["gate"].(map[string]any)["outcome"] != "BLOCK" ||
+		list.Body["items"].([]any)[0].(map[string]any)["changes"].(map[string]any)["items"] != 2.0 {
 		t.Fatalf("list: %d %s", list.Status, list.Raw)
 	}
 

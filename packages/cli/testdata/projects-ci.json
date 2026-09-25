@@ -4,17 +4,17 @@
       "artifact_retention_days": 30,
       "content_mode": "redacted",
       "content_retention_days": 7,
-      "created_at": "2026-09-25T14:19:13.502415Z",
+      "created_at": "2026-09-25T14:48:00.754585Z",
       "created_by": "system:bootstrap",
       "description": "Support automation agents",
       "gate_policy": {},
-      "id": "01a0d8ef-40e9-72ad-a388-8fd4afeb0b91",
+      "id": "01a0d909-9bf7-7df1-9e0c-fc0d6596f1d9",
       "name": "Customer Support",
-      "organization_id": "01a0d8ef-40df-72b2-af0e-132aeb28a2b4",
+      "organization_id": "01a0d909-9bf2-7b35-ac42-090934bf8d5b",
       "slug": "support",
       "store_prompt_text": true,
       "trace_retention_days": 30,
-      "updated_at": "2026-09-25T14:19:13.502415Z",
+      "updated_at": "2026-09-25T14:48:00.754585Z",
       "updated_by": "system:bootstrap"
     }
   ]

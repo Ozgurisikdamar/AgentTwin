@@ -52,7 +52,7 @@ BLOCK  An action took effect twice (duplicate_side_effect)
          trace: 4ad026574fb37d447a7a79f1eecf00ac
 …
 Risk index   90/100 (sorts releases; never decides)
-Evidence     sha256 205cd964… (verified)
+Evidence     sha256 df7a3425… (verified)
 Details      https://agenttwin.example.com/releases/01a0…
 
 Exit code: 3

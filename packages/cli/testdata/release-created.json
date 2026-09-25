@@ -12,9 +12,9 @@
       "agent": "support-refund-agent",
       "base_version": "1.2.4",
       "candidate_version": "1.3.0",
-      "change_set_id": "01a0d8ec-1078-7b29-8b31-93a3b5ea7b1d",
+      "change_set_id": "01a0d909-97b6-77e5-941d-347847b3074d",
       "complete": true,
-      "computed_at": "2026-09-25T14:15:44.512309175Z",
+      "computed_at": "2026-09-25T14:47:59.681527483Z",
       "counts": {
         "always_run": 0,
         "graph": 1,
@@ -152,7 +152,7 @@
         "max_depth": 4
       },
       "problems": [],
-      "project_id": "01a0d8ec-102d-72e8-8b86-6a560ad0bbfb",
+      "project_id": "01a0d909-9750-7300-8d2e-32e77bc2a3e9",
       "scenarios": [
         {
           "agent": "support-refund-agent",
@@ -562,10 +562,10 @@
       "semantic_regression_drop": 0.1,
       "warn_fails_ci": false
     },
-    "release_evaluation_id": "01a0d8ec-108e-79ff-b840-d88d35002708",
-    "release_id": "01a0d8ec-107a-7e95-b614-81eead58ac7c",
-    "requested_at": "2026-09-25T14:15:44.526747Z",
-    "requested_by": "user:01a0d8ec-102a-7655-84e9-bcb6119d9c01",
+    "release_evaluation_id": "01a0d909-97d8-73da-8819-d455378b6bdf",
+    "release_id": "01a0d909-97b8-7731-8057-c6ab0ff84ad0",
+    "requested_at": "2026-09-25T14:47:59.70432Z",
+    "requested_by": "user:01a0d909-974b-7d96-a13c-4b47d6523598",
     "revision": 1,
     "status": "EVALUATING",
     "suite": [
@@ -868,22 +868,35 @@
   },
   "release": {
     "agent": {
-      "id": "01a0d8ec-103e-780a-9a7a-418160760406",
+      "id": "01a0d909-975d-7037-8832-9bc748f753a2",
       "name": "support-refund-agent"
     },
     "baseline": {
-      "id": "01a0d8ec-104d-7f07-afb3-372b7df7de0e",
+      "id": "01a0d909-976d-7283-be49-5f13b5487ac7",
       "version": "1.2.4"
     },
     "candidate": {
-      "id": "01a0d8ec-1061-72d2-b0bd-8595c13dc85e",
+      "id": "01a0d909-9794-7040-b38a-08b25935a9a8",
       "version": "1.3.0"
     },
-    "change_set_id": "01a0d8ec-1078-7b29-8b31-93a3b5ea7b1d",
+    "change_set_id": "01a0d909-97b6-77e5-941d-347847b3074d",
+    "changes": {
+      "breaking": 0,
+      "confidence": {
+        "exact": 1,
+        "filenames_only": 1
+      },
+      "items": 2,
+      "kinds": {
+        "code": 1,
+        "prompt": 1
+      },
+      "seeds": 2
+    },
     "ci_url": "https://ci.example.com/runs/42",
     "commit_sha": "4e5f6a7b",
-    "created_at": "2026-09-25T14:15:44.507018Z",
-    "created_by": "user:01a0d8ec-102a-7655-84e9-bcb6119d9c01",
+    "created_at": "2026-09-25T14:47:59.672583Z",
+    "created_by": "user:01a0d909-974b-7d96-a13c-4b47d6523598",
     "gate": {
       "decided_at": null,
       "effective_outcome": "PENDING",
@@ -891,15 +904,15 @@
       "incomplete": null,
       "outcome": null,
       "overridden": false,
-      "requested_at": "2026-09-25T14:15:44.526747Z",
-      "requested_by": "user:01a0d8ec-102a-7655-84e9-bcb6119d9c01",
+      "requested_at": "2026-09-25T14:47:59.70432Z",
+      "requested_by": "user:01a0d909-974b-7d96-a13c-4b47d6523598",
       "revision": 1,
       "risk_index": null,
       "status": "EVALUATING",
       "summary": null
     },
-    "id": "01a0d8ec-107a-7e95-b614-81eead58ac7c",
-    "project_id": "01a0d8ec-102d-72e8-8b86-6a560ad0bbfb",
+    "id": "01a0d909-97b8-7731-8057-c6ab0ff84ad0",
+    "project_id": "01a0d909-9750-7300-8d2e-32e77bc2a3e9",
     "title": "Refund flow rewrite"
   }
 }

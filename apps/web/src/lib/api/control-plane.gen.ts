@@ -1816,6 +1816,8 @@ export interface components {
             ci_url: string | null;
             created_by: components["schemas"]["Actor"];
             created_at: components["schemas"]["Timestamp"];
+            /** @description What the release's change set counts (its changed components, by kind). */
+            changes: components["schemas"]["ChangeCounts"];
             /** @description The gate of the latest evaluation; `null` before one. */
             gate: components["schemas"]["GateSummary"] | null;
         };

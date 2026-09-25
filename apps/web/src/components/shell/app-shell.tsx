@@ -6,6 +6,7 @@ import {
   Bug,
   Database,
   FlaskConical,
+  Gavel,
   GitCompareArrows,
   GitPullRequestArrow,
   LayoutDashboard,
@@ -13,6 +14,8 @@ import {
   LogOut,
   Network,
   Rocket,
+  ShieldCheck,
+  Stamp,
   UserCheck,
 } from "lucide-react";
 import Link from "next/link";
@@ -34,6 +37,9 @@ const NAV: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/releases", label: "Releases", icon: Rocket },
   { href: "/regressions", label: "Regressions", icon: Bug },
+  { href: "/approvals", label: "Approvals", icon: Stamp },
+  { href: "/policies", label: "Policies", icon: ShieldCheck },
+  { href: "/decisions", label: "Decisions", icon: Gavel },
   { href: "/changes", label: "Changes", icon: GitPullRequestArrow },
   { href: "/graph", label: "Graph", icon: Network },
   { href: "/simulations", label: "Simulations", icon: FlaskConical },

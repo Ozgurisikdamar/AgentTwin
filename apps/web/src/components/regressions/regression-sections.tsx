@@ -525,6 +525,9 @@ export function MergeForm({ regression: r, onDone }: { regression: Regression; o
 
 /** The scenario the representative trace suggests, and its promotion into a regression test. */
 export function DraftSection({ regression: r, canPromote }: { regression: Regression; canPromote: boolean }) {
+  // Kept here: once the page reads the promoted regression the form is gone,
+  // and what the promotion answered (version, redactions, warnings) with it.
+  const [result, setResult] = useState<PromoteResponse | null>(null);
   const draft = useQuery({
     queryKey: ["regression-draft", r.id, r.representative_trace_id],
     queryFn: ({ signal }) => api<RegressionDraft>(`/regressions/${r.id}/draft`, { signal }),
@@ -538,6 +541,8 @@ export function DraftSection({ regression: r, canPromote }: { regression: Regres
       </Card>
     );
   }
+  if (result?.regression.id === r.id && r.scenario_name)
+    return <PromotedCard regression={r} result={result} />;
   if (r.scenario_name) return <PromotedCard regression={r} />;
   if (draft.isPending) return <Skeleton className="h-64 w-full" />;
   if (draft.isError) {
@@ -558,17 +563,19 @@ export function DraftSection({ regression: r, canPromote }: { regression: Regres
       </Card>
     );
   }
-  return <DraftAndPromote regression={r} draft={draft.data} canPromote={canPromote} />;
+  return <DraftAndPromote regression={r} draft={draft.data} canPromote={canPromote} onPromoted={setResult} />;
 }
 
 function DraftAndPromote({
   regression: r,
   draft: out,
   canPromote,
+  onPromoted,
 }: {
   regression: Regression;
   draft: RegressionDraft;
   canPromote: boolean;
+  onPromoted: (result: PromoteResponse) => void;
 }) {
   const d = out.draft;
   const qc = useQueryClient();
@@ -592,6 +599,7 @@ function DraftAndPromote({
       }),
     onSuccess: (res) => {
       setResult(res);
+      onPromoted(res);
       refresh(res.regression);
       void qc.invalidateQueries({ queryKey: ["datasets"] });
     },

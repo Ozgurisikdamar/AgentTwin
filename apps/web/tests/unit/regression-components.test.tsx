@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RegressionDetail } from "@/components/regressions/regression-detail";
 import { RegressionList } from "@/components/regressions/regression-list";
 import { MeProvider } from "@/components/shell/me-context";
-import type { RegressionDetail as RegressionDetailData } from "@/lib/api/evaluation";
+import type { Regression, RegressionDetail as RegressionDetailData } from "@/lib/api/evaluation";
 import type { Me } from "@/lib/types";
 import {
   liveCandidate,
@@ -101,13 +101,25 @@ function error(status: number, code: string, message: string, details?: Record<s
   });
 }
 
-/** One regression's API: its detail, its draft, the inbox, and what each action answers. */
+/**
+ * One regression's API: its detail, its draft, the inbox, and what each
+ * action answers. Like the service, the detail read after an action shows
+ * the regression the action left (for a merge, the merged one).
+ */
 function regressionAPI(detail: RegressionDetailData, answers: Record<string, unknown> = {}): Handler {
   const id = detail.regression.id;
+  let current = detail;
   return (url, init) => {
     const method = init?.method ?? "GET";
-    if (method !== "GET") return answers[`${method} ${url}`] ?? { regression: detail.regression };
-    if (url === `/api/v1/regressions/${id}`) return detail;
+    if (method !== "GET") {
+      const answer = answers[`${method} ${url}`] ?? { regression: current.regression };
+      if (!(answer instanceof Response)) {
+        const a = answer as { regression: Regression; merged?: Regression };
+        current = { ...current, regression: a.merged ?? a.regression };
+      }
+      return answer;
+    }
+    if (url === `/api/v1/regressions/${id}`) return current;
     if (url === `/api/v1/regressions/${id}/draft`) return answers.draft ?? liveDraft;
     if (url.startsWith("/api/v1/regressions/candidates?")) return liveRegressionInbox;
     return catalog(url);
@@ -359,7 +371,13 @@ describe("RegressionDetail", () => {
       body: {},
       key: expect.stringMatching(/^regression-promote-/),
     });
+    // What the promotion answered stays shown once the page reads the promoted regression.
+    await vi.waitFor(() =>
+      expect(fetched.filter((u) => u === `/api/v1/regressions/${DUP.id}`)).toHaveLength(2),
+    );
+    expect(screen.getByTestId("regression-header")).toHaveTextContent("Has a test");
     expect(test).toHaveTextContent("Promoted to a regression test");
+    expect(test).toHaveTextContent(`${livePromoted.scenario.name} (version 1)`);
     expect(within(test).getByRole("link", { name: livePromoted.scenario.name })).toHaveAttribute(
       "href",
       `/scenarios/${livePromoted.scenario.id}`,

@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, urlparse
 
 from support_refund_agent.world import ToolError, World, default_world
 
-__all__ = ["Fault", "ToolsServer", "parse_faults"]
+__all__ = ["Fault", "ToolsServer", "parse_faults", "parse_order_faults"]
 
 log = logging.getLogger("support_refund_agent.tools")
 
@@ -52,6 +52,38 @@ class Fault:
     delay_s: float = 2.5
     #: Apply to at most this many calls of the tool (None = every call).
     times: int | None = None
+
+
+@dataclass
+class _Scoped:
+    """A fault of one order and how many of its calls it still takes."""
+
+    fault: Fault
+    left: int
+
+
+def parse_order_faults(raw: Any) -> list[Fault]:
+    """The faults of one order (``POST /admin/orders`` ``faults``): each
+    ``{tool, kind, times?, delay_s?}`` fires on that order's first ``times``
+    calls of the tool (default once), whatever the configured faults."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) > 10:
+        raise TypeError("faults must be a list of at most 10 faults")
+    out = []
+    for f in raw:
+        if not isinstance(f, dict) or set(f) - {"tool", "kind", "times", "delay_s"}:
+            raise TypeError("a fault is {tool, kind, times?, delay_s?}")
+        tool, kind = f.get("tool"), f.get("kind")
+        times, delay = f.get("times", 1), f.get("delay_s", 2.5)
+        if tool not in TOOLS or kind not in FAULT_KINDS:
+            raise ValueError("unknown tool or fault kind")
+        if not isinstance(times, int) or isinstance(times, bool) or not 1 <= times <= 100:
+            raise ValueError("times is 1..100")
+        if not isinstance(delay, int | float) or isinstance(delay, bool) or not 0 <= delay <= 10:
+            raise ValueError("delay_s is 0..10")
+        out.append(Fault(str(tool), str(kind), 1.0, float(delay), times))
+    return out
 
 
 def parse_faults(spec: str | None) -> list[Fault]:
@@ -121,6 +153,9 @@ class ToolsServer:
         # Orders created with ``inject_faults: false`` never receive the
         # configured probabilistic faults, so end-to-end tests are deterministic.
         self._fault_free_orders: set[str] = set()
+        # Orders created with their own ``faults`` receive those, and only
+        # those: a reproducible incident on one order (fault, calls left).
+        self._order_faults: dict[str, list[_Scoped]] = {}
         self.calls: list[dict[str, Any]] = []
         server = self
 
@@ -171,6 +206,7 @@ class ToolsServer:
                         inject_faults = spec.get("inject_faults", True)
                         if not isinstance(inject_faults, bool):
                             raise TypeError("inject_faults must be a boolean")
+                        order_faults = parse_order_faults(spec.get("faults"))
                         order = server.world.create_order(
                             str(spec.get("tenant") or "demo-co"),
                             str(spec["customer_id"]),
@@ -178,7 +214,9 @@ class ToolsServer:
                             status=str(spec.get("status") or "delivered"),
                             age_days=int(spec.get("age_days") or 2),
                         )
-                        if not inject_faults:
+                        if order_faults:
+                            server.scope_faults(str(order["order_id"]), order_faults)
+                        elif not inject_faults:
                             server.exempt_from_faults(str(order["order_id"]))
                     except (KeyError, ValueError, TypeError):
                         self._send(
@@ -186,7 +224,8 @@ class ToolsServer:
                             {
                                 "error": {
                                     "code": "INVALID_ORDER",
-                                    "message": "customer_id and total are required.",
+                                    "message": "customer_id and total are required; "
+                                    "inject_faults is a boolean; faults are {tool, kind, times?, delay_s?}.",
                                 }
                             },
                         )
@@ -225,6 +264,11 @@ class ToolsServer:
     def exempt_from_faults(self, order_id: str) -> None:
         with self._rng_lock:
             self._fault_free_orders.add(order_id)
+
+    def scope_faults(self, order_id: str, faults: list[Fault]) -> None:
+        """Gives the order its own faults (and none of the configured ones)."""
+        with self._rng_lock:
+            self._order_faults[order_id] = [_Scoped(f, f.times or 1) for f in faults]
 
     def _admin(self, auth: str | None) -> bool:
         return self.admin_token is not None and auth == f"Bearer {self.admin_token}"
@@ -275,6 +319,12 @@ class ToolsServer:
 
     def _pick_fault(self, tool: str, order_id: object = None) -> Fault | None:
         with self._rng_lock:
+            if isinstance(order_id, str) and order_id in self._order_faults:
+                for scoped in self._order_faults[order_id]:
+                    if scoped.fault.tool == tool and scoped.left > 0:
+                        scoped.left -= 1
+                        return scoped.fault
+                return None
             if isinstance(order_id, str) and order_id in self._fault_free_orders:
                 return None
             for i, f in enumerate(self.faults):

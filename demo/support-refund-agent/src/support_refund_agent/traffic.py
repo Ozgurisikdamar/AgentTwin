@@ -166,6 +166,40 @@ class TrafficGenerator:
             record["verified_outcome"] = self._verify_refund(result, order_id, conv.refund_amount)
         return record
 
+    def incident(self, version: str) -> dict[str, Any]:
+        """A reproducible production incident: a $40 refund whose first
+        payment call times out after the money moved (a fault on that order
+        only). A version that retries without an idempotency key pays twice;
+        the verified outcome contradicts its claimed success."""
+        text = "Hi! One item in {order} arrived broken. Can I get a refund of $40?"
+        order = self._admin(
+            "POST",
+            "/admin/orders",
+            {
+                "customer_id": "CUS-100",
+                "total": 140.0,
+                "status": "delivered",
+                "age_days": 4,
+                "faults": [{"tool": "refund_payment", "kind": "timeout_after_mutation", "times": 1}],
+            },
+        )
+        order_id = str(order["order_id"])
+        req = RunRequest(
+            input=text.format(order=order_id),
+            customer_id="CUS-100",
+            version=version,
+            source="production",
+            environment=self.environment,
+        )
+        result = self._run(req)
+        record: dict[str, Any] = {"kind": "incident", "version": version, "order_id": order_id, **result}
+        if result.get("business_outcome") == "REFUND_COMPLETED":
+            record["verified_outcome"] = self._verify_refund(result, order_id, 40.0)
+        else:
+            state = self._admin("GET", "/state")["orders"].get(order_id, {})
+            record["verified_outcome"] = {"status": None, "refund_count": state.get("refund_count", 0)}
+        return record
+
     def _verify_refund(
         self, result: dict[str, Any], order_id: str, amount: float | None
     ) -> dict[str, Any] | None:

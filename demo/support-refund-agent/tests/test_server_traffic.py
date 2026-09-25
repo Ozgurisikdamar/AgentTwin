@@ -131,6 +131,37 @@ def test_traffic_generator_verifies_outcomes_against_the_ledger(stack: Any) -> N
     assert all(r["verified_outcome"]["status"] == "SUCCESS" for r in verified if r not in duplicates)
 
 
+def test_the_incident_is_reproduced_on_its_own_order(stack: Any) -> None:
+    """The seeded production incident: 1.3.0 retries the timed-out refund
+    without an idempotency key and pays twice, claiming success; 1.3.1
+    reuses its key and pays once. The configured faults are left alone."""
+    server, tools, _ = stack
+
+    def run(req: RunRequest) -> dict[str, Any]:
+        return server.agent.run(req).to_json()
+
+    gen = TrafficGenerator(
+        run,
+        tools_url=tools.url,
+        tools_admin_token="admin-secret",
+        versions={"1.3.0": 1.0},
+        verify_outcomes=True,
+    )
+    broken = gen.incident("1.3.0")
+    assert (broken["kind"], broken["version"], broken["claimed_outcome"]) == ("incident", "1.3.0", "SUCCESS")
+    assert broken["verified_outcome"]["refund_count"] == 2
+    assert broken["verified_outcome"]["status"] == "FAILURE"
+    fixed = gen.incident("1.3.1")
+    assert fixed["verified_outcome"]["refund_count"] == 1
+    assert fixed["verified_outcome"]["status"] == "SUCCESS"
+    # Only the incident orders' own faults fired.
+    faulted = [c for c in tools.calls if c["fault"]]
+    assert [(c["tool"], c["args"]["order_id"]) for c in faulted] == [
+        ("refund_payment", broken["order_id"]),
+        ("refund_payment", fixed["order_id"]),
+    ]
+
+
 def test_tools_admin_endpoints_require_token(stack: Any) -> None:
     _, tools, _ = stack
     code, _ = post(tools.url + "/admin/orders", {"customer_id": "CUS-100", "total": 10}, token=None)
@@ -179,6 +210,51 @@ def test_orders_can_be_exempted_from_injected_faults() -> None:
         )
         assert code == 500 and body["error"]["code"] == "UPSTREAM_ERROR"
         assert [c["fault"] for c in tools.calls] == [None, "server_error"]
+    finally:
+        tools.stop()
+
+
+def test_an_order_can_carry_its_own_faults() -> None:
+    """A reproducible incident: the order's own fault fires on its first
+    call of the tool only, and the configured faults never touch it."""
+    always = [Fault("refund_payment", "server_error")]
+    tools = ToolsServer(admin_token="admin-secret", faults=always).start()
+    try:
+        timeout = [{"tool": "refund_payment", "kind": "timeout_after_mutation", "delay_s": 0}]
+        code, incident = post(
+            tools.url + "/admin/orders",
+            {"customer_id": "CUS-100", "total": 140, "faults": timeout},
+            token="admin-secret",
+        )
+        assert code == 201
+        order = incident["order_id"]
+        for key in ("k1", "k2"):
+            code, body = post(
+                tools.url + "/tools/refund_payment",
+                {"order_id": order, "amount": 40, "idempotency_key": key},
+                token=None,
+            )
+            assert code == 200 and body["result"]["status"] == "succeeded"
+        # A read of the same order is not the faulted tool.
+        code, _ = post(tools.url + "/tools/lookup_order", {"order_id": order}, token=None)
+        assert code == 200
+        assert [c["fault"] for c in tools.calls] == ["timeout_after_mutation", None, None]
+        # The first refund was applied before the (simulated) timeout: two refunds.
+        assert tools.world.snapshot()["orders"][order]["refund_count"] == 2
+        for bad in (
+            [{"tool": "refund_payment", "kind": "explode"}],
+            [{"tool": "no_such_tool", "kind": "server_error"}],
+            [{"tool": "refund_payment", "kind": "server_error", "times": 0}],
+            [{"tool": "refund_payment", "kind": "server_error", "delay_s": 60}],
+            [{"tool": "refund_payment", "kind": "server_error", "when": "always"}],
+            {"tool": "refund_payment"},
+        ):
+            code, body = post(
+                tools.url + "/admin/orders",
+                {"customer_id": "CUS-100", "total": 10, "faults": bad},
+                token="admin-secret",
+            )
+            assert code == 400 and body["error"]["code"] == "INVALID_ORDER", bad
     finally:
         tools.stop()
 

@@ -21,13 +21,20 @@ import {
   outcomeLabel,
   outcomeMeaning,
   policyShape,
+  probeText,
+  problemsOf,
+  reportVerdict,
+  spanText,
   thresholdText,
   valueText,
 } from "@/lib/runtime";
 import {
   liveDeniedApproval,
+  liveFailingTestReport,
+  liveNotActivatable,
   livePendingApproval,
   livePolicyVersion,
+  liveTestReport,
   liveUsedApproval,
 } from "./runtime-fixtures";
 
@@ -209,5 +216,45 @@ describe("what a policy version decides", () => {
     expect(failModeMeaning("require_approval")).toContain("asks a person");
     expect(failModeMeaning("other")).toBe("other");
     expect(thresholdText(livePolicyVersion.thresholds[0]!)).toBe("args.amount > 100");
+  });
+});
+
+describe("what a person reads about testing and activating", () => {
+  it("lists the problems an error names, and only those with a message", () => {
+    const err = {
+      status: 422,
+      code: "POLICY_NOT_ACTIVATABLE",
+      details: liveNotActivatable.body.error.details,
+    };
+    expect(problemsOf(err)).toEqual([
+      {
+        field: "spec.tests[1]",
+        message:
+          '"someone else" fails: expected allow, the policy decided deny (The agent may email only customers at example.com.)',
+      },
+    ]);
+    expect(problemsOf({ details: { problems: [{ field: "x" }, { message: "m" }, "junk"] } })).toEqual([
+      { field: "", message: "m" },
+    ]);
+    expect(problemsOf({ details: { problems: "no" } })).toEqual([]);
+    expect(problemsOf(null)).toEqual([]);
+  });
+
+  it("says whether a version can be activated", () => {
+    expect(reportVerdict(liveTestReport)).toBe("All 6 tests pass: this version can be activated.");
+    expect(reportVerdict(liveFailingTestReport)).toBe("1 of 6 tests fail: this version cannot be activated.");
+    expect(reportVerdict({ ...liveTestReport, results: [] })).toMatch(/^No tests/);
+    expect(reportVerdict({ ...liveTestReport, activatable: false })).toMatch(
+      /cannot be activated \(see the problems\)/,
+    );
+  });
+
+  it("writes probes and spans", () => {
+    expect(probeText({ value: 100.01, effect: "require_approval", rule: "over-automatic-limit" })).toBe(
+      "100.01 → Needs approval (over-automatic-limit)",
+    );
+    expect(probeText({ value: 99, effect: "allow" })).toBe("99 → Allow");
+    expect(spanText(3600)).toBe("1 h");
+    expect(spanText(-5)).toBe("0 s");
   });
 });

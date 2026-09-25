@@ -6,7 +6,17 @@
  * these only decide what the pages show and offer.
  */
 import type { BadgeTone } from "@/components/ui/badge";
-import type { Approval, ApprovalStatus, Attempt, Change, Effect, Outcome, Risk } from "./api/runtime";
+import type {
+  Approval,
+  ApprovalStatus,
+  Attempt,
+  Change,
+  Effect,
+  Outcome,
+  PolicyTestReport,
+  Problem,
+  Risk,
+} from "./api/runtime";
 
 export const EFFECTS: readonly Effect[] = ["allow", "allow_with_limits", "require_approval", "deny"];
 
@@ -138,6 +148,11 @@ export function expiry(expiresAt: string, now: Date = new Date()): { expired: bo
   return seconds > 0
     ? { expired: false, text: `in ${span}` }
     : { expired: true, text: `expired ${span} ago` };
+}
+
+/** A number of seconds in words: "45 s", "14 min", "1 h 30 min", "2 d". */
+export function spanText(seconds: number): string {
+  return spanOf(Math.max(0, Math.round(seconds)));
 }
 
 function spanOf(s: number): string {
@@ -303,4 +318,64 @@ export function failModeMeaning(mode: string): string {
 /** A threshold as a sentence: `args.amount > 100`. */
 export function thresholdText(t: { path: string; op: string; value: number }): string {
   return `${t.path} ${t.op} ${t.value}`;
+}
+
+/** The problems an API error names (`details.problems`: an invalid or unactivatable policy). */
+export function problemsOf(error: unknown): Problem[] {
+  const details = (error as { details?: Record<string, unknown> } | null)?.details;
+  const list = details?.problems;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((p) => {
+    const r = record(p);
+    const message = str(r.message);
+    return message ? [{ field: str(r.field), message }] : [];
+  });
+}
+
+/** How many of a report's tests pass. */
+export function testTally(report: Pick<PolicyTestReport, "results">): { passed: number; failed: number } {
+  const passed = report.results.filter((r) => r.passed).length;
+  return { passed, failed: report.results.length - passed };
+}
+
+/** What a test report means for activation, in one sentence. */
+export function reportVerdict(report: PolicyTestReport): string {
+  const { passed, failed } = testTally(report);
+  if (report.results.length === 0) return "No tests: a version without tests cannot be activated.";
+  if (failed > 0) return `${failed} of ${passed + failed} tests fail: this version cannot be activated.`;
+  if (!report.activatable)
+    return "Every test passes, but this version cannot be activated (see the problems).";
+  return `All ${passed} tests pass: this version can be activated.`;
+}
+
+/** A boundary's probes in words: `100 → Allow, 100.01 → Needs approval`. */
+export function probeText(probe: { value: number; effect: Effect; rule?: string }): string {
+  return `${probe.value} → ${effectLabel(probe.effect)}${probe.rule ? ` (${probe.rule})` : ""}`;
+}
+
+/** The starting document of a new policy for `tool` (it must have tests to be activated). */
+export function newPolicyYaml(tool = "refund_payment"): string {
+  return `apiVersion: agenttwin.dev/v1
+kind: Policy
+metadata:
+  name: ${tool.replace(/_/g, "-")}-limits
+  description: What this policy protects, in a sentence.
+spec:
+  tool: ${tool}
+  default: allow
+  failMode: fail_closed
+  approval:
+    expiresInSeconds: 3600
+  rules:
+    - name: over-the-limit
+      when: "args.amount > 100"
+      effect: require_approval
+      message: Over 100 needs a person's approval.
+  tests:
+    - {name: under the limit, args: {amount: 40}, expect: allow}
+    - name: over the limit
+      args: {amount: 150}
+      expect: require_approval
+      rule: over-the-limit
+`;
 }

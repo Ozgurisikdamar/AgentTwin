@@ -1,8 +1,9 @@
 /**
  * The runtime gateway's answers, captured from the local stack through the
  * control plane (make seed, then the golden path of ADR-0033 driven with the
- * Python SDK's Gateway client): policies, a test report, approvals held,
- * approved, used and denied, and decisions. Verbatim. Typed by the API
+ * Python SDK's Gateway client): policies, test reports, versions added,
+ * activated and refused, approvals held, approved, used and denied,
+ * decisions and the errors a person sees. Verbatim. Typed by the API
  * contract (`satisfies`), so a fixture the service could not send does not
  * compile.
  */
@@ -12,11 +13,17 @@ import type {
   ApprovalPage,
   Decision,
   DecisionPage,
+  Policy,
+  PolicyCreated,
   PolicyDetail,
   PolicyPage,
   PolicyTestReport,
+  PolicyVersionAdded,
   PolicyVersionDetail,
+  RuntimeSchemas,
 } from "@/lib/api/runtime";
+
+type RuntimeError = RuntimeSchemas["Error"];
 
 /** The project's policies: the seeded refund limits and the customer-data export ban. */
 export const livePolicies = {
@@ -1960,3 +1967,389 @@ export const liveDeniedDecision = {
   trace_id: "7bd55cf500fdf6cf262c503f9f2ecb6b",
   upstream_status: null,
 } satisfies Decision;
+
+/** Adding refund-limits' own document again: it decides what v1 decides, so nothing is stored. */
+export const liveUnchangedVersion = {
+  created: false,
+  policy: {
+    activated_at: "2026-09-25T21:17:39.426325Z",
+    activated_by: "apikey:01a0d9c7-d08e-7c2d-b3c6-f9005889c285",
+    active: {
+      id: "01a0da6e-56d6-70db-a257-a3a51afa975b",
+      version: 1,
+    },
+    created_at: "2026-09-25T21:17:39.414028Z",
+    created_by: "apikey:01a0d9c7-d08e-7c2d-b3c6-f9005889c285",
+    description:
+      "A refund is the support agent's only irreversible action. Up to 100 USD the agent refunds on its own; above that a person approves the exact refund. A refund over 1000 USD, or a second refund in one conversation, is refused.",
+    id: "01a0da6e-56d6-706b-81f6-b6bd3b3fe696",
+    latest_version: 1,
+    name: "refund-limits",
+    tool: "refund_payment",
+    updated_at: "2026-09-25T21:17:39.426325Z",
+  },
+  version: {
+    active: true,
+    created_at: "2026-09-25T21:17:39.414056Z",
+    created_by: "apikey:01a0d9c7-d08e-7c2d-b3c6-f9005889c285",
+    document:
+      'apiVersion: agenttwin.dev/v1\nkind: Policy\nmetadata:\n  name: refund-limits\n  description: >-\n    A refund is the support agent\'s only irreversible action. Up to 100 USD\n    the agent refunds on its own; above that a person approves the exact\n    refund. A refund over 1000 USD, or a second refund in one conversation,\n    is refused.\nspec:\n  tool: refund_payment\n  default: allow\n  failMode: fail_closed\n  approval:\n    # A person has an hour to decide; the approved refund then runs once.\n    expiresInSeconds: 3600\n  rules:\n    - name: over-automatic-limit\n      when: "args.amount > 100"\n      effect: require_approval\n      message: Refunds over 100 USD need a person\'s approval.\n    - name: over-finance-limit\n      when: "args.amount > 1000"\n      effect: deny\n      message: Refunds over 1000 USD are issued by finance, not by an agent.\n    - name: one-refund-per-conversation\n      when: "trace.calls >= 1"\n      effect: deny\n      message: A conversation may issue one refund; a second one is refused.\n  tests:\n    - {name: a small refund, args: {order_id: ORD-1001, amount: 40}, expect: allow}\n    - {name: at the limit, args: {order_id: ORD-1001, amount: 100}, expect: allow}\n    - name: over the limit\n      args: {order_id: ORD-1001, amount: 150}\n      expect: require_approval\n      rule: over-automatic-limit\n    - name: over the finance limit\n      args: {order_id: ORD-1001, amount: 1500}\n      expect: deny\n      rule: over-finance-limit\n    - name: a second refund in the conversation\n      args: {order_id: ORD-1001, amount: 20}\n      context: {traceCalls: 1}\n      expect: deny\n      rule: one-refund-per-conversation\n    - name: no amount\n      args: {order_id: ORD-1001}\n      expect: deny\n',
+    id: "01a0da6e-56d6-70db-a257-a3a51afa975b",
+    policy_id: "01a0da6e-56d6-706b-81f6-b6bd3b3fe696",
+    spec: {
+      apiVersion: "agenttwin.dev/v1",
+      kind: "Policy",
+      metadata: {
+        description:
+          "A refund is the support agent's only irreversible action. Up to 100 USD the agent refunds on its own; above that a person approves the exact refund. A refund over 1000 USD, or a second refund in one conversation, is refused.",
+        name: "refund-limits",
+      },
+      spec: {
+        approval: {
+          expiresInSeconds: 3600,
+        },
+        default: "allow",
+        failMode: "fail_closed",
+        rules: [
+          {
+            effect: "require_approval",
+            message: "Refunds over 100 USD need a person's approval.",
+            name: "over-automatic-limit",
+            when: "args.amount > 100",
+          },
+          {
+            effect: "deny",
+            message: "Refunds over 1000 USD are issued by finance, not by an agent.",
+            name: "over-finance-limit",
+            when: "args.amount > 1000",
+          },
+          {
+            effect: "deny",
+            message: "A conversation may issue one refund; a second one is refused.",
+            name: "one-refund-per-conversation",
+            when: "trace.calls >= 1",
+          },
+        ],
+        tests: [
+          {
+            args: {
+              amount: 40,
+              order_id: "ORD-1001",
+            },
+            expect: "allow",
+            name: "a small refund",
+          },
+          {
+            args: {
+              amount: 100,
+              order_id: "ORD-1001",
+            },
+            expect: "allow",
+            name: "at the limit",
+          },
+          {
+            args: {
+              amount: 150,
+              order_id: "ORD-1001",
+            },
+            expect: "require_approval",
+            name: "over the limit",
+            rule: "over-automatic-limit",
+          },
+          {
+            args: {
+              amount: 1500,
+              order_id: "ORD-1001",
+            },
+            expect: "deny",
+            name: "over the finance limit",
+            rule: "over-finance-limit",
+          },
+          {
+            args: {
+              amount: 20,
+              order_id: "ORD-1001",
+            },
+            context: {
+              traceCalls: 1,
+            },
+            expect: "deny",
+            name: "a second refund in the conversation",
+            rule: "one-refund-per-conversation",
+          },
+          {
+            args: {
+              order_id: "ORD-1001",
+            },
+            expect: "deny",
+            name: "no amount",
+          },
+        ],
+        tool: "refund_payment",
+      },
+    },
+    spec_hash: "2187299bdf788fd9cecc266296db5f64b878f3603d963d0b101a16c3b51bb2be",
+    version: 1,
+  },
+} satisfies PolicyVersionAdded;
+
+/** A new policy (email-recipients guarding send_email) stored as version 1. */
+export const liveCreatedPolicy = {
+  policy: {
+    activated_at: null,
+    activated_by: null,
+    active: null,
+    created_at: "2026-09-25T21:30:50.431061Z",
+    created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+    description: "The agent emails only the customer of the conversation.",
+    id: "01a0da7a-68bf-70ea-865a-bfd2b15c72d7",
+    latest_version: 1,
+    name: "email-recipients",
+    tool: "send_email",
+    updated_at: "2026-09-25T21:30:50.431061Z",
+  },
+  version: {
+    active: false,
+    created_at: "2026-09-25T21:30:50.43106954Z",
+    created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+    document:
+      "apiVersion: agenttwin.dev/v1\nkind: Policy\nmetadata:\n  name: email-recipients\n  description: The agent emails only the customer of the conversation.\nspec:\n  tool: send_email\n  default: allow\n  failMode: fail_closed\n  rules:\n    - name: outside-domain\n      when: \"!args.to.endsWith('@example.com')\"\n      effect: deny\n      message: The agent may email only customers at example.com.\n  tests:\n    - {name: a customer, args: {to: ana@example.com, subject: Refund}, expect: allow}\n    - name: someone else\n      args: {to: attacker@evil.test, subject: Refund}\n      expect: deny\n      rule: outside-domain\n",
+    id: "01a0da7a-68bf-710e-9238-435ce445ab5f",
+    policy_id: "01a0da7a-68bf-70ea-865a-bfd2b15c72d7",
+    spec: {
+      apiVersion: "agenttwin.dev/v1",
+      kind: "Policy",
+      metadata: {
+        description: "The agent emails only the customer of the conversation.",
+        name: "email-recipients",
+      },
+      spec: {
+        default: "allow",
+        failMode: "fail_closed",
+        rules: [
+          {
+            effect: "deny",
+            message: "The agent may email only customers at example.com.",
+            name: "outside-domain",
+            when: "!args.to.endsWith('@example.com')",
+          },
+        ],
+        tests: [
+          {
+            args: {
+              subject: "Refund",
+              to: "ana@example.com",
+            },
+            expect: "allow",
+            name: "a customer",
+          },
+          {
+            args: {
+              subject: "Refund",
+              to: "attacker@evil.test",
+            },
+            expect: "deny",
+            name: "someone else",
+            rule: "outside-domain",
+          },
+        ],
+        tool: "send_email",
+      },
+    },
+    spec_hash: "d7b471b65e80003c1455cb199859d26565dbd1b98dcae86833904108f277478b",
+    version: 1,
+  },
+} satisfies PolicyCreated;
+
+/** Its version 2, whose second test expects the wrong effect. */
+export const liveAddedVersion = {
+  created: true,
+  policy: {
+    activated_at: null,
+    activated_by: null,
+    active: null,
+    created_at: "2026-09-25T21:30:50.431061Z",
+    created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+    description: "The agent emails only the customer of the conversation.",
+    id: "01a0da7a-68bf-70ea-865a-bfd2b15c72d7",
+    latest_version: 2,
+    name: "email-recipients",
+    tool: "send_email",
+    updated_at: "2026-09-25T21:30:50.476803Z",
+  },
+  version: {
+    active: false,
+    created_at: "2026-09-25T21:30:50.476803877Z",
+    created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+    document:
+      "apiVersion: agenttwin.dev/v1\nkind: Policy\nmetadata:\n  name: email-recipients\n  description: The agent emails only the customer of the conversation.\nspec:\n  tool: send_email\n  default: allow\n  failMode: fail_closed\n  rules:\n    - name: outside-domain\n      when: \"!args.to.endsWith('@example.com')\"\n      effect: deny\n      message: The agent may email only customers at example.com.\n  tests:\n    - {name: a customer, args: {to: ana@example.com, subject: Refund}, expect: allow}\n    - name: someone else\n      args: {to: attacker@evil.test, subject: Refund}\n      expect: allow\n",
+    id: "01a0da7a-68ec-7c41-a583-7a92eb0c2b0c",
+    policy_id: "01a0da7a-68bf-70ea-865a-bfd2b15c72d7",
+    spec: {
+      apiVersion: "agenttwin.dev/v1",
+      kind: "Policy",
+      metadata: {
+        description: "The agent emails only the customer of the conversation.",
+        name: "email-recipients",
+      },
+      spec: {
+        default: "allow",
+        failMode: "fail_closed",
+        rules: [
+          {
+            effect: "deny",
+            message: "The agent may email only customers at example.com.",
+            name: "outside-domain",
+            when: "!args.to.endsWith('@example.com')",
+          },
+        ],
+        tests: [
+          {
+            args: {
+              subject: "Refund",
+              to: "ana@example.com",
+            },
+            expect: "allow",
+            name: "a customer",
+          },
+          {
+            args: {
+              subject: "Refund",
+              to: "attacker@evil.test",
+            },
+            expect: "allow",
+            name: "someone else",
+          },
+        ],
+        tool: "send_email",
+      },
+    },
+    spec_hash: "708e54e8a54fd3c3d695005a3d5b3eac4473b54302e9d0da5ab9a75852fe1f4c",
+    version: 2,
+  },
+} satisfies PolicyVersionAdded;
+
+/** Version 1 activated, with a reason. */
+export const liveActivatedPolicy = {
+  activated_at: "2026-09-25T21:30:50.511608Z",
+  activated_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+  active: {
+    id: "01a0da7a-68bf-710e-9238-435ce445ab5f",
+    version: 1,
+  },
+  created_at: "2026-09-25T21:30:50.431061Z",
+  created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+  description: "The agent emails only the customer of the conversation.",
+  id: "01a0da7a-68bf-70ea-865a-bfd2b15c72d7",
+  latest_version: 2,
+  name: "email-recipients",
+  tool: "send_email",
+  updated_at: "2026-09-25T21:30:50.511608Z",
+} satisfies Policy;
+
+/** The policy deactivated: it guards nothing. */
+export const liveDeactivatedPolicy = {
+  activated_at: null,
+  activated_by: null,
+  active: null,
+  created_at: "2026-09-25T21:30:50.431061Z",
+  created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+  description: "The agent emails only the customer of the conversation.",
+  id: "01a0da7a-68bf-70ea-865a-bfd2b15c72d7",
+  latest_version: 2,
+  name: "email-recipients",
+  tool: "send_email",
+  updated_at: "2026-09-25T21:30:50.518455Z",
+} satisfies Policy;
+
+/** That policy after deactivation: two versions, none active. */
+export const liveInactivePolicy = {
+  activated_at: null,
+  activated_by: null,
+  active: null,
+  created_at: "2026-09-25T21:30:50.431061Z",
+  created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+  description: "The agent emails only the customer of the conversation.",
+  id: "01a0da7a-68bf-70ea-865a-bfd2b15c72d7",
+  latest_version: 2,
+  name: "email-recipients",
+  tool: "send_email",
+  updated_at: "2026-09-25T21:30:50.518455Z",
+  versions: [
+    {
+      active: false,
+      created_at: "2026-09-25T21:30:50.476803Z",
+      created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+      id: "01a0da7a-68ec-7c41-a583-7a92eb0c2b0c",
+      spec_hash: "708e54e8a54fd3c3d695005a3d5b3eac4473b54302e9d0da5ab9a75852fe1f4c",
+      version: 2,
+    },
+    {
+      active: false,
+      created_at: "2026-09-25T21:30:50.431069Z",
+      created_by: "user:01a0d9c7-d088-7c03-89c9-9f2e3d34ceb7",
+      id: "01a0da7a-68bf-710e-9238-435ce445ab5f",
+      spec_hash: "d7b471b65e80003c1455cb199859d26565dbd1b98dcae86833904108f277478b",
+      version: 1,
+    },
+  ],
+} satisfies PolicyDetail;
+
+/** Creating a policy whose name is taken (409). */
+export const livePolicyExists = {
+  body: {
+    error: {
+      code: "POLICY_EXISTS",
+      details: {
+        field: "metadata.name",
+      },
+      message: 'A policy named "email-recipients" exists in this project; add a version to it instead.',
+      request_id: "e4921960aec1358b59823340216d1e11",
+    },
+  },
+  status: 409,
+} satisfies { status: number; body: RuntimeError };
+
+/** Testing a draft whose rule does not compile (400). */
+export const liveInvalidPolicy = {
+  body: {
+    error: {
+      code: "INVALID_POLICY",
+      details: {
+        problems: [
+          {
+            field: "spec.rules[0].when",
+            message:
+              "ERROR: outside-domain:1:18: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '(', ')', '.', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}\n | args.to.endsWith(\n | .................^",
+          },
+        ],
+      },
+      message:
+        "The policy document is not valid: ERROR: outside-domain:1:18: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '(', ')', '.', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}\n | args.to.endsWith(\n | .................^.",
+      request_id: "7107a4130b110487e4798c4191a6c270",
+    },
+  },
+  status: 400,
+} satisfies { status: number; body: RuntimeError };
+
+/** Activating version 2, whose test fails (422). */
+export const liveNotActivatable = {
+  body: {
+    error: {
+      code: "POLICY_NOT_ACTIVATABLE",
+      details: {
+        problems: [
+          {
+            field: "spec.tests[1]",
+            message:
+              '"someone else" fails: expected allow, the policy decided deny (The agent may email only customers at example.com.)',
+          },
+        ],
+      },
+      message:
+        'Version 2 of email-recipients cannot be activated: "someone else" fails: expected allow, the policy decided deny (The agent may email only customers at example.com.).',
+      request_id: "f5280a2649df19e0a5110dd98f28d4c1",
+    },
+  },
+  status: 422,
+} satisfies { status: number; body: RuntimeError };

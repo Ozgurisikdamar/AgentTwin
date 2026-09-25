@@ -326,6 +326,9 @@ services:
       DEMO_AGENT_ANTHROPIC_MODEL: ${DEMO_AGENT_ANTHROPIC_MODEL:-claude-sonnet-5}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEMO_AGENT_URL: http://127.0.0.1:8090
+      # A contained run (`--contained`) calls its tools through the runtime
+      # gateway; a refund held for approval waits this long for a person.
+      DEMO_AGENT_APPROVAL_WAIT_S: ${DEMO_AGENT_APPROVAL_WAIT_S:-600}
     depends_on:
       demo-tools: {condition: service_healthy}
       otel-collector: {condition: service_started}

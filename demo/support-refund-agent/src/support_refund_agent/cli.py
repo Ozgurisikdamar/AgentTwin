@@ -64,6 +64,10 @@ def _model_factory() -> Any:
     return scripted_model_factory(os.environ.get("DEMO_AGENT_INTERNAL_API_KEY", INTERNAL_API_KEY))
 
 
+def _approval_wait_s() -> float:
+    return float(os.environ.get("DEMO_AGENT_APPROVAL_WAIT_S", "0"))
+
+
 def _agent(telemetry: AgentTwin, tools_url: str) -> Agent:
     return Agent(
         telemetry,
@@ -71,6 +75,11 @@ def _agent(telemetry: AgentTwin, tools_url: str) -> Agent:
         tools_base_url=tools_url,
         model_factory=_model_factory(),
         tool_timeout_s=float(os.environ.get("DEMO_AGENT_TOOL_TIMEOUT_S", "1.5")),
+        # Contained runs call the tools through the runtime gateway behind
+        # the control plane, with the project's key (ADR-0033).
+        gateway_url=os.environ.get("DEMO_AGENT_GATEWAY_URL") or os.environ.get("AGENTTWIN_API_URL"),
+        gateway_api_key=os.environ.get("AGENTTWIN_API_KEY"),
+        approval_wait_s=_approval_wait_s(),
     )
 
 
@@ -118,13 +127,14 @@ def cmd_serve_agent(args: argparse.Namespace) -> int:
     return 0
 
 
-def _http_run(agent_url: str, req: RunRequest) -> dict[str, Any]:
+def _http_run(agent_url: str, req: RunRequest, *, wait_s: float = 0.0) -> dict[str, Any]:
     body = {
         "input": req.input,
         "customer_id": req.customer_id,
         "tenant": req.tenant,
         "agent_version": req.version,
         "run_context": {"source": req.source, "environment": req.environment},
+        "contained": req.contained,
     }
     headers = {"Content-Type": "application/json"}
     if token := os.environ.get("DEMO_AGENT_TOKEN"):
@@ -132,7 +142,9 @@ def _http_run(agent_url: str, req: RunRequest) -> dict[str, Any]:
     http_req = urllib.request.Request(  # noqa: S310 - URL from the operator's configuration
         agent_url.rstrip("/") + "/run", data=json.dumps(body).encode(), headers=headers, method="POST"
     )
-    with urllib.request.urlopen(http_req, timeout=60) as resp:  # noqa: S310
+    # A contained run may wait for a person's approval.
+    timeout = 60 + (wait_s if req.contained else 0.0)
+    with urllib.request.urlopen(http_req, timeout=timeout) as resp:  # noqa: S310
         result: dict[str, Any] = json.loads(resp.read())
         return result
 
@@ -161,9 +173,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.new_order is not None:
         order_id = _create_order(args.tools_url, args.customer, args.new_order)
         text = text.replace("{order}", order_id) if "{order}" in text else f"{text} (order {order_id})"
-    req = RunRequest(input=text, customer_id=args.customer, version=args.version, source="production")
+    req = RunRequest(
+        input=text,
+        customer_id=args.customer,
+        version=args.version,
+        source="production",
+        contained=args.contained,
+    )
     if args.agent_url:
-        result = _http_run(args.agent_url, req)
+        result = _http_run(args.agent_url, req, wait_s=args.approval_wait)
     else:
         telemetry = _telemetry()
         result = _agent(telemetry, args.tools_url).run(req).to_json()
@@ -1015,6 +1033,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         metavar="TOTAL",
         help="create a fresh delivered order; TEXT may use {order}",
+    )
+    s.add_argument(
+        "--contained",
+        action="store_true",
+        help="call the tools through the runtime gateway: each call is decided by the project's policies",
+    )
+    s.add_argument(
+        "--approval-wait",
+        type=float,
+        default=_approval_wait_s(),
+        metavar="SECONDS",
+        help="how long the HTTP client waits for a contained run that is waiting for an approval",
     )
     s.set_defaults(fn=cmd_run)
 

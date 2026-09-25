@@ -17,10 +17,22 @@ from pathlib import Path
 from typing import Any
 
 from agenttwin import AgentManifest, AgentTwin, load_manifest
+from agenttwin.gateway import Gateway
 from support_refund_agent.models import KB_TOOL, ChatModel, Message, ScriptedPlannerModel, tool_specs
 from support_refund_agent.tool_client import ToolClient, ToolOutcome
 
-__all__ = ["Agent", "ManifestStore", "RunRequest", "RunResult", "default_manifest_dir"]
+__all__ = [
+    "Agent",
+    "ContainmentUnavailable",
+    "ManifestStore",
+    "RunRequest",
+    "RunResult",
+    "default_manifest_dir",
+]
+
+
+class ContainmentUnavailable(ValueError):
+    """A contained run was asked of an agent without a runtime gateway."""
 
 
 def default_manifest_dir() -> Path:
@@ -90,6 +102,8 @@ class RunRequest:
     release_id: str | None = None
     simulation_run_id: str | None = None
     scenario_id: str | None = None
+    #: Call the tools through the runtime gateway (ADR-0033).
+    contained: bool = False
 
     @classmethod
     def from_json(cls, body: dict[str, Any]) -> RunRequest:
@@ -104,6 +118,9 @@ class RunRequest:
             isinstance(k, str) and isinstance(v, str) for k, v in headers.items()
         ):
             raise ValueError("tool_headers must map strings to strings")
+        contained = body.get("contained", False)
+        if not isinstance(contained, bool):
+            raise ValueError("contained must be a boolean")
         return cls(
             input=text,
             customer_id=body.get("customer_id"),
@@ -117,6 +134,7 @@ class RunRequest:
             release_id=ctx.get("release_id"),
             simulation_run_id=ctx.get("simulation_run_id"),
             scenario_id=ctx.get("scenario_id"),
+            contained=contained,
         )
 
 
@@ -143,7 +161,10 @@ ModelFactory = Callable[[AgentManifest, RunRequest], ChatModel]
 def scripted_model_factory(secret: str) -> ModelFactory:
     def make(manifest: AgentManifest, req: RunRequest) -> ChatModel:
         return ScriptedPlannerModel(
-            manifest.model_name or "scripted-planner-v1", customer_id=req.customer_id, secret=secret
+            manifest.model_name or "scripted-planner-v1",
+            customer_id=req.customer_id,
+            secret=secret,
+            contained=req.contained,
         )
 
     return make
@@ -159,6 +180,9 @@ class Agent:
         model_factory: ModelFactory,
         tool_timeout_s: float = 1.5,
         backoff_scale: float = 1.0,
+        gateway_url: str | None = None,
+        gateway_api_key: str | None = None,
+        approval_wait_s: float = 0.0,
     ) -> None:
         self.telemetry = telemetry
         self.manifests = manifests
@@ -166,6 +190,26 @@ class Agent:
         self.model_factory = model_factory
         self.tool_timeout_s = tool_timeout_s
         self.backoff_scale = backoff_scale
+        # Where contained runs send their tool calls (the control plane) and
+        # the project key they authenticate with.
+        self.gateway_url = gateway_url
+        self.gateway_api_key = gateway_api_key
+        self.approval_wait_s = approval_wait_s
+
+    def _gateway(self, manifest: AgentManifest, req: RunRequest) -> Gateway | None:
+        if not req.contained:
+            return None
+        if not self.gateway_url or not self.gateway_api_key:
+            raise ContainmentUnavailable(
+                "this agent has no runtime gateway configured (DEMO_AGENT_GATEWAY_URL and AGENTTWIN_API_KEY)"
+            )
+        return Gateway(
+            self.gateway_url,
+            self.gateway_api_key,
+            agent=manifest.name,
+            agent_version=manifest.version,
+            environment=req.environment or "production",
+        )
 
     def run(self, req: RunRequest) -> RunResult:
         manifest = self.manifests.get(req.version)
@@ -181,6 +225,8 @@ class Agent:
             risks=dict(manifest.tool_risks),
             headers=req.tool_headers,
             timeout_s=self.tool_timeout_s,
+            gateway=self._gateway(manifest, req),
+            approval_wait_s=self.approval_wait_s,
         )
         specs = tool_specs(
             spec.get("tools") or [], retrieval=bool((spec.get("retrieval") or {}).get("sources"))
@@ -202,7 +248,7 @@ class Agent:
             release_id=req.release_id,
             simulation_run_id=req.simulation_run_id,
             scenario_id=req.scenario_id,
-            attributes={"agenttwin.model.kind": model.kind},
+            attributes={"agenttwin.model.kind": model.kind, "agenttwin.runtime.contained": req.contained},
         ) as run:
             messages: list[Message] = [{"role": "user", "content": req.input}]
             status, final = "step_limit", "I wasn't able to finish this request; a specialist will follow up."

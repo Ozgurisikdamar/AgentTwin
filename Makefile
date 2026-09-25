@@ -13,6 +13,7 @@ LOAD_ENV       := set -a; . ./.env; set +a
 DEMO_INPUT     ?= Hi! One item in {order} arrived broken. Can I get a refund of $$40?
 # The version Demo Co runs in production (1.3.x are release candidates).
 DEMO_VERSION   ?= 1.2.4
+DEMO_CONTAINED_INPUT ?= Hi! One item in {order} arrived broken. Can I get a refund of $$150?
 
 .PHONY: help
 help: ## Show targets
@@ -52,6 +53,10 @@ seed: env ## Load the demo workspace: agent, tool twin, scenarios, simulations, 
 .PHONY: demo
 demo: env ## Run one refund conversation through the demo agent and print its trace link
 	$(COMPOSE) exec -T demo-agent support-refund-agent run '$(DEMO_INPUT)' --version $(DEMO_VERSION) --new-order 140 --agent-url http://127.0.0.1:8090
+
+.PHONY: demo-contained
+demo-contained: env ## Run an over-limit refund through the runtime gateway; it waits for a person to approve it in the UI
+	$(COMPOSE) exec -T demo-agent support-refund-agent run '$(DEMO_CONTAINED_INPUT)' --version $(DEMO_VERSION) --new-order 180 --contained --agent-url http://127.0.0.1:8090
 
 .PHONY: logs
 logs: ## Tail service logs

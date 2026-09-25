@@ -18,7 +18,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agenttwin import AgentRun
-from agenttwin.tracing import ToolResultStatus
+from agenttwin.gateway import Gateway, GatewayError, ToolResponse
+from agenttwin.tracing import ToolCall, ToolResultStatus
 
 __all__ = ["ToolClient", "ToolOutcome"]
 
@@ -33,6 +34,8 @@ class ToolOutcome:
     message: str | None = None
     http_status: int | None = None
     retry_after: float | None = None
+    #: The approval request a contained call is waiting for (ADR-0033).
+    approval_id: str | None = None
 
     def to_message(self) -> str:
         body: dict[str, Any] = {"status": self.status}
@@ -42,6 +45,8 @@ class ToolOutcome:
             body["error"] = {"code": self.error_code, "message": self.message}
         if self.retry_after is not None:
             body["retry_after"] = self.retry_after
+        if self.approval_id:
+            body["approval_id"] = self.approval_id
         return json.dumps(body, sort_keys=True)
 
     @staticmethod
@@ -54,6 +59,7 @@ class ToolOutcome:
             error_code=err.get("code"),
             message=err.get("message"),
             retry_after=body.get("retry_after"),
+            approval_id=body.get("approval_id"),
         )
 
 
@@ -76,6 +82,11 @@ class ToolClient:
     risks: Mapping[str, str] = field(default_factory=dict)
     headers: Mapping[str, str] = field(default_factory=dict)
     timeout_s: float = 1.5
+    #: Contained (ADR-0033): tool calls go through the runtime gateway, which
+    #: decides each one; a call held for approval waits up to approval_wait_s
+    #: for a person, then is repeated with the token and the same key.
+    gateway: Gateway | None = None
+    approval_wait_s: float = 0.0
 
     def call(
         self,
@@ -95,12 +106,55 @@ class ToolClient:
             attempt=attempt,
             call_id=call_id,
         ) as span:
-            outcome = self._post(f"/tools/{urllib.parse.quote(name)}", args)
+            if self.gateway is not None:
+                outcome = self._via_gateway(self.gateway, run, span, name, args, idem)
+            else:
+                outcome = self._post(f"/tools/{urllib.parse.quote(name)}", args)
             if outcome.status == "ok":
                 span.set_result(outcome.result)
             else:
                 span.set_error(outcome.status, outcome.error_code, http_status=outcome.http_status)
             return outcome
+
+    def _via_gateway(
+        self,
+        gateway: Gateway,
+        run: AgentRun,
+        span: ToolCall,
+        name: str,
+        args: dict[str, Any],
+        idem: str | None,
+    ) -> ToolOutcome:
+        def record(r: ToolResponse) -> None:
+            # Each decision of the gateway, under this tool call.
+            d = r.decision
+            if d.effect in ("allow", "allow_with_limits", "require_approval", "deny"):
+                run.policy_decision(
+                    d.effect,  # type: ignore[arg-type]
+                    policy=d.policy,
+                    version=d.policy_version,
+                    rule=d.rule,
+                    tool=name,
+                    reason=r.refusal.message if r.refusal else None,
+                    decision_id=d.id,
+                    approval_id=r.refusal.approval_id if r.refusal else None,
+                )
+
+        try:
+            r = gateway.call_approved(
+                name,
+                args,
+                idempotency_key=idem,
+                traceparent=span.traceparent,
+                headers={"X-AgentTwin-Tenant": self.tenant, **self.headers},
+                wait_s=self.approval_wait_s,
+                on_response=record,
+            )
+        except GatewayError as err:
+            # No answer: the call may have happened; a retry with the same
+            # key is deduplicated by the gateway.
+            return ToolOutcome(status="error", error_code="GATEWAY_UNREACHABLE", message=err.message)
+        return _gateway_outcome(r)
 
     def search_kb(self, run: AgentRun, query: str, limit: int = 3) -> list[dict[str, Any]]:
         with run.retrieval("support-kb", query=query) as span:
@@ -190,3 +244,52 @@ class ToolClient:
                 http_status=http_status,
             )
         return ToolOutcome(status="ok", result=body.get("result"), http_status=http_status)
+
+
+def _gateway_outcome(r: ToolResponse) -> ToolOutcome:
+    """What the agent sees of a contained call: the tool's answer, or why the
+    platform did not return it."""
+    if r.refusal is None:
+        try:
+            body = r.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return ToolOutcome(
+                status="error",
+                error_code="MALFORMED_RESPONSE",
+                message="The tool answered with a body that is not a JSON object.",
+                http_status=r.status,
+            )
+        if r.ok:
+            return ToolOutcome(status="ok", result=body.get("result"), http_status=r.status)
+        found = body.get("error")
+        err: dict[str, Any] = found if isinstance(found, dict) else {}
+        return ToolOutcome(
+            status=_status_for(r.status),
+            error_code=str(err.get("code") or "HTTP_ERROR"),
+            message=str(err.get("message") or ""),
+            http_status=r.status,
+        )
+    code, message = r.refusal.code, r.refusal.message
+    if code == "APPROVAL_REQUIRED":
+        # Nobody approved within the wait: the request stays open.
+        state = (r.approval or {}).get("status")
+        if state == "DENIED":
+            reason = (r.approval or {}).get("decision_reason")
+            return ToolOutcome(
+                status="denied",
+                error_code="APPROVAL_DENIED",
+                message=f"a person declined it ({reason})" if reason else "a person declined it",
+                http_status=r.status,
+                approval_id=r.refusal.approval_id,
+            )
+        return ToolOutcome(
+            status="denied",
+            error_code="APPROVAL_EXPIRED" if state == "EXPIRED" else "APPROVAL_PENDING",
+            message=message,
+            http_status=r.status,
+            approval_id=r.refusal.approval_id,
+        )
+    # The status says it: 403 POLICY_DENIED is denied, 504 TOOL_TIMEOUT a timeout.
+    return ToolOutcome(status=_status_for(r.status), error_code=code, message=message, http_status=r.status)

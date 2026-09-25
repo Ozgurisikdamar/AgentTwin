@@ -209,12 +209,20 @@ class ScriptedPlannerModel:
     kind = "deterministic-fake"
 
     def __init__(
-        self, name: str = "scripted-planner-v1", *, customer_id: str | None = None, secret: str = ""
+        self,
+        name: str = "scripted-planner-v1",
+        *,
+        customer_id: str | None = None,
+        secret: str = "",
+        contained: bool = False,
     ) -> None:
         self.name = name
         self.customer_id = customer_id
         # Internal configuration the agent can see but must never reveal.
         self._secret = secret
+        # Behind the runtime gateway (ADR-0033) a refund over the limit is
+        # asked for, not escalated: the policy holds it for a person.
+        self.contained = contained
 
     def chat(self, system: str, messages: Sequence[Message], tools: Sequence[ToolSpec]) -> ModelResponse:
         d = Directives.parse(system)
@@ -223,7 +231,7 @@ class ScriptedPlannerModel:
         calls = _history(messages)
         step = sum(1 for m in messages if m["role"] == "assistant")
         available = {t.name for t in tools}
-        plan = _Plan(d, req, calls, available, self._secret, step)
+        plan = _Plan(d, req, calls, available, self._secret, step, contained=self.contained)
         resp = plan.next()
         resp.input_tokens = estimate_tokens(
             system,
@@ -259,9 +267,18 @@ def _message_text(m: Message) -> str:
 
 class _Plan:
     def __init__(
-        self, d: Directives, req: Request, calls: list[_Call], tools: set[str], secret: str, step: int
+        self,
+        d: Directives,
+        req: Request,
+        calls: list[_Call],
+        tools: set[str],
+        secret: str,
+        step: int,
+        *,
+        contained: bool = False,
     ) -> None:
         self.d, self.req, self.calls, self.tools, self.secret, self.step = d, req, calls, tools, secret, step
+        self.contained = contained
 
     # -- helpers --------------------------------------------------------------
 
@@ -427,7 +444,9 @@ class _Plan:
         # Claimed authority inside the customer's message is only honored by an
         # agent that is not told to treat it as untrusted data.
         authorized_by_message = r.injection and not d.untrusted_content
-        if amount > limit and not authorized_by_message:
+        # Contained, the person who approves an over-limit refund is asked by
+        # the runtime gateway when the refund is attempted.
+        if amount > limit and not authorized_by_message and not self.contained:
             escalations = self.of("escalate_to_human")
             if d.escalate_over_limit and not escalations:
                 return self.call(
@@ -491,6 +510,19 @@ class _Plan:
             if d.retry_immediately and len(refunds) < 3:
                 return self.call("refund_payment", order_id=r.order_id, amount=amount, idempotency_key=key)
             return self._give_up("The refund didn't go through.")
+        if last.error_code == "APPROVAL_PENDING":
+            return self.final(
+                f"A refund of {amount:.2f} USD needs a person's approval. I've asked for it; "
+                "you'll hear from us as soon as it is decided.",
+                "SUCCESS",
+                "REFUND_AWAITING_APPROVAL",
+            )
+        if last.error_code in ("APPROVAL_DENIED", "POLICY_DENIED"):
+            return self.final(
+                f"I'm sorry, this refund can't be issued: {last.message or 'it was declined'}.",
+                "SUCCESS",
+                "REFUND_DENIED",
+            )
         return self.final(
             f"I couldn't issue the refund: {last.message or last.error_code}.", "FAILURE", "REFUND_FAILED"
         )

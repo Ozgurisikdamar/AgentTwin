@@ -5,13 +5,17 @@
     {"input": "...", "customer_id": "CUS-100", "tenant": "demo-co",
      "agent_version": "1.3.0", "session_id": "...",
      "tools_base_url": "http://<twin or tools>", "tool_headers": {...},
+     "contained": false,
      "run_context": {"source": "simulation", "simulation_run_id": "...", "scenario_id": "..."}}
 
 ``GET /versions``  agent versions this deployment can run
 ``GET /healthz``   liveness
 
 Simulations point ``tools_base_url`` at a tool twin, so every tool call the
-agent makes is observed by AgentTwin rather than self-reported.
+agent makes is observed by AgentTwin rather than self-reported. A contained
+run (``"contained": true``) calls its tools through the runtime gateway, which
+decides each call; a call held for approval waits for a person (at most
+``DEMO_AGENT_APPROVAL_WAIT_S``) before the run answers.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
 
-from support_refund_agent.agent import Agent, RunRequest
+from support_refund_agent.agent import Agent, ContainmentUnavailable, RunRequest
 
 __all__ = ["AgentServer"]
 
@@ -95,6 +99,9 @@ class AgentServer:
                     return
                 try:
                     result = server.agent.run(req)
+                except ContainmentUnavailable as err:
+                    self._send(409, {"error": {"code": "CONTAINMENT_UNAVAILABLE", "message": str(err)}})
+                    return
                 except KeyError as err:
                     self._send(404, {"error": {"code": "UNKNOWN_VERSION", "message": str(err).strip("'\"")}})
                     return

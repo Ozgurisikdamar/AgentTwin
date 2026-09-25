@@ -151,6 +151,34 @@ service 138, SDK 71, demo 31, repository checks 41), web 110 (13 files);
 healthy and seeded (1.2.4 9/9; 1.3.0 6/9, 2 critical); `make doctor` 0 failed;
 `make e2e` 12/12 (Phase 1: 7, Phase 2: 5).
 
+## Phase 3 progress (2026-09-25)
+
+Pieces landed so far, each with its tests and the mutations they catch
+(a mutation is applied to the source, the service's tests run, the source is
+restored; "caught" means the tests failed):
+
+| Piece | Tests | Mutations caught |
+|---|---|---|
+| Comparison and first divergence (`agenttwin_evaluation.comparison`, `.trajectory`) — case classes, metric deltas, slices, lockstep first divergence with plain-language impact | 33 (comparison 16, trajectory 17), property tests included | all mutations tried on the classification and divergence rules; three that first survived (effect ignored in the step signature, a repeated write called a double effect when nothing applied, a check made earlier reported as skipped) were closed with tests |
+| Judges (`.judges`) — Anthropic (forced `record_verdict` tool) and OpenAI-compatible (strict JSON schema) adapters replayed through their wire formats, verdict validation, quotes held to the material shown, retries with `retry-after`, truncation, the deterministic fake | 26 | 13 of 13 (e.g. unsupported quotes accepted, 429 not retried, `retry-after` ignored or uncapped, verdict tool not forced, refusal or truncation not detected, prices swapped, delimiters forgeable) |
+| Semantic grading (`.semantic`) — label *and* threshold, judge errors as `ERROR`/`EVALUATION_ERROR`, no-answer fails without a call, budget, cache, judge selection; every result valid against the simulation contract's `ExpectationResult` | 24 | 12 of 12 (e.g. score alone decides, threshold exclusive, a judge error becoming FAIL with score 0, budget or unknown-cost calls not counted, redeliveries shown to the judge) |
+| Calibration (`.calibration`) — agreement, Cohen's kappa, confusion matrix, judge errors as disagreements, thresholds (20 examples, 80%, 0.6) | 14, property test included | 5 of 5 |
+
+Found on the way and fixed: the `maxRetries` expectation disagreed with
+ADR-0018 (it counted a verify-after-write re-read as a retry) — evaluator
+version 1.1.0, see the ADR's addendum. Design: ADR-0022.
+
+Live check of the comparison on the Phase 2 stack (1.2.4 against 1.3.0, seed
+42): `refund-timeout-after-mutation` and `refund-tool-success-lie` are new
+critical failures, `refund-happy-path` regressed (policy check skipped), six
+cases unchanged; the timeout case first diverges at step 2, where the
+candidate calls the irreversible `refund_payment` without the policy lookup
+the baseline made there.
+
+Gates on this state: `make lint-py` clean (ruff, ruff format, mypy strict 71
+files); Python 525 passed on the test infrastructure (real PostgreSQL and
+RabbitMQ), 97 of them in the evaluation service.
+
 ## Definition of Done tracking
 
 See the final delivery report in `docs/delivery-report.md` (written at the end;

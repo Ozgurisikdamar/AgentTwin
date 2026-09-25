@@ -324,12 +324,12 @@ AgentTwin does **not** turn these into a misleading “95% safe” claim.
 
 ## Development
 
-> **AgentTwin is under active phased development.** Phases 0–6 are done; the
-> runtime gateway and hardening follow.
+> **AgentTwin is under active phased development.** Phases 0–7 are done;
+> hardening (Phase 8) follows.
 
 Track live build status and the evidence of each phase: [docs/plan/implementation-board.md](docs/plan/implementation-board.md)
 
-### What works today (Phases 1–6)
+### What works today (Phases 1–7)
 
 * **Trace ingestion** from any OpenTelemetry-instrumented agent through the
   OTel Collector into the trace service: GenAI semantic conventions, per-project
@@ -392,6 +392,19 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   and every later release of the agent runs it as a known regression. A
   release blocks if the regression is back; a version that passes the test
   marks it fixed.
+* **Runtime containment** (opt-in): an agent calls its tools through the
+  runtime gateway by changing its tools base URL. Each call is decided by the
+  tool's active policies — CEL rules with a default effect, a fail mode and
+  their own tests — as allow, allow with limits, hold for a person's
+  approval, or deny, and every decision is recorded. An approval covers the
+  exact action: its token is single-use and bound to the hash of the tool
+  and its arguments, so a changed request cannot reuse it and the approved
+  one runs once; idempotency keys replay a retry instead of repeating it.
+  Only registered tools on allowlisted hosts are reachable. A policy version
+  is tested (its cases and the boundaries of every threshold) before it can
+  be activated, in the UI or as code with an API key holding
+  `policies:deploy`. The Python SDK has a gateway client that waits for an
+  approval and repeats the call with the token.
 * **CLI** ([`packages/cli`](packages/cli)): `agenttwin release check` creates a
   release from CI, waits for its gate, prints why it decided and exits with
   it (0 pass, 2 warn, 3 block, 4 infrastructure error), with JUnit and JSON
@@ -404,7 +417,10 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   and manual mappings; releases with why each gate decided, its evidence
   and hash, the pinned suite, the audit trail, and overrides; the regression
   inbox, each group's evidence, failures and history, triage, merges and the
-  promotion of its drafted scenario.
+  promotion of its drafted scenario; the approvals inbox with the exact
+  action, why it needs a person, its expiry and every use of the approval;
+  policies with their versions, rules, tests, boundaries and activation;
+  and the gateway's decisions.
 * **Demo**: *Demo Co*'s support-refund agent with production-like tools,
   driven by a deterministic scripted planner (or Anthropic Claude when
   `DEMO_AGENT_MODEL=anthropic` and a key are set). Version 1.2.4 is good,
@@ -421,7 +437,11 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   ends with a canary production incident on 1.3.0: a refund whose payment
   times out after the money moved and is retried without an idempotency key,
   so the customer is refunded twice. The miner groups it into the regression
-  inbox, where a reviewer can promote it.
+  inbox, where a reviewer can promote it. Finally the seed contains the
+  agent: it registers its seven tools with the runtime gateway, activates
+  the `refund-limits` policy (refunds over 100 USD need a person's approval,
+  over 1000 are denied, one per conversation) and leaves one over-limit
+  refund waiting in `/approvals`.
 
 ### Quick start (local)
 
@@ -451,6 +471,7 @@ Useful developer entrypoints:
 ```bash
 make help
 make demo       # one more refund conversation through the demo agent; prints the trace link
+make demo-contained  # an over-limit refund through the runtime gateway: approve it in /approvals
 make doctor     # checks Docker, env, ports, PostgreSQL, RabbitMQ, OTel, migrations, services
 make e2e        # Playwright tests against the running stack
 make test       # unit + integration (real PostgreSQL + RabbitMQ) + frontend tests

@@ -403,13 +403,30 @@ reason, triage, merge, promote). `make seed` sends a canary incident on
 moved, retried without an idempotency key) and reports the group it lands
 in; promoting it is a reviewer's decision.
 
-### 3.9 Runtime containment (opt-in)
+### 3.9 Runtime containment (opt-in, ADR-0033)
 
-`agent → POST /gateway/v1/tools/{tool}/invoke → policy (CEL) → allow | allow_with_limits | require_approval | deny → upstream tool`
+`agent → POST /gateway/v1/tools/{tool} (control plane edge) → runtime-gateway → idempotency → policies (CEL) → allow | allow_with_limits | require_approval | deny → registered tool (netguard)`
 
-Approval tokens are single-use, short-lived and bound to the SHA-256 hash of the
-exact canonical action (tool, arguments, agent, project). Changing any argument
-invalidates the approval.
+An agent opts in by pointing its tools base URL at `/gateway/v1/tools`: the
+body is the tool's own arguments, the context travels in `X-AgentTwin-*`
+headers and `traceparent`, and the answer is the tool's own answer with the
+decision in `X-AgentTwin-Decision*` headers. Only registered tools are
+callable; their hosts must be in the egress allowlist and every dial is
+checked again. Every active policy of the tool is evaluated; the most
+restrictive matching effect wins, and a rule that errs applies the policy's
+fail mode (anything but a `READ` tool fails closed). Every decision is
+recorded, append-only.
+
+`require_approval` answers `403 APPROVAL_REQUIRED` with an approval request a
+person decides in the UI (`/approvals`). Once approved, the agent claims a
+token: single-use, short-lived, and bound to the SHA-256 hash of the exact
+canonical action (organization, project, agent, tool, arguments). A changed
+argument is refused (`APPROVAL_MISMATCH`, recorded with what changed); the
+exact action runs once, and a retry with its idempotency key replays the
+stored answer. Denials and refused tokens on a production trace become
+regression signals for the miner. Policies are versioned documents with
+their own tests; a version is activated only when its tests pass (UI,
+`/policies`, or as code with the `policies:deploy` scope).
 
 ## 4. Data ownership
 

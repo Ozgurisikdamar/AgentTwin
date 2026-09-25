@@ -12,7 +12,7 @@ tested software and is committed separately. Status is updated as work lands.
 | 4 | Graph, manifest/OpenAPI/MCP import, observed edges, change set, bounded blast radius, impacted selection | prompt/tool change selects refund scenarios with reasons | done |
 | 5 | Release, gate rules, immutable evidence, CLI CI output, release UI | bad candidate BLOCKED | done |
 | 6 | Regression miner: features, embeddings, grouping, taxonomy, inbox, promotion | demo failure → regression case → auto-included in next gate | done |
-| 7 | Runtime gateway: CEL policies, approvals, idempotency, SSRF-safe proxy, audit | over-limit refund requires approval; tampered args rejected | pending |
+| 7 | Runtime gateway: CEL policies, approvals, idempotency, SSRF-safe proxy, audit | over-limit refund requires approval; tampered args rejected | done |
 | 8 | Tenant isolation, SSRF, redaction, chaos, load, security, E2E, docs, screenshots | Definition of Done checklist | pending |
 
 ## Phase 1 evidence (2026-09-24)
@@ -359,6 +359,65 @@ Found on the way:
   version, redactions, warnings) once it read the promoted regression again:
   the form holding the answer was unmounted. The e2e test found it; the unit
   tests' fake now answers like the service, and reproduced it.
+
+## Phase 7 evidence (2026-09-25)
+
+Acceptance (golden path 13–14): *a runtime refund above the configured amount
+is held for a person; the approvals page receives the request; a person
+approves that exact action; it succeeds once; a modified request cannot reuse
+the approval.* It holds on a stack built from scratch, through the seed,
+through the UI and the gateway directly (the Phase 7 e2e tests) and through
+`make demo-contained`. Commands run on the Phase 7 code, with their results:
+
+| Command | Result |
+|---|---|
+| `make reset` (drop volumes, then `make dev`: build, start, wait until healthy, seed) | Stack healthy and seeded in 115 s. Everything Phase 6 seeded (the 1.2.4 → 1.3.0 **BLOCK** and 1.2.4 → 1.3.1 **PASS** releases; the canary incident on ORD-3029 grouped as "refund_payment took effect twice"; an inbox of 4 CANDIDATE groups), then the containment of the demo agent: 7 tool endpoints registered with the runtime gateway (`refund_payment` WRITE_IRREVERSIBLE, `escalate_to_human` and `send_email` WRITE_REVERSIBLE, `export_customer_data` ADMIN, `lookup_order`, `lookup_customer` and `get_refund_policy` READ); `refund-limits` v1 tested (6 of 6 pass; thresholds `args.amount > 100`, `> 1000`, `trace.calls >= 1`) and activated; `customer-data-export` v1 (1 of 1) activated; then a contained $150 refund on ORD-3030: **REFUND_AWAITING_APPROVAL**, its approval request PENDING by `over-automatic-limit` |
+| `make e2e` | 28/28 Playwright tests in 2.5 min. Phase 1: 7, Phase 2: 5, Phase 3: 4, Phase 4: 4, Phase 5: 3, Phase 6: 2, Phase 7: 3. The Phase 7 tests: (1) the demo agent, contained, asks for a $150 refund; the reviewer finds it on `/approvals`, sees the exact action (amount 150, the order) while no refund has moved, and approves it; the waiting agent repeats the action with its token: REFUND_COMPLETED, one `refund_payment` call, one refund on the order; the approval is Used with one executed use, and the conversation's decisions read Held for approval, then Executed. (2) The same flow through the gateway directly: `403 APPROVAL_REQUIRED` with the approval's id; no token before a decision (`APPROVAL_PENDING`); after approval a $200 request with the token is `403 APPROVAL_MISMATCH` (`amount: 150 → 200`) and nothing moves; the exact request runs (`X-AgentTwin-Decision: require_approval`, one refund); retrying it replays the stored answer (`Idempotent-Replayed: true`, still one refund); the approval is spent (`APPROVAL_USED`); the page lists the refused change and the run. (3) `refund-limits` is v1 active; running its tests: "All 6 tests pass: this version can be activated.", boundary "100 → Allow · 100.01 → Needs approval". Screenshots in `docs/screenshots/phase7-*.png` (phases 1–6 refreshed: the navigation gained Approvals, Policies and Decisions) |
+| `make demo-contained` | A $150 refund on ORD-3034 held by the gateway; the agent waited; a reviewer approved it; the agent claimed the token and repeated the exact call: REFUND_COMPLETED, the agent claimed SUCCESS, exit 0 |
+| `make doctor` | 0 failed, 1 warning (development placeholder secrets). All migrations applied (control plane 4, trace 1, graph 1, runtime gateway 1, simulation 3, evaluation 4); every service ready, the `runtime` schema among them; dead-letter queues empty. Demo workspace, new in Phase 7: "2 active runtime policies; 1 approval request waits for a person" |
+| `make lint` | gofmt clean; `go vet` clean; golangci-lint 0 issues; ruff, ruff format (204 files) and mypy strict (90 files) clean; Prettier, ESLint and `tsc` clean |
+| `make test` | Go: 343 tests and 279 subtests pass with real PostgreSQL and RabbitMQ (0 failed, 0 skipped; 287 and 233 at the end of Phase 6), the runtime gateway's among them (policy 18, gateway core 13, API and invocation 16, store 8). Python: 955 (evaluation service 350, core 194, simulation service 171, demo 93, SDK 92, contracts, images and document checks 55; 902 at the end of Phase 6). Web: 323 (29 files; 268). 501 s |
+| `make contracts-check` | 14 event schemas and 6 API documents (122 operations, 101 at the end of Phase 6; the runtime gateway's is new) compatible with the baselines; the six generated web type files up to date |
+
+## Phase 7 progress (2026-09-25)
+
+Pieces landed, each with its tests and the mutations they catch (same method
+as the earlier phases):
+
+| Piece | Tests | Mutations caught |
+|---|---|---|
+| Policy domain (`runtime-gateway` `policy`, ADR-0033) — documents that refuse unknown fields, CEL rules type-checked against the declared variables, decisions under a cost limit (a matched deny always denies, the most restrictive match wins, the fail mode on an error: `fail_open` only for READ tools), several policies combined, tests that say why a case fails, activation checks, numeric thresholds read from the rules' syntax tree and probed around each value | 18 | 63 of 64 (the one left is equivalent); two survivors of a first run pointed at redundant code, now removed |
+| Invocation core (`gateway`) — the action and its SHA-256 over canonical JSON, forwarded as those bytes; the context from headers; approval tokens (32 random bytes, stored as a hash, never past the approval) and their checks; idempotency (replay, reuse, in flight, unknown outcome after a timeout); redaction of what people see and the diff between two calls | 13 | 67 of 69; both survivors pointed at redundant checks, now removed |
+| Runtime schema and store — immutable versions, append-only decisions and attempts, approvals that only move forward and whose action never changes, enforced by triggers | 8 integration tests on PostgreSQL | schema 18 of 18, store 19 of 19 |
+| Management API and invocation path — tool endpoints behind the egress allowlist, policies (versions, tests, activation publishing `policy.activated.v1`), approvals, decisions; each call decided in one transaction and forwarded over HTTP or MCP through netguard; its OpenAPI document, every exchange held to it | 16 integration tests, the golden path among them | two rounds: every survivor (locks, the recorded replay, expiry, limits, audits, JSON dialects, an MCP answer both result and error) got a test; the policy cache mutation is equivalent |
+| Wiring — the service's command, retention, `/gateway/v1` at the control plane edge (authenticated and rate limited, the tool call's `Idempotency-Key` passed through), compose, doctor | control-plane integration test of the route | — |
+| SDK gateway client (`agenttwin.gateway`) — a call with the caller's context, the decision in the answer, `call_approved` waiting for a person, claiming the token and repeating the same call with the same key; runtime management methods | against the contract-checked fakes | 12 of 12 |
+| Demo containment — `--contained` sends every tool call through the gateway; a held refund waits for a person (bounded) and is repeated with the token; a refusal ends the conversation clearly | demo tests | approval wait 7 of 7, tool client 1 of 1 |
+| Miner: runtime denials — `policy.violation_detected.v1`; a deny or a refused token becomes the trace's `policy_denied:<tool>` even when the agent recorded nothing; a pending approval is not a failure | 7 integration tests on PostgreSQL | caught |
+| Seed containment — endpoints from the latest manifest, the policies tested and activated (a failing test fails the seed), the held refund; idempotent on a second run | seed against a contract-checked fake | 15 of 15 (the first run hid survivors behind a test filter; run on the whole file, one got its test and one redundant check was removed) |
+| Scope `policies:deploy` — deploy policies as code; Go and Python matrices agree | parity test | — |
+| Web: `/approvals`, `/approvals/{id}`, `/decisions` — the exact action with its hash, why it needs a person, expiry, every use and how it differed, approve or deny once with a reason; decisions filtered by effect, outcome, tool and trace | 32 on the gateway's real answers, captured from the local stack | 19 of 19 |
+| Web: `/policies`, `/policies/{id}`, `/policies/new` — versions, rules, thresholds, tests, the test report with each boundary, activation and its refusal, a draft tested and saved (or "nothing new was stored") | 40 on captured answers | 21 of 21 |
+
+Found on the way:
+
+* **The live seed was refused (403).** The demo key's scopes could not
+  register tools or activate policies; the fake the seed tests ran against
+  did not check scopes. A scope, `policies:deploy`, is the pipeline's way to
+  deploy policies as code; activation can loosen containment, so it is not
+  part of `ci`.
+* **The API baseline did not record the new scope** (5e6f58c): the test that
+  holds the baseline up to date failed until 117a2c7 recorded it. `make test`
+  on the full tree found it, not the per-piece gates.
+* **The edge must not answer a tool call's retry itself.** Its
+  `Idempotency-Key` replay would hide an unknown outcome; `/gateway/v1`
+  passes the key through and the gateway, which knows the action, enforces
+  it. A key differing between the header and the `idempotency_key` argument
+  is refused.
+* **The screenshots found three misleading displays** the unit tests did
+  not: a used approval still counting down to its expiry, a sub-millisecond
+  run shown as "0.00 ms", and `/decisions` filtered by a trace it did not
+  show. All fixed, each with a test.
 
 ## Definition of Done tracking
 

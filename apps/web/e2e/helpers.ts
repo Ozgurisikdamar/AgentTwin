@@ -82,7 +82,7 @@ export async function signIn(
 }
 
 /** The control plane (the runtime gateway is behind it, ADR-0033). */
-const controlPlaneURL =
+export const controlPlaneURL =
   process.env.E2E_CONTROL_PLANE_URL ?? `http://127.0.0.1:${process.env.CONTROL_PLANE_HOST_PORT ?? "8080"}`;
 
 /** Starts a contained conversation: the agent's tools go through the runtime gateway. */

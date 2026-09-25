@@ -55,6 +55,31 @@ export type ImpactProblem = S["ImpactProblem"];
 export type ImpactPrivilege = S["ImpactPrivilege"];
 export type GraphComponentRef = S["GraphComponent"];
 
+// Releases and their gates (spec §28, §38, §91-92).
+export type Release = S["Release"];
+export type ReleasePage = S["ReleasePage"];
+export type ReleaseDetail = S["ReleaseDetail"];
+export type CreatedRelease = S["CreatedRelease"];
+export type ReleaseGate = S["ReleaseGate"];
+export type GateSummary = S["GateSummary"];
+export type GateDecisionSummary = S["GateDecisionSummary"];
+export type GateDecision = S["GateDecision"];
+export type GateCounts = S["GateCounts"];
+export type GateRule = S["GateRule"];
+export type GateEvidence = S["GateEvidence"];
+export type GateRatio = S["GateRatio"];
+export type GateRiskIndex = S["GateRiskIndex"];
+export type GateOverride = S["GateOverride"];
+export type ReleaseSuiteEntry = S["ReleaseSuiteEntry"];
+export type ResolvedGatePolicy = S["ResolvedGatePolicy"];
+export type EffectiveOutcome = S["EffectiveOutcome"];
+export type GateOutcome = S["GateOutcome"];
+export type ChangeCounts = S["ChangeCounts"];
+
+// The audit log (spec §75).
+export type AuditEntry = S["AuditEntry"];
+export type AuditPage = S["AuditPage"];
+
 /** What the sign-in route reads from a development login. */
 export interface DevLogin {
   token?: string;

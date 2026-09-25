@@ -477,11 +477,13 @@ func TestABadCandidateIsBlocked(t *testing.T) {
 	if detail.Status != 200 {
 		t.Fatalf("detail: %d %s", detail.Status, detail.Raw)
 	}
+	capture(t, "release-detail-block", detail)
 	revs := detail.Body["revisions"].([]any)
 	if len(revs) != 1 || revs[0].(map[string]any)["effective_outcome"] != "BLOCK" || revs[0].(map[string]any)["risk_index"] == nil {
 		t.Fatalf("revisions = %v", revs)
 	}
 	list := h.request("GET", "/api/v1/releases?project_id="+fx.pid, nil, bearer(fx.eng))
+	capture(t, "release-list", list)
 	if list.Status != 200 || len(list.Body["items"].([]any)) != 1 ||
 		list.Body["items"].([]any)[0].(map[string]any)["gate"].(map[string]any)["outcome"] != "BLOCK" ||
 		list.Body["items"].([]any)[0].(map[string]any)["changes"].(map[string]any)["items"] != 2.0 {
@@ -623,10 +625,21 @@ func TestAnOverrideNeverRewritesTheDecision(t *testing.T) {
 	if n := h.count(`SELECT count(*) FROM control.audit_event WHERE action = 'release.override' AND reason = $1`, reason["reason"]); n != 1 {
 		t.Errorf("override audit entries = %d", n)
 	}
-	detail := h.request("GET", "/api/v1/releases/"+releaseID, nil, bearer(viewer)).Body
-	rev := detail["revisions"].([]any)[0].(map[string]any)
+	detailResp := h.request("GET", "/api/v1/releases/"+releaseID, nil, bearer(viewer))
+	capture(t, "release-detail-overridden", detailResp)
+	rev := detailResp.Body["revisions"].([]any)[0].(map[string]any)
 	if rev["outcome"] != "BLOCK" || rev["effective_outcome"] != "OVERRIDDEN" || rev["overridden"] != true {
 		t.Fatalf("revision = %v", rev)
+	}
+	// The release's history is in the audit log, oldest last.
+	audit := h.request("GET", "/api/v1/audit?resource_type=release&resource_id="+releaseID, nil, bearer(admin))
+	capture(t, "release-audit", audit)
+	var actions []string
+	for _, e := range audit.Body["items"].([]any) {
+		actions = append(actions, e.(map[string]any)["action"].(string))
+	}
+	if want := []string{"release.override", "release.gate_decided", "release.evaluate", "release.created"}; !slices.Equal(actions, want) {
+		t.Fatalf("audit = %v, want %v", actions, want)
 	}
 
 	// One override per decision.

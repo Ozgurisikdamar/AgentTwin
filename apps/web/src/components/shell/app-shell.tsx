@@ -11,6 +11,7 @@ import {
   ListChecks,
   LogOut,
   Network,
+  Rocket,
   UserCheck,
 } from "lucide-react";
 import Link from "next/link";
@@ -30,6 +31,7 @@ interface NavItem {
 // Sections appear here as they ship (see docs/plan/implementation-board.md).
 const NAV: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { href: "/releases", label: "Releases", icon: Rocket },
   { href: "/changes", label: "Changes", icon: GitPullRequestArrow },
   { href: "/graph", label: "Graph", icon: Network },
   { href: "/simulations", label: "Simulations", icon: FlaskConical },

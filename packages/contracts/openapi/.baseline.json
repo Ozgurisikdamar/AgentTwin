@@ -1292,6 +1292,797 @@
         }
       }
     },
+    "GET /api/v1/change-sets/{change_set_id}/impact": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:change_set_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/graph/seeds/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/graph/seeds/[]/component/kind": [
+              "\"AGENT_VERSION\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"TOOL\""
+            ],
+            "/graph/unresolved/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/graph/unresolved/[]/component/kind": [
+              "\"AGENT_VERSION\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"TOOL\""
+            ],
+            "/new_privileges/[]/change": [
+              "\"added\"",
+              "\"escalated\""
+            ],
+            "/problems/[]/service": [
+              "\"graph-service\"",
+              "\"simulation-service\""
+            ],
+            "/scenarios/[]/reasons/similar/[]/item/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/scenarios/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ]
+          },
+          "required": {
+            "/": [
+              "agent",
+              "base_version",
+              "candidate_version",
+              "change_set_id",
+              "complete",
+              "computed_at",
+              "counts",
+              "embedding_model",
+              "graph",
+              "irreversible_actions",
+              "min_similarity",
+              "new_privileges",
+              "notes",
+              "policy",
+              "problems",
+              "project_id",
+              "scenarios",
+              "truncated",
+              "unlinked_scenarios"
+            ],
+            "/counts": [
+              "always_run",
+              "graph",
+              "known_regression",
+              "scenarios",
+              "similar"
+            ],
+            "/graph": [
+              "affected",
+              "affected_count",
+              "evaluators",
+              "max_depth",
+              "policies",
+              "seeds",
+              "truncated",
+              "unresolved"
+            ],
+            "/graph/affected/[]": [
+              "attributes",
+              "certain",
+              "component",
+              "depth",
+              "direct",
+              "factors",
+              "label",
+              "path",
+              "score",
+              "seed",
+              "severity"
+            ],
+            "/graph/affected/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/graph/evaluators/[]": [
+              "component",
+              "label",
+              "reasons",
+              "weight"
+            ],
+            "/graph/evaluators/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/graph/evaluators/[]/reasons/[]": [
+              "direct",
+              "path",
+              "score",
+              "via",
+              "via_label"
+            ],
+            "/graph/evaluators/[]/reasons/[]/via": [
+              "key",
+              "kind"
+            ],
+            "/graph/policies/[]": [
+              "component",
+              "label",
+              "reasons",
+              "weight"
+            ],
+            "/graph/policies/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/graph/policies/[]/reasons/[]": [
+              "direct",
+              "path",
+              "score",
+              "via",
+              "via_label"
+            ],
+            "/graph/policies/[]/reasons/[]/via": [
+              "key",
+              "kind"
+            ],
+            "/graph/seeds/[]": [
+              "change",
+              "component"
+            ],
+            "/graph/seeds/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/graph/unresolved/[]": [
+              "change",
+              "component"
+            ],
+            "/graph/unresolved/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/irreversible_actions/[]": [
+              "attributes",
+              "certain",
+              "component",
+              "depth",
+              "direct",
+              "factors",
+              "label",
+              "path",
+              "score",
+              "seed",
+              "severity"
+            ],
+            "/irreversible_actions/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/new_privileges/[]": [
+              "change",
+              "risk",
+              "tool"
+            ],
+            "/policy": [
+              "always_run_tags",
+              "include_known_regressions",
+              "max_depth"
+            ],
+            "/problems/[]": [
+              "code",
+              "message",
+              "service"
+            ],
+            "/scenarios/[]": [
+              "agent",
+              "description",
+              "in_library",
+              "name",
+              "reasons",
+              "severity",
+              "source",
+              "tags",
+              "twin",
+              "why"
+            ],
+            "/scenarios/[]/reasons": [
+              "always_run_tags",
+              "graph",
+              "known_regression",
+              "similar"
+            ],
+            "/scenarios/[]/reasons/graph/[]": [
+              "direct",
+              "from",
+              "from_label",
+              "hops",
+              "path",
+              "score",
+              "via",
+              "via_label"
+            ],
+            "/scenarios/[]/reasons/graph/[]/from": [
+              "key",
+              "kind"
+            ],
+            "/scenarios/[]/reasons/graph/[]/via": [
+              "key",
+              "kind"
+            ],
+            "/scenarios/[]/reasons/similar/[]": [
+              "item",
+              "similarity"
+            ],
+            "/scenarios/[]/reasons/similar/[]/item": [
+              "change",
+              "kind",
+              "subject"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/agent": [
+              "string"
+            ],
+            "/base_version": [
+              "string"
+            ],
+            "/candidate_version": [
+              "string"
+            ],
+            "/change_set_id": [
+              "string"
+            ],
+            "/complete": [
+              "boolean"
+            ],
+            "/computed_at": [
+              "string"
+            ],
+            "/counts": [
+              "object"
+            ],
+            "/counts/always_run": [
+              "integer"
+            ],
+            "/counts/graph": [
+              "integer"
+            ],
+            "/counts/known_regression": [
+              "integer"
+            ],
+            "/counts/scenarios": [
+              "integer"
+            ],
+            "/counts/similar": [
+              "integer"
+            ],
+            "/embedding_model": [
+              "string"
+            ],
+            "/graph": [
+              "null",
+              "object"
+            ],
+            "/graph/affected": [
+              "array"
+            ],
+            "/graph/affected/[]": [
+              "object"
+            ],
+            "/graph/affected/[]/attributes": [
+              "object"
+            ],
+            "/graph/affected/[]/certain": [
+              "boolean"
+            ],
+            "/graph/affected/[]/component": [
+              "object"
+            ],
+            "/graph/affected/[]/component/key": [
+              "string"
+            ],
+            "/graph/affected/[]/component/kind": [
+              "string"
+            ],
+            "/graph/affected/[]/depth": [
+              "integer"
+            ],
+            "/graph/affected/[]/direct": [
+              "boolean"
+            ],
+            "/graph/affected/[]/factors": [
+              "array"
+            ],
+            "/graph/affected/[]/factors/[]": [
+              "string"
+            ],
+            "/graph/affected/[]/label": [
+              "string"
+            ],
+            "/graph/affected/[]/path": [
+              "array"
+            ],
+            "/graph/affected/[]/path/[]": [
+              "object"
+            ],
+            "/graph/affected/[]/score": [
+              "number"
+            ],
+            "/graph/affected/[]/seed": [
+              "boolean"
+            ],
+            "/graph/affected/[]/severity": [
+              "string"
+            ],
+            "/graph/affected_count": [
+              "integer"
+            ],
+            "/graph/evaluators": [
+              "array"
+            ],
+            "/graph/evaluators/[]": [
+              "object"
+            ],
+            "/graph/evaluators/[]/component": [
+              "object"
+            ],
+            "/graph/evaluators/[]/component/key": [
+              "string"
+            ],
+            "/graph/evaluators/[]/component/kind": [
+              "string"
+            ],
+            "/graph/evaluators/[]/label": [
+              "string"
+            ],
+            "/graph/evaluators/[]/reasons": [
+              "array"
+            ],
+            "/graph/evaluators/[]/reasons/[]": [
+              "object"
+            ],
+            "/graph/evaluators/[]/reasons/[]/direct": [
+              "boolean"
+            ],
+            "/graph/evaluators/[]/reasons/[]/path": [
+              "array"
+            ],
+            "/graph/evaluators/[]/reasons/[]/path/[]": [
+              "object"
+            ],
+            "/graph/evaluators/[]/reasons/[]/score": [
+              "number"
+            ],
+            "/graph/evaluators/[]/reasons/[]/via": [
+              "object"
+            ],
+            "/graph/evaluators/[]/reasons/[]/via/key": [
+              "string"
+            ],
+            "/graph/evaluators/[]/reasons/[]/via/kind": [
+              "string"
+            ],
+            "/graph/evaluators/[]/reasons/[]/via_label": [
+              "string"
+            ],
+            "/graph/evaluators/[]/severity": [
+              "string"
+            ],
+            "/graph/evaluators/[]/weight": [
+              "number"
+            ],
+            "/graph/max_depth": [
+              "integer"
+            ],
+            "/graph/policies": [
+              "array"
+            ],
+            "/graph/policies/[]": [
+              "object"
+            ],
+            "/graph/policies/[]/component": [
+              "object"
+            ],
+            "/graph/policies/[]/component/key": [
+              "string"
+            ],
+            "/graph/policies/[]/component/kind": [
+              "string"
+            ],
+            "/graph/policies/[]/label": [
+              "string"
+            ],
+            "/graph/policies/[]/reasons": [
+              "array"
+            ],
+            "/graph/policies/[]/reasons/[]": [
+              "object"
+            ],
+            "/graph/policies/[]/reasons/[]/direct": [
+              "boolean"
+            ],
+            "/graph/policies/[]/reasons/[]/path": [
+              "array"
+            ],
+            "/graph/policies/[]/reasons/[]/path/[]": [
+              "object"
+            ],
+            "/graph/policies/[]/reasons/[]/score": [
+              "number"
+            ],
+            "/graph/policies/[]/reasons/[]/via": [
+              "object"
+            ],
+            "/graph/policies/[]/reasons/[]/via/key": [
+              "string"
+            ],
+            "/graph/policies/[]/reasons/[]/via/kind": [
+              "string"
+            ],
+            "/graph/policies/[]/reasons/[]/via_label": [
+              "string"
+            ],
+            "/graph/policies/[]/severity": [
+              "string"
+            ],
+            "/graph/policies/[]/weight": [
+              "number"
+            ],
+            "/graph/seeds": [
+              "array"
+            ],
+            "/graph/seeds/[]": [
+              "object"
+            ],
+            "/graph/seeds/[]/change": [
+              "string"
+            ],
+            "/graph/seeds/[]/component": [
+              "object"
+            ],
+            "/graph/seeds/[]/component/key": [
+              "string"
+            ],
+            "/graph/seeds/[]/component/kind": [
+              "string"
+            ],
+            "/graph/seeds/[]/mentions": [
+              "array"
+            ],
+            "/graph/seeds/[]/mentions/[]": [
+              "string"
+            ],
+            "/graph/seeds/[]/summary": [
+              "string"
+            ],
+            "/graph/truncated": [
+              "boolean"
+            ],
+            "/graph/unresolved": [
+              "array"
+            ],
+            "/graph/unresolved/[]": [
+              "object"
+            ],
+            "/graph/unresolved/[]/change": [
+              "string"
+            ],
+            "/graph/unresolved/[]/component": [
+              "object"
+            ],
+            "/graph/unresolved/[]/component/key": [
+              "string"
+            ],
+            "/graph/unresolved/[]/component/kind": [
+              "string"
+            ],
+            "/graph/unresolved/[]/mentions": [
+              "array"
+            ],
+            "/graph/unresolved/[]/mentions/[]": [
+              "string"
+            ],
+            "/graph/unresolved/[]/summary": [
+              "string"
+            ],
+            "/irreversible_actions": [
+              "array"
+            ],
+            "/irreversible_actions/[]": [
+              "object"
+            ],
+            "/irreversible_actions/[]/attributes": [
+              "object"
+            ],
+            "/irreversible_actions/[]/certain": [
+              "boolean"
+            ],
+            "/irreversible_actions/[]/component": [
+              "object"
+            ],
+            "/irreversible_actions/[]/component/key": [
+              "string"
+            ],
+            "/irreversible_actions/[]/component/kind": [
+              "string"
+            ],
+            "/irreversible_actions/[]/depth": [
+              "integer"
+            ],
+            "/irreversible_actions/[]/direct": [
+              "boolean"
+            ],
+            "/irreversible_actions/[]/factors": [
+              "array"
+            ],
+            "/irreversible_actions/[]/factors/[]": [
+              "string"
+            ],
+            "/irreversible_actions/[]/label": [
+              "string"
+            ],
+            "/irreversible_actions/[]/path": [
+              "array"
+            ],
+            "/irreversible_actions/[]/path/[]": [
+              "object"
+            ],
+            "/irreversible_actions/[]/score": [
+              "number"
+            ],
+            "/irreversible_actions/[]/seed": [
+              "boolean"
+            ],
+            "/irreversible_actions/[]/severity": [
+              "string"
+            ],
+            "/min_similarity": [
+              "number"
+            ],
+            "/new_privileges": [
+              "array"
+            ],
+            "/new_privileges/[]": [
+              "object"
+            ],
+            "/new_privileges/[]/change": [
+              "string"
+            ],
+            "/new_privileges/[]/from": [
+              "string"
+            ],
+            "/new_privileges/[]/risk": [
+              "string"
+            ],
+            "/new_privileges/[]/tool": [
+              "string"
+            ],
+            "/notes": [
+              "array"
+            ],
+            "/notes/[]": [
+              "string"
+            ],
+            "/policy": [
+              "object"
+            ],
+            "/policy/always_run_tags": [
+              "array"
+            ],
+            "/policy/always_run_tags/[]": [
+              "string"
+            ],
+            "/policy/include_known_regressions": [
+              "boolean"
+            ],
+            "/policy/max_depth": [
+              "integer"
+            ],
+            "/problems": [
+              "array"
+            ],
+            "/problems/[]": [
+              "object"
+            ],
+            "/problems/[]/code": [
+              "string"
+            ],
+            "/problems/[]/message": [
+              "string"
+            ],
+            "/problems/[]/service": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/scenarios": [
+              "array"
+            ],
+            "/scenarios/[]": [
+              "object"
+            ],
+            "/scenarios/[]/agent": [
+              "null",
+              "string"
+            ],
+            "/scenarios/[]/description": [
+              "string"
+            ],
+            "/scenarios/[]/id": [
+              "string"
+            ],
+            "/scenarios/[]/in_library": [
+              "boolean"
+            ],
+            "/scenarios/[]/latest_version": [
+              "integer"
+            ],
+            "/scenarios/[]/name": [
+              "string"
+            ],
+            "/scenarios/[]/reasons": [
+              "object"
+            ],
+            "/scenarios/[]/reasons/always_run_tags": [
+              "array"
+            ],
+            "/scenarios/[]/reasons/always_run_tags/[]": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/graph": [
+              "array"
+            ],
+            "/scenarios/[]/reasons/graph/[]": [
+              "object"
+            ],
+            "/scenarios/[]/reasons/graph/[]/direct": [
+              "boolean"
+            ],
+            "/scenarios/[]/reasons/graph/[]/from": [
+              "object"
+            ],
+            "/scenarios/[]/reasons/graph/[]/from/key": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/graph/[]/from/kind": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/graph/[]/from_label": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/graph/[]/hops": [
+              "integer"
+            ],
+            "/scenarios/[]/reasons/graph/[]/path": [
+              "array"
+            ],
+            "/scenarios/[]/reasons/graph/[]/path/[]": [
+              "object"
+            ],
+            "/scenarios/[]/reasons/graph/[]/score": [
+              "number"
+            ],
+            "/scenarios/[]/reasons/graph/[]/via": [
+              "object"
+            ],
+            "/scenarios/[]/reasons/graph/[]/via/key": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/graph/[]/via/kind": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/graph/[]/via_label": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/known_regression": [
+              "boolean"
+            ],
+            "/scenarios/[]/reasons/similar": [
+              "array"
+            ],
+            "/scenarios/[]/reasons/similar/[]": [
+              "object"
+            ],
+            "/scenarios/[]/reasons/similar/[]/item": [
+              "object"
+            ],
+            "/scenarios/[]/reasons/similar/[]/item/change": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/similar/[]/item/kind": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/similar/[]/item/subject": [
+              "string"
+            ],
+            "/scenarios/[]/reasons/similar/[]/similarity": [
+              "number"
+            ],
+            "/scenarios/[]/severity": [
+              "string"
+            ],
+            "/scenarios/[]/source": [
+              "string"
+            ],
+            "/scenarios/[]/tags": [
+              "array"
+            ],
+            "/scenarios/[]/tags/[]": [
+              "string"
+            ],
+            "/scenarios/[]/twin": [
+              "null",
+              "string"
+            ],
+            "/scenarios/[]/why": [
+              "array"
+            ],
+            "/scenarios/[]/why/[]": [
+              "string"
+            ],
+            "/truncated": [
+              "boolean"
+            ],
+            "/unlinked_scenarios": [
+              "array"
+            ],
+            "/unlinked_scenarios/[]": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
     "GET /api/v1/me": {
       "parameters": {
         "header:x-agenttwin-org": {

@@ -18,6 +18,7 @@ import (
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/hashx"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/logx"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/svcclient"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/auth"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/store"
 )
@@ -32,6 +33,9 @@ type App struct {
 	Pepper string
 	Log    *slog.Logger
 	Now    func() time.Time
+	// Graph and Simulation are asked for a change set's impact; nil when
+	// the service is not configured.
+	Graph, Simulation *svcclient.Client
 }
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)

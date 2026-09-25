@@ -17,6 +17,7 @@ import (
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/config"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/svcclient"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/api"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/app"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/auth"
@@ -83,6 +84,9 @@ func LoadConfig(l *config.Loader) Config {
 	return c
 }
 
+// impactTimeout bounds each call a change impact makes.
+const impactTimeout = 20 * time.Second
+
 // Server is the assembled control plane.
 type Server struct {
 	App     *app.App
@@ -108,6 +112,15 @@ func New(ctx context.Context, pool *pgxpool.Pool, tokens *authn.TokenService, lo
 		return nil, err
 	}
 	a := &app.App{Store: st, Auth: authenticator, Pepper: c.Pepper, Log: log, Now: now}
+	// The services a change set's impact asks (spec §22); a missing URL
+	// makes the impact incomplete, not the control plane unavailable.
+	for name, client := range map[string]**svcclient.Client{"graph-service": &a.Graph, "simulation-service": &a.Simulation} {
+		if url := c.Targets[name]; url != "" {
+			if *client, err = svcclient.New(name, url, tokens, impactTimeout); err != nil {
+				return nil, err
+			}
+		}
+	}
 	s := &Server{App: a, Store: st, Auth: authenticator}
 
 	if c.DemoBootstrap {

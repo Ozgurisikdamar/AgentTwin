@@ -109,6 +109,7 @@ func (s *Server) PublicRoutes(mux Router) {
 	mux.HandleFunc("POST /api/v1/projects/{id}/change-sets", h(s.createChangeSet))
 	mux.HandleFunc("GET /api/v1/projects/{id}/change-sets", h(s.listChangeSets))
 	mux.HandleFunc("GET /api/v1/change-sets/{id}", h(s.getChangeSet))
+	mux.HandleFunc("GET /api/v1/change-sets/{id}/impact", h(s.changeSetImpact))
 
 	mux.HandleFunc("GET /api/v1/audit", h(s.listAudit))
 	mux.HandleFunc("GET /api/v1/audit/verify", h(s.verifyAudit))
@@ -694,6 +695,19 @@ func (s *Server) getChangeSet(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	httpx.WriteJSON(w, http.StatusOK, cs)
+	return nil
+}
+
+func (s *Server) changeSetImpact(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id", "change_set_id")
+	if err != nil {
+		return err
+	}
+	imp, err := s.App.ChangeSetImpact(r.Context(), principal(r), id)
+	if err != nil {
+		return err
+	}
+	httpx.WriteJSON(w, http.StatusOK, imp)
 	return nil
 }
 

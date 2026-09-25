@@ -570,6 +570,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/change-sets/{change_set_id}/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The scenarios a change set requires, and why
+         * @description The impacted suite of a change set (spec §22): the union of the
+         *     scenarios the dependency graph links to the changed components
+         *     (directly, or through dependencies, entered at the candidate
+         *     version up to the policy's `max_depth`), the known production
+         *     regressions (when the gate policy includes them), the scenarios
+         *     semantically close to what changed (the changed lines of the
+         *     prompt, a changed tool's description, a retrieval source, declared
+         *     changes, changed file names) and the suite the gate policy always
+         *     runs (`always_run_tags`). Every scenario lists each reason it was
+         *     selected for, and a sentence per reason (`why`).
+         *
+         *     Also: the components the change reaches (the most affected first),
+         *     the irreversible actions among them and the tools the candidate
+         *     uses with more power than the base (`new_privileges`).
+         *
+         *     The impact is computed when asked: the graph and the scenario
+         *     library change over time; a release gate records what it ran. The
+         *     graph and simulation services are asked on the caller's behalf, for
+         *     the change set's project only. When one of them cannot answer, the
+         *     impact says so (`complete: false`, `problems`, `notes`) and lists
+         *     what is known; it is not an error. With `hashing-v1`, similarity is
+         *     lexical (shared words and identifiers), not semantic.
+         *
+         *     Needs read access to the change set's project.
+         */
+        get: operations["getChangeSetImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1373,6 +1416,157 @@ export interface components {
         CreatedChangeSet: components["schemas"]["ChangeSet"] & {
             /** @description False when the same change set was stored before (nothing was stored). */
             created: boolean;
+        };
+        /** @description A component of the dependency graph (graph service). */
+        GraphComponent: {
+            /** @description `AGENT`, `AGENT_VERSION`, `PROMPT`, `MODEL`, `TOOL`, `SERVICE`, `HTTP_API`, `SCENARIO`… (clients ignore kinds they do not know). */
+            kind: string;
+            key: string;
+        };
+        /** @description The part of the project's gate policy that selects scenarios. */
+        ImpactPolicy: {
+            always_run_tags: string[];
+            include_known_regressions: boolean;
+            max_depth: number;
+        };
+        ImpactProblem: {
+            /** @enum {string} */
+            service: "graph-service" | "simulation-service";
+            /** @description `NOT_CONFIGURED`, `UPSTREAM_UNAVAILABLE`, or the service's own error code. */
+            code: string;
+            message: string;
+        };
+        /** @description The change set item a similarity is about. */
+        ImpactItemRef: {
+            kind: string;
+            subject: string;
+            change: components["schemas"]["ChangeType"];
+        };
+        /**
+         * @description The scenario tests `via`, a component the change to `from` reaches
+         *     (`via` = `from` when the tested component itself changed).
+         */
+        ImpactGraphReason: {
+            from: components["schemas"]["GraphComponent"];
+            from_label: string;
+            via: components["schemas"]["GraphComponent"];
+            via_label: string;
+            /** @description The graph service's meaning; false when the link goes only through the agent or through a tool a prompt change does not name (a weaker link). */
+            direct: boolean;
+            /** @description Edges from the changed component to the scenario (the last is the test's own). */
+            hops: number;
+            score: number;
+            /** @description The graph service's path, from the changed component (its steps are the graph service's `Step`). */
+            path: Record<string, unknown>[];
+        };
+        ImpactSimilarity: {
+            item: components["schemas"]["ImpactItemRef"];
+            similarity: number;
+        };
+        ImpactReasons: {
+            graph: components["schemas"]["ImpactGraphReason"][];
+            similar: components["schemas"]["ImpactSimilarity"][];
+            always_run_tags: string[];
+            known_regression: boolean;
+        };
+        ImpactScenario: {
+            id?: components["schemas"]["Uuid"];
+            name: string;
+            agent: string | null;
+            twin: string | null;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            tags: string[];
+            /** @description Empty when the scenario library did not answer. */
+            source: string;
+            latest_version?: number;
+            description: string;
+            /** @description False for a scenario the graph links that the scenario library could not confirm (it did not answer). */
+            in_library: boolean;
+            reasons: components["schemas"]["ImpactReasons"];
+            /** @description A sentence per reason. */
+            why: string[];
+        };
+        ImpactCounts: {
+            scenarios: number;
+            graph: number;
+            similar: number;
+            always_run: number;
+            known_regression: number;
+        };
+        /** @description A component the change reaches (the graph service's `Affected`). */
+        ImpactAffected: {
+            component: components["schemas"]["GraphComponent"];
+            label: string;
+            attributes: Record<string, unknown>;
+            seed: boolean;
+            direct: boolean;
+            depth: number;
+            score: number;
+            severity: string;
+            certain: boolean;
+            factors: string[];
+            path: Record<string, unknown>[];
+        };
+        /** @description A policy or evaluator the graph links to the change. */
+        ImpactLinked: {
+            component: components["schemas"]["GraphComponent"];
+            label: string;
+            severity?: string;
+            weight: number;
+            reasons: {
+                via: components["schemas"]["GraphComponent"];
+                via_label: string;
+                direct: boolean;
+                score: number;
+                path: Record<string, unknown>[];
+            }[];
+        };
+        /** @description What the blast radius says besides scenarios. */
+        ImpactGraph: {
+            seeds: components["schemas"]["ChangeSeed"][];
+            /** @description Changed components the graph does not know. */
+            unresolved: components["schemas"]["ChangeSeed"][];
+            /** @description The most affected components (at most 50). */
+            affected: components["schemas"]["ImpactAffected"][];
+            affected_count: number;
+            policies: components["schemas"]["ImpactLinked"][];
+            evaluators: components["schemas"]["ImpactLinked"][];
+            max_depth: number;
+            truncated: boolean;
+        };
+        ImpactPrivilege: {
+            tool: string;
+            /** @enum {string} */
+            change: "added" | "escalated";
+            risk: string;
+            from?: string;
+        };
+        ChangeImpact: {
+            change_set_id: components["schemas"]["Uuid"];
+            project_id: components["schemas"]["Uuid"];
+            agent: string;
+            base_version: string;
+            candidate_version: string;
+            policy: components["schemas"]["ImpactPolicy"];
+            /** @description Both services answered in full. */
+            complete: boolean;
+            problems: components["schemas"]["ImpactProblem"][];
+            computed_at: components["schemas"]["Timestamp"];
+            /** @description Severest first, then by name. */
+            scenarios: components["schemas"]["ImpactScenario"][];
+            counts: components["schemas"]["ImpactCounts"];
+            /** @description Scenarios the graph links that are no active scenario of the agent in the library. */
+            unlinked_scenarios: string[];
+            graph: components["schemas"]["ImpactGraph"] | null;
+            irreversible_actions: components["schemas"]["ImpactAffected"][];
+            new_privileges: components["schemas"]["ImpactPrivilege"][];
+            /** @description The model of the similarity ("" when the scenario library did not answer). */
+            embedding_model: string;
+            min_similarity: number;
+            /** @description The scenario library selected more scenarios than it answered. */
+            truncated: boolean;
+            notes: string[];
         };
         ChangeSetPage: {
             items: components["schemas"]["ChangeSetSummary"][];
@@ -2897,6 +3091,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["Internal"];
+        };
+    };
+    getChangeSetImpact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The organization to act in, for users who belong to several. */
+                "X-AgentTwin-Org"?: components["parameters"]["Organization"];
+            };
+            path: {
+                change_set_id: components["parameters"]["ChangeSetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The impact of the change set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeImpact"];
                 };
             };
             400: components["responses"]["BadRequest"];

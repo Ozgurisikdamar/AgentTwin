@@ -591,9 +591,8 @@ async def test_a_runtime_denial_makes_a_trace_a_policy_violation() -> None:
         assert o["reasons"] == ["a policy denied one of its actions"]
         assert (g["taxonomy"], g["severity"]) == ("POLICY_VIOLATION", "high")
         assert o["observation"]["violations"] == ["policy_denied:refund_payment"]
-        assert await denials(ev, tid) == [
-            ("refund_payment", "refund_over_limit", "denied", "Refunds over 100 USD need a person's approval.")
-        ]
+        reason = "Refunds over 100 USD need a person's approval."
+        assert await denials(ev, tid) == [("refund_payment", "refund_over_limit", "denied", reason)]
         # A later fact about the trace reads it again and keeps the denial.
         assert (await mine(ev, outcome_recorded(ok))).outcome == "updated"
         [o] = await occurrences(ev, g["id"])

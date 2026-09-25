@@ -127,3 +127,8 @@ gen-api: ## Regenerate the web's API types from the OpenAPI documents
 build: ## Build all Go binaries and container images
 	$(GO) build ./...
 	$(COMPOSE) build
+
+.PHONY: cli
+cli: ## Build the agenttwin CLI into bin/agenttwin
+	$(GO) build -trimpath -ldflags "-X github.com/Ozgurisikdamar/AgentTwin/packages/gokit/buildinfo.Commit=$$(git rev-parse --short HEAD 2>/dev/null)" \
+		-o bin/agenttwin ./packages/cli/cmd/agenttwin

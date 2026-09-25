@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -33,6 +34,24 @@ func capturedEvaluation(t *testing.T) map[string]any {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// capture writes an answer to $AGENTTWIN_CAPTURE_DIR/<name>.json when set:
+// the CLI's tests read the control plane's real answers, captured this way.
+func capture(t *testing.T, name string, r resp) {
+	t.Helper()
+	dir := os.Getenv("AGENTTWIN_CAPTURE_DIR")
+	if dir == "" {
+		return
+	}
+	var v any
+	if err := json.Unmarshal(r.Raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.MarshalIndent(v, "", "  ")
+	if err := os.WriteFile(filepath.Join(dir, name+".json"), append(b, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // deepCopy copies a decoded JSON value.
@@ -316,6 +335,7 @@ func TestABadCandidateIsBlocked(t *testing.T) {
 	if created.Status != http.StatusCreated {
 		t.Fatalf("create: %d %s", created.Status, created.Raw)
 	}
+	capture(t, "release-created", created)
 	rel := created.Body["release"].(map[string]any)
 	releaseID := rel["id"].(string)
 	if rel["commit_sha"] != "4e5f6a7b" || rel["ci_url"] != "https://ci.example.com/runs/42" || rel["title"] != "Refund flow rewrite" ||
@@ -375,6 +395,7 @@ func TestABadCandidateIsBlocked(t *testing.T) {
 	if r.Status != 200 {
 		t.Fatalf("gate: %d %s", r.Status, r.Raw)
 	}
+	capture(t, "gate-block", r)
 	g := r.Body
 	decision := g["decision"].(map[string]any)
 	if g["status"] != "DECIDED" || g["effective_outcome"] != "BLOCK" || decision["outcome"] != "BLOCK" ||
@@ -581,6 +602,7 @@ func TestAnOverrideNeverRewritesTheDecision(t *testing.T) {
 	if r.Status != http.StatusCreated {
 		t.Fatalf("override: %d %s", r.Status, r.Raw)
 	}
+	capture(t, "gate-overridden", r)
 	g := r.Body
 	o := g["override"].(map[string]any)
 	if g["effective_outcome"] != "OVERRIDDEN" || g["exit_code"] != 0.0 || g["ci_fails"] != false ||
@@ -794,7 +816,9 @@ func TestAGoodCandidatePassesAndAnEmptySuiteWarns(t *testing.T) {
 	if _, err := fx.complete(t, gateEvaluationID(t, created), mirrored(fx.evidence)); err != nil {
 		t.Fatal(err)
 	}
-	g := fx.gate(fx.eng, releaseID, 0).Body
+	pass := fx.gate(fx.eng, releaseID, 0)
+	capture(t, "gate-pass", pass)
+	g := pass.Body
 	if g["effective_outcome"] != "PASS" || g["exit_code"] != 0.0 || g["ci_fails"] != false {
 		t.Fatalf("mirrored candidate = %v (rules %v)", g["effective_outcome"], g["decision"].(map[string]any)["rules"])
 	}
@@ -811,6 +835,7 @@ func TestAGoodCandidatePassesAndAnEmptySuiteWarns(t *testing.T) {
 	fx.set(func() { fx.scenarios = false })
 	requests := h.count(`SELECT count(*) FROM control.outbox WHERE event_type = 'evaluation.run_requested.v1'`)
 	empty := h.request("POST", "/api/v1/releases/"+releaseID+"/evaluate", nil, bearer(fx.eng))
+	capture(t, "gate-warn", empty)
 	if empty.Status != http.StatusCreated || empty.Body["status"] != "DECIDED" || empty.Body["effective_outcome"] != "WARN" ||
 		empty.Body["exit_code"] != 2.0 || empty.Body["ci_fails"] != false || empty.Body["eval_run_id"] != nil {
 		t.Fatalf("empty suite: %d %s", empty.Status, empty.Raw)
@@ -829,6 +854,7 @@ func TestAGoodCandidatePassesAndAnEmptySuiteWarns(t *testing.T) {
 		t.Fatalf("policy: %d %s", r.Status, r.Raw)
 	}
 	strict := h.request("POST", "/api/v1/releases/"+releaseID+"/evaluate", nil, bearer(fx.eng))
+	capture(t, "gate-warn-fails-ci", strict)
 	if strict.Body["effective_outcome"] != "WARN" || strict.Body["exit_code"] != 2.0 || strict.Body["ci_fails"] != true ||
 		strict.Body["policy"].(map[string]any)["warn_fails_ci"] != true {
 		t.Fatalf("strict policy: %s", strict.Raw)
@@ -879,6 +905,15 @@ func TestReleaseAccessAndValidation(t *testing.T) {
 		t.Fatalf("key: %d %s", key.Status, key.Raw)
 	}
 	ci := map[string]string{"X-AgentTwin-Api-Key": key.Body["key"].(string), "Idempotency-Key": "ci-run-42-release"}
+	if os.Getenv("AGENTTWIN_CAPTURE_DIR") != "" {
+		// What the CLI asks besides releases, answered to a CI key.
+		keyOnly := map[string]string{"X-AgentTwin-Api-Key": ci["X-AgentTwin-Api-Key"]}
+		capture(t, "me-ci", h.request("GET", "/api/v1/me", nil, keyOnly))
+		capture(t, "projects-ci", h.request("GET", "/api/v1/projects", nil, keyOnly))
+		manifest := map[string]string{"X-AgentTwin-Api-Key": ci["X-AgentTwin-Api-Key"], "Content-Type": "application/yaml"}
+		capture(t, "manifest-validation", h.request("POST", "/api/v1/manifests/validate", readManifest(t, "1.3.0"), manifest))
+		capture(t, "registered-version", h.request("POST", "/api/v1/projects/"+fx.pid+"/agent-manifests", readManifest(t, "1.3.0"), manifest))
+	}
 	body := map[string]any{"project_id": fx.pid, "agent": "support-refund-agent", "baseline_version": "1.2.4",
 		"candidate_version": "1.3.0", "evaluate": false}
 	first := h.request("POST", "/api/v1/releases", body, ci)

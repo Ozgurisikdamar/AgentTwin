@@ -445,6 +445,7 @@ packages/
   gokit/              shared Go infrastructure primitives
   core-py/            shared Python kit (service runtime, jobs, evaluators, contract checks)
   sdk-python/         Python SDK
+  cli/                the agenttwin CLI (release check for CI, agents, doctor)
   scenario-schema/    versioned scenario, twin, manifest and policy schemas
 
 demo/
@@ -462,7 +463,7 @@ infra/
   grafana/            local observability provisioning
 ```
 
-The runtime gateway, the CLI and the TypeScript SDK join as their phases land.
+The runtime gateway and the TypeScript SDK join as their phases land.
 
 ---
 

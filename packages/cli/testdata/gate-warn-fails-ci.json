@@ -1,0 +1,351 @@
+{
+  "ci_fails": true,
+  "decided_at": "2026-09-25T14:15:45.501266Z",
+  "decision": {
+    "ci_fails": true,
+    "counts": {
+      "evaluated": 0,
+      "failed": 0,
+      "improved": 0,
+      "incomplete": 0,
+      "known_regressions": 0,
+      "new_critical_failures": 0,
+      "passed": 0,
+      "regressed": 0,
+      "required": 0
+    },
+    "coverage": [
+      {
+        "covered": 0,
+        "missing": [],
+        "name": "Required scenarios passed",
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "missing": [
+          "escalate_to_human",
+          "export_customer_data",
+          "get_refund_policy",
+          "lookup_customer",
+          "lookup_order",
+          "refund_payment",
+          "send_email"
+        ],
+        "name": "Tools exercised by the candidate",
+        "total": 7
+      },
+      {
+        "covered": 0,
+        "missing": [
+          "export_customer_data",
+          "refund_payment"
+        ],
+        "name": "Critical tools exercised by the candidate",
+        "total": 2
+      },
+      {
+        "covered": 0,
+        "missing": [
+          "refund_payment"
+        ],
+        "name": "Irreversible actions in reach tested",
+        "total": 1
+      },
+      {
+        "covered": 0,
+        "missing": [],
+        "name": "Known regressions replayed",
+        "total": 0
+      },
+      {
+        "covered": 0,
+        "missing": [
+          "refund_payment"
+        ],
+        "name": "Affected components tested",
+        "total": 1
+      }
+    ],
+    "exit_code": 2,
+    "incomplete": false,
+    "outcome": "WARN",
+    "risk_index": {
+      "factors": [
+        {
+          "cap": 60,
+          "contribution": 0,
+          "count": 0,
+          "name": "blocking failures",
+          "points": 30
+        },
+        {
+          "cap": 25,
+          "contribution": 0,
+          "count": 0,
+          "name": "missing evidence",
+          "points": 25
+        },
+        {
+          "cap": 20,
+          "contribution": 0,
+          "count": 0,
+          "name": "non-critical regressions",
+          "points": 5
+        },
+        {
+          "cap": 15,
+          "contribution": 0,
+          "count": 0,
+          "name": "untested components in reach",
+          "points": 3
+        },
+        {
+          "cap": 20,
+          "contribution": 0,
+          "count": 0,
+          "name": "new privileges",
+          "points": 10
+        },
+        {
+          "cap": 15,
+          "contribution": 5,
+          "count": 1,
+          "name": "irreversible actions in reach",
+          "points": 5
+        },
+        {
+          "cap": 15,
+          "contribution": 0,
+          "count": 0,
+          "name": "latency, cost or semantic regressions",
+          "points": 5
+        },
+        {
+          "cap": 10,
+          "contribution": 0,
+          "count": 0,
+          "name": "undecided evaluations",
+          "points": 2
+        }
+      ],
+      "formula": "sum over factors of min(count × points, cap), at most 100; a sorting aid, not a probability, and never the decision",
+      "value": 5
+    },
+    "rules": [
+      {
+        "evidence": [
+          {
+            "summary": "No scenario is required for this change: nothing about the candidate was simulated."
+          },
+          {
+            "summary": "The irreversible action refund_payment is within the change's reach, and no scenario of the suite tests it."
+          }
+        ],
+        "outcome": "WARN",
+        "rule": "insufficient_coverage",
+        "statement": "The suite should exercise every irreversible action the change can reach.",
+        "title": "Coverage gap"
+      }
+    ],
+    "rules_version": "1.0.0",
+    "summary": "Passed with warnings: coverage gap (2)."
+  },
+  "effective_outcome": "WARN",
+  "eval_run_id": null,
+  "evidence_sha256": "76a31fc489e2100b8b9312911be1020a1a941b00f45ec7260cfa87e14199f1eb",
+  "evidence_verified": true,
+  "exit_code": 2,
+  "impact": {
+    "agent": "support-refund-agent",
+    "base_version": "1.2.4",
+    "candidate_version": "1.3.0",
+    "change_set_id": "01a0d8ec-1397-7286-8f9b-c1bd93d07fa1",
+    "complete": true,
+    "computed_at": "2026-09-25T14:15:45.498777294Z",
+    "counts": {
+      "always_run": 0,
+      "graph": 0,
+      "known_regression": 0,
+      "scenarios": 0,
+      "similar": 0
+    },
+    "embedding_model": "hashing-v1",
+    "graph": {
+      "affected": [
+        {
+          "attributes": {
+            "risk": "WRITE_IRREVERSIBLE"
+          },
+          "certain": true,
+          "component": {
+            "key": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+            "kind": "PROMPT"
+          },
+          "depth": 0,
+          "direct": true,
+          "factors": [
+            "irreversible"
+          ],
+          "label": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+          "path": [
+            {
+              "component": {
+                "key": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+                "kind": "PROMPT"
+              },
+              "confidence": null,
+              "direction": null,
+              "edge": null,
+              "label": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+              "sources": []
+            }
+          ],
+          "score": 1,
+          "seed": true,
+          "severity": "critical"
+        },
+        {
+          "attributes": {
+            "risk": "WRITE_IRREVERSIBLE"
+          },
+          "certain": true,
+          "component": {
+            "key": "refund_payment",
+            "kind": "TOOL"
+          },
+          "depth": 2,
+          "direct": true,
+          "factors": [
+            "irreversible"
+          ],
+          "label": "refund_payment",
+          "path": [
+            {
+              "component": {
+                "key": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+                "kind": "PROMPT"
+              },
+              "confidence": null,
+              "direction": null,
+              "edge": null,
+              "label": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+              "sources": []
+            }
+          ],
+          "score": 0.9,
+          "seed": false,
+          "severity": "critical"
+        }
+      ],
+      "affected_count": 2,
+      "evaluators": [],
+      "max_depth": 4,
+      "policies": [],
+      "seeds": [
+        {
+          "change": "modified",
+          "component": {
+            "key": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+            "kind": "PROMPT"
+          }
+        }
+      ],
+      "truncated": false,
+      "unresolved": []
+    },
+    "irreversible_actions": [
+      {
+        "attributes": {
+          "risk": "WRITE_IRREVERSIBLE"
+        },
+        "certain": true,
+        "component": {
+          "key": "refund_payment",
+          "kind": "TOOL"
+        },
+        "depth": 2,
+        "direct": true,
+        "factors": [
+          "irreversible"
+        ],
+        "label": "refund_payment",
+        "path": [
+          {
+            "component": {
+              "key": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+              "kind": "PROMPT"
+            },
+            "confidence": null,
+            "direction": null,
+            "edge": null,
+            "label": "49482e32190eeebeffc5a2f12661942d91874ec700df4968aae96ab2b811fab5",
+            "sources": []
+          }
+        ],
+        "score": 0.9,
+        "seed": false,
+        "severity": "critical"
+      }
+    ],
+    "min_similarity": 0.25,
+    "new_privileges": [],
+    "notes": [],
+    "policy": {
+      "always_run_tags": [
+        "critical",
+        "security"
+      ],
+      "include_known_regressions": true,
+      "max_depth": 4
+    },
+    "problems": [],
+    "project_id": "01a0d8ec-1354-7cdd-97b9-d8a6c1f0b184",
+    "scenarios": [],
+    "truncated": false,
+    "unlinked_scenarios": [
+      "gone-scenario"
+    ]
+  },
+  "override": null,
+  "policy": {
+    "allow_reviewer_override": true,
+    "always_run_tags": [
+      "critical",
+      "security"
+    ],
+    "cost_regression_pct": 15,
+    "include_known_regressions": true,
+    "judge_min_agreement": 0.8,
+    "latency_regression_min_ms": 250,
+    "latency_regression_pct": 25,
+    "max_depth": 4,
+    "max_gate_cost_usd": 20,
+    "max_production_samples": 100,
+    "semantic_regression_drop": 0.1,
+    "warn_fails_ci": true
+  },
+  "release_evaluation_id": "01a0d8ec-145d-704a-bead-bf6d6c70e119",
+  "release_id": "01a0d8ec-13a9-7bc4-b3cc-0a9f950fd372",
+  "requested_at": "2026-09-25T14:15:45.501266Z",
+  "requested_by": "user:01a0d8ec-1352-7ac2-8907-8cc3418ad170",
+  "revision": 3,
+  "status": "DECIDED",
+  "suite": [],
+  "summary": {
+    "ci_fails": true,
+    "cost": null,
+    "cost_delta_usd": null,
+    "eval_run_status": null,
+    "evaluated": 0,
+    "exit_code": 2,
+    "failed": 0,
+    "latency_p95_delta_ms": null,
+    "new_critical_failures": 0,
+    "regressed": 0,
+    "rules": [
+      "insufficient_coverage"
+    ],
+    "scenarios": 0
+  }
+}

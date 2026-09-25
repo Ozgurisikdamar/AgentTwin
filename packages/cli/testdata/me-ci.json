@@ -1,0 +1,28 @@
+{
+  "organization": {
+    "created_at": "2026-09-25T14:19:13.502415Z",
+    "id": "01a0d8ef-40df-72b2-af0e-132aeb28a2b4",
+    "name": "Demo Co",
+    "slug": "demo"
+  },
+  "permissions": [
+    "read",
+    "agent.write",
+    "scenario.write",
+    "simulation.run",
+    "eval.run",
+    "release.write",
+    "policy.test"
+  ],
+  "principal": {
+    "org": "01a0d8ef-40df-72b2-af0e-132aeb28a2b4",
+    "projects": [
+      "01a0d8ef-40e9-72ad-a388-8fd4afeb0b91"
+    ],
+    "role": "API_KEY",
+    "scopes": [
+      "ci"
+    ],
+    "sub": "apikey:01a0d8ef-413e-7ec6-92c0-aed15540fa20"
+  }
+}

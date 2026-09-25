@@ -130,8 +130,8 @@ if is_running postgres && $COMPOSE exec -T postgres pg_isready -q -U "${POSTGRES
     "SELECT default_version FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | tr -d '[:space:]')
   [ -n "$vec" ] && ok "pgvector $vec available" || fail "pgvector extension is not available (use the pgvector/pgvector image)"
   schemas=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
-    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','evaluation','graph','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
-  [ "$schemas" = "control,evaluation,graph,simulation,trace" ] && ok "service schemas: control, evaluation, graph, simulation, trace" ||
+    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','evaluation','graph','runtime','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
+  [ "$schemas" = "control,evaluation,graph,runtime,simulation,trace" ] && ok "service schemas: control, evaluation, graph, runtime, simulation, trace" ||
     fail "service schemas missing (found: ${schemas:-none})"
 else
   fail "postgres is not ready ($COMPOSE logs postgres)"
@@ -166,7 +166,7 @@ export_errors=$($COMPOSE logs --no-color --since 15m otel-collector 2>/dev/null 
 # ------------------------------------------------------------------ migrations
 section "Migrations"
 # service -> its binary inside the image (Go services: /app/service)
-for entry in control-plane:/app/service trace-service:/app/service graph-service:/app/service \
+for entry in control-plane:/app/service trace-service:/app/service graph-service:/app/service runtime-gateway:/app/service \
   simulation-service:simulation-service evaluation-service:evaluation-service; do
   svc=${entry%%:*}
   bin=${entry#*:}
@@ -194,7 +194,7 @@ probe() { # name url expected
   [ "$code" = "$3" ] && ok "$1 ($2)" || fail "$1 returned '${code:-no response}' ($2)"
 }
 probe "control plane ready" "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/health/ready" 200
-for svc in trace-service graph-service; do
+for svc in trace-service graph-service runtime-gateway; do
   if $COMPOSE exec -T "$svc" /app/service healthcheck >/dev/null 2>&1; then ok "$svc ready"; else fail "$svc is not ready ($COMPOSE logs $svc)"; fi
 done
 for entry in simulation-service:simulation-service simulation-worker:simulation-service \

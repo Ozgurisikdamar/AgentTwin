@@ -45,7 +45,11 @@ What exists already:
   agent's hot path, so it is Go, like the other latency-sensitive services.
   Callers reach it through the control plane, which authenticates them and
   forwards with an internal token (ADR-0009): `/gateway/v1` is added to the
-  proxy's ownership table. A request costs one more hop; the gateway verifying
+  proxy's ownership table. It is mounted beside `/api`, with the same
+  authentication and rate limits but without the edge's `Idempotency-Key`
+  replay: that key belongs to the tool call, so the edge passes it through
+  and the gateway enforces it (the edge answering a retry itself would hide
+  an unknown outcome). A request costs one more hop; the gateway verifying
   API keys itself is the upgrade when that hop matters.
 
 * **The invoke contract is the tool contract.** `POST /gateway/v1/tools/{tool}`
@@ -73,7 +77,9 @@ What exists already:
   service names only through `RUNTIME_EGRESS_PRIVATE_HOSTS`). Every call goes
   through `netguard`, which checks the address again when it dials, so a DNS
   answer that changes to a private or metadata address is still refused.
-  Irreversible tools require an idempotency key by default.
+  Redirects are never followed (they would leave the checked host) and plain
+  HTTP is refused when `APP_ENV=production`. Irreversible tools require an
+  idempotency key by default.
 
 * **The action and its hash.** The action is the organization, project,
   agent, tool and arguments. Its hash is the SHA-256 of their canonical JSON.
@@ -143,7 +149,9 @@ What exists already:
   in flight is `409 IDEMPOTENCY_IN_PROGRESS`. A timeout leaves the outcome
   unknown: the next call with the key is forwarded again, with the key, for
   the tool to deduplicate. The key is forwarded to the tool as
-  `Idempotency-Key`.
+  `Idempotency-Key`. Expired records are deleted (the key is free again
+  either way), and the per-trace tool counters after seven days: a
+  conversation that outlives them counts from zero again.
 
 * **Record and signals.** Every request that reaches a decision is recorded
   (append-only, enforced by a trigger): the action hash, effect, deciding and

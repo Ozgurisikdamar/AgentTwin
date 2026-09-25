@@ -47,7 +47,14 @@ var Routes = []Route{
 	{"/api/v1/approvals", "runtime-gateway"},
 	{"/api/v1/policy-decisions", "runtime-gateway"},
 	{"/api/v1/tool-endpoints", "runtime-gateway"},
+	{GatewayPrefix, "runtime-gateway"},
 }
+
+// GatewayPrefix is where agents call their tools through the runtime gateway
+// (ADR-0033). It is served beside /api, not under it: the edge's
+// Idempotency-Key replay does not apply there, because the key belongs to the
+// tool call — the gateway enforces it and forwards it to the tool.
+const GatewayPrefix = "/gateway/v1"
 
 // OrgProjects returns the ids of an organization's projects.
 type OrgProjects func(ctx context.Context, orgID string) ([]string, error)
@@ -99,8 +106,13 @@ func New(tokens *authn.TokenService, targets map[string]string, projects OrgProj
 				pr.SetURL(target)
 				pr.Out.Host = target.Host
 				// Client credentials never travel to internal services.
-				for _, h := range []string{"Authorization", "Cookie", "X-Agenttwin-Api-Key", "X-Agenttwin-Org", "Idempotency-Key"} {
+				for _, h := range []string{"Authorization", "Cookie", "X-Agenttwin-Api-Key", "X-Agenttwin-Org"} {
 					pr.Out.Header.Del(h)
+				}
+				// The edge answers an API request's Idempotency-Key itself; a
+				// tool call's key is the gateway's to enforce.
+				if !isGatewayPath(pr.In.URL.Path) {
+					pr.Out.Header.Del("Idempotency-Key")
 				}
 				pr.SetXForwarded()
 				if tok, ok := pr.In.Context().Value(tokenKey{}).(string); ok {
@@ -131,6 +143,8 @@ func New(tokens *authn.TokenService, targets map[string]string, projects OrgProj
 	sort.Slice(p.routes, func(i, j int) bool { return len(p.routes[i].Prefix) > len(p.routes[j].Prefix) })
 	return p, nil
 }
+
+func isGatewayPath(path string) bool { return strings.HasPrefix(path, GatewayPrefix+"/") }
 
 // Match returns the owning service for a path.
 func (p *Proxy) Match(path string) (string, bool) {

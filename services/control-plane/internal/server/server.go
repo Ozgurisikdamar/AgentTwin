@@ -170,8 +170,21 @@ func New(ctx context.Context, pool *pgxpool.Pool, tokens *authn.TokenService, lo
 	apiSrv.InternalRoutes(internal)
 	internalHandler := httpx.Chain(internal, authn.RequireInternal(tokens, "control-plane"))
 
+	// Agents call their tools here (ADR-0033): authenticated and rate limited
+	// like the API, without the edge's Idempotency-Key replay (the key is the
+	// tool call's, enforced by the gateway).
+	gatewayHandler := httpx.Chain(s.Proxy,
+		httpx.RateLimit(ipLimiter, clientIP),
+		authenticator.Middleware(nil),
+		httpx.RateLimit(principalLimiter, func(r *http.Request) string {
+			p, _ := authn.FromContext(r.Context())
+			return p.OrgID + "/" + p.Actor
+		}),
+	)
+
 	root := http.NewServeMux()
 	root.Handle("/api/", publicHandler)
+	root.Handle(proxy.GatewayPrefix+"/", gatewayHandler)
 	root.Handle("/internal/", internalHandler)
 	s.Handler = root
 	return s, nil

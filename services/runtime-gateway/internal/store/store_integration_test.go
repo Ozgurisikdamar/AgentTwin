@@ -428,6 +428,40 @@ func TestIdempotencyRecords(t *testing.T) {
 	}
 }
 
+// Expired idempotency records and old trace calls are deleted; live ones
+// stay.
+func TestExpiredRecordsArePurged(t *testing.T) {
+	s, pool, _ := migrated(t)
+	ctx := context.Background()
+	sc := store.Scope{OrgID: ids.New(), ProjectID: ids.New()}
+	now := t0.Add(store.TraceCallRetention + time.Hour)
+	hash := strings.Repeat("1", 64)
+	for key, at := range map[string]time.Time{"expired": t0, "live": now.Add(-time.Hour)} {
+		if err := inTx(t, pool, func(tx pgx.Tx) error { return s.ClaimIdem(ctx, tx, sc, "refund_payment", key, hash, ids.New(), at) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for trace, at := range map[string]time.Time{strings.Repeat("a", 32): t0, strings.Repeat("b", 32): now.Add(-time.Hour)} {
+		if err := s.RecordTraceCall(ctx, pool, sc, trace, "refund_payment", hash, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := s.PurgeExpired(ctx, now)
+	if err != nil || n != 2 {
+		t.Fatalf("purged %d %v", n, err)
+	}
+	var keys, traces string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(key, ',') FROM idempotency_record`).Scan(&keys); err != nil || keys != "live" {
+		t.Fatalf("kept keys %q %v", keys, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT string_agg(trace_id, ',') FROM trace_tool_call`).Scan(&traces); err != nil || traces != strings.Repeat("b", 32) {
+		t.Fatalf("kept traces %q %v", traces, err)
+	}
+	if n, err := s.PurgeExpired(ctx, now); err != nil || n != 0 {
+		t.Fatalf("nothing left to purge: %d %v", n, err)
+	}
+}
+
 func TestTraceCallsCountOtherActions(t *testing.T) {
 	s, pool, _ := migrated(t)
 	ctx := context.Background()

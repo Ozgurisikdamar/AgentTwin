@@ -177,3 +177,37 @@ func (s *Store) RecordTraceCall(ctx context.Context, q Querier, sc Scope, traceI
 		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, sc.OrgID, sc.ProjectID, traceID, tool, actionHash, at)
 	return err
 }
+
+// TraceCallRetention is how long the actions forwarded in a trace are kept
+// for trace.calls. A conversation that outlives it counts from zero again.
+const TraceCallRetention = 7 * 24 * time.Hour
+
+// PurgeExpired deletes idempotency records past their expiry (an expired key
+// is free again either way) and trace calls older than TraceCallRetention,
+// in batches so that no purge holds locks for long. It returns the rows
+// deleted.
+func (s *Store) PurgeExpired(ctx context.Context, now time.Time) (int64, error) {
+	var total int64
+	for _, q := range []struct {
+		sql string
+		arg time.Time
+	}{
+		{`DELETE FROM idempotency_record WHERE (organization_id, project_id, tool, key) IN (
+			SELECT organization_id, project_id, tool, key FROM idempotency_record WHERE expires_at < $1 LIMIT 5000)`, now},
+		{`DELETE FROM trace_tool_call WHERE (organization_id, project_id, trace_id, tool, action_hash) IN (
+			SELECT organization_id, project_id, trace_id, tool, action_hash FROM trace_tool_call WHERE first_at < $1 LIMIT 5000)`,
+			now.Add(-TraceCallRetention)},
+	} {
+		for {
+			tag, err := s.Pool.Exec(ctx, q.sql, q.arg)
+			if err != nil {
+				return total, err
+			}
+			total += tag.RowsAffected()
+			if tag.RowsAffected() < 5000 {
+				break
+			}
+		}
+	}
+	return total, nil
+}

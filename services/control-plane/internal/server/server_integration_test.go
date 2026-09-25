@@ -622,6 +622,81 @@ func TestProxyForwardsWithInternalTokenAndStripsClientCredentials(t *testing.T) 
 	}
 }
 
+// Agents call their tools through the edge at /gateway/v1 (ADR-0033). The
+// key authenticates the call and never travels further; the Idempotency-Key
+// and the approval token do, because they belong to the tool call: the edge
+// must not answer a retry itself, the gateway decides what a retry means.
+func TestAgentsReachTheGatewayThroughTheEdge(t *testing.T) {
+	type seen struct{ path, idem, approval, apiKey, auth string }
+	var mu sync.Mutex
+	var calls []seen
+	tokens, _ := authn.NewTokenService(internalSecret)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, _, err := tokens.Verify(authn.BearerToken(r), "runtime-gateway"); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		mu.Lock()
+		calls = append(calls, seen{r.URL.Path, r.Header.Get("Idempotency-Key"), r.Header.Get("X-AgentTwin-Approval-Token"),
+			r.Header.Get("X-AgentTwin-Api-Key"), r.Header.Get("Authorization")})
+		n := len(calls)
+		mu.Unlock()
+		httpx.WriteJSON(w, 201, map[string]any{"call": n})
+	}))
+	defer upstream.Close()
+	h := newHarness(t, map[string]string{"runtime-gateway": upstream.URL})
+	agent := map[string]string{"X-AgentTwin-Api-Key": demoKey, "Idempotency-Key": "refund-ORD-1003",
+		"X-AgentTwin-Approval-Token": "apt_token-for-the-exact-action"}
+
+	for i := 1; i <= 2; i++ {
+		r := h.request("POST", "/gateway/v1/tools/refund_payment", map[string]any{"amount": 250}, agent)
+		if r.Status != 201 || r.Body["call"] != float64(i) || r.Header.Get("Idempotent-Replayed") != "" {
+			t.Fatalf("call %d: %d replayed=%q %s", i, r.Status, r.Header.Get("Idempotent-Replayed"), r.Raw)
+		}
+	}
+	mu.Lock()
+	if len(calls) != 2 {
+		t.Fatalf("the gateway saw %d calls, want both", len(calls))
+	}
+	for _, c := range calls {
+		if c.path != "/gateway/v1/tools/refund_payment" || c.idem != "refund-ORD-1003" ||
+			c.approval != "apt_token-for-the-exact-action" || c.apiKey != "" || strings.Contains(c.auth, demoKey) {
+			t.Fatalf("forwarded %+v", c)
+		}
+	}
+	calls = nil
+	mu.Unlock()
+
+	// The management API under /api keeps the edge's replay: the service
+	// never sees the key and a retry is answered by the edge.
+	for i := 0; i < 2; i++ {
+		r := h.request("POST", "/api/v1/policies", map[string]any{"name": "refund-limit"},
+			map[string]string{"X-AgentTwin-Api-Key": demoKey, "Idempotency-Key": "create-policy-0001"})
+		if r.Status != 201 {
+			t.Fatalf("policy create %d: %d %s", i, r.Status, r.Raw)
+		}
+	}
+	mu.Lock()
+	if len(calls) != 1 || calls[0].idem != "" {
+		t.Fatalf("management calls forwarded: %+v", calls)
+	}
+	calls = nil
+	mu.Unlock()
+
+	// Unauthenticated calls stop at the edge; only /gateway/v1 is served.
+	if r := h.request("POST", "/gateway/v1/tools/refund_payment", map[string]any{}, nil); r.Status != 401 {
+		t.Fatalf("unauthenticated tool call: %d", r.Status)
+	}
+	if r := h.request("POST", "/gateway/v2/tools/refund_payment", map[string]any{}, agent); r.Status != 404 {
+		t.Fatalf("unknown gateway version: %d", r.Status)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(calls) != 0 {
+		t.Fatalf("refused calls reached the gateway: %+v", calls)
+	}
+}
+
 func TestProductionRefusesDevelopmentAuth(t *testing.T) {
 	env := map[string]string{
 		"APP_ENV": "production", "AUTH_MODE": "dev",

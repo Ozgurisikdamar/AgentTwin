@@ -239,6 +239,7 @@ CREATE TABLE trace_tool_call (
     first_at         timestamptz NOT NULL,
     PRIMARY KEY (organization_id, project_id, trace_id, tool, action_hash)
 );
+CREATE INDEX trace_tool_call_age ON trace_tool_call (first_at);
 
 CREATE TABLE outbox (
     id            uuid PRIMARY KEY,

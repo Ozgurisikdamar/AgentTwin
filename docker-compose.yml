@@ -174,6 +174,7 @@ services:
       GRAPH_SERVICE_URL: http://graph-service:8082
       SIMULATION_SERVICE_URL: http://simulation-service:8084
       EVALUATION_SERVICE_URL: http://evaluation-service:8083
+      RUNTIME_GATEWAY_URL: http://runtime-gateway:8086
     ports: ["127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}:8080"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -202,6 +203,25 @@ services:
     image: agenttwin/graph-service:${AGENTTWIN_VERSION:-dev}
     environment:
       <<: *service-env
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    <<: *hardening
+
+  # Runtime containment (spec §33-41, ADR-0033): agents call their tools
+  # through it; the project's active policies allow, deny or hold each call
+  # for a person, and every decision is recorded. Tools are reachable only
+  # at hosts on its egress allowlist.
+  runtime-gateway:
+    build:
+      <<: *go-build
+      args: {SERVICE: runtime-gateway, VERSION: "${AGENTTWIN_VERSION:-dev}"}
+    image: agenttwin/runtime-gateway:${AGENTTWIN_VERSION:-dev}
+    environment:
+      <<: *service-env
+      RUNTIME_EGRESS_ALLOWED_HOSTS: ${RUNTIME_EGRESS_ALLOWED_HOSTS:-}
+      # Compose service names resolve to private addresses; only these may.
+      RUNTIME_EGRESS_PRIVATE_HOSTS: ${RUNTIME_EGRESS_PRIVATE_HOSTS:-demo-tools}
     depends_on:
       postgres: {condition: service_healthy}
       rabbitmq: {condition: service_healthy}

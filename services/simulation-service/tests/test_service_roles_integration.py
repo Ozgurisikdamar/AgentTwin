@@ -23,6 +23,7 @@ from prometheus_client.parser import text_string_to_metric_families
 
 from agenttwin_core.auth import Principal, Role, TokenService
 from agenttwin_core.config import Environment, Loader
+from agenttwin_core.embeddings import HashingEmbedder
 from agenttwin_core.logx import get_logger
 from agenttwin_core.service import Runtime, ServiceConfig, start_runtime
 from agenttwin_core.testing import amqp_url, temp_database
@@ -105,17 +106,34 @@ async def wait_for(check: Any, timeout: float, what: str) -> Any:
     raise AssertionError(f"timed out waiting for {what}")
 
 
+class FakeEmbeddings:
+    """An OpenAI-compatible ``/embeddings`` endpoint that embeds like
+    hashing-v1 (a hosted model, as far as the service can tell)."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str | None, list[str]]] = []
+        self.local = HashingEmbedder()
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        self.calls.append((request.url.path, request.headers.get("authorization"), body["input"]))
+        data = [{"index": i, "embedding": self.local.embed_one(t)} for i, t in enumerate(body["input"])]
+        return httpx.Response(200, json={"object": "list", "data": data, "model": body["model"]})
+
+
 async def test_serve_and_worker_roles_over_rabbitmq() -> None:
     broker_url = amqp_url()
     await purge(broker_url, QUEUE, ROUTED)
     tokens = TokenService(SECRET)
     control_plane, traces = FakeControlPlane(tokens), FakeTraceService(tokens)
+    embeddings = FakeEmbeddings()
     engineer = Principal(org_id=ORG, actor="user:engineer", role=Role.ENGINEER, project_ids=(PROJECT,))
     runtimes: list[Runtime] = []
     async with (
         temp_database() as database_url,
         serve_app(ASGIFake(control_plane)) as control_plane_url,
         serve_app(ASGIFake(traces)) as trace_service_url,
+        serve_app(ASGIFake(embeddings)) as embeddings_url,
     ):
         with demo_agent() as (agent_server, exporter):
             sock = free_socket()
@@ -135,6 +153,12 @@ async def test_serve_and_worker_roles_over_rabbitmq() -> None:
                     "SIMULATION_POLL_INTERVAL": "60s",
                     "SIMULATION_OUTCOME_RETRY": "100ms",
                     "SIMULATION_LEASE_DURATION": "10s",
+                    # Scenario matching with a hosted embedding model.
+                    "EMBEDDING_PROVIDER": "openai_compatible",
+                    "EMBEDDING_MODEL": "fake-semantic-1",
+                    "EMBEDDING_DIMENSIONS": "256",
+                    "EMBEDDING_BASE_URL": embeddings_url + "/v1",
+                    "EMBEDDING_API_KEY": "sk-fake-embeddings",
                 }
             )
             cfg = load_config(loader)
@@ -171,6 +195,20 @@ async def test_serve_and_worker_roles_over_rabbitmq() -> None:
                     ) as worker_http,
                 ):
                     await exercise(api, worker_http, serve_rt, broker_url, control_plane, traces)
+                    # The configured embedding model selects scenarios.
+                    r = await api.post(
+                        "/api/v1/scenarios/match",
+                        json={
+                            "project_id": PROJECT,
+                            "queries": [{"id": "p", "text": "refund timeout retry"}],
+                        },
+                    )
+                    assert r.status_code == 200, r.text
+                    assert r.json()["embedding_model"] == "fake-semantic-1"
+                    assert [m["name"] for m in r.json()["scenarios"]] == [TIMEOUT]
+                    [(path, auth, _), *_] = embeddings.calls
+                    assert (path, auth) == ("/v1/embeddings", "Bearer sk-fake-embeddings")
+                    assert sum(len(texts) for *_, texts in embeddings.calls) == 3  # two scenarios, one query
                     roots = [sp for sp in exporter.get_finished_spans() if sp.parent is None]
                     assert len(roots) == 2
             finally:

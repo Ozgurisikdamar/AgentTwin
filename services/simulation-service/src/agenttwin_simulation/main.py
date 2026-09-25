@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from agenttwin_core.embeddings import build_embedder
 from agenttwin_core.evaluators import default_registry
 from agenttwin_core.service import Runtime, Spec
 from agenttwin_core.service import main as service_main
@@ -54,11 +55,21 @@ async def build_serve(rt: Runtime, cfg: Any) -> FastAPI:
     reg = adapters()
     metrics = SimulationMetrics.on(rt.metrics.registry, rt.metrics.service)
     control_plane = ControlPlaneClient(cfg.control_plane_url, rt.tokens)
+    embedder = build_embedder(cfg.embedding)
+    rt.log.info(
+        "scenario embeddings", provider=cfg.embedding.provider, model=embedder.model, dims=embedder.dims
+    )
     app = build_app(
         service=rt.metrics.service, version=VERSION, health=rt.health, tokens=rt.tokens, audience=NAME
     )
     SimulationAPI(
-        store=store, cfg=cfg, registry=registry, control_plane=control_plane, log=rt.log, adapters=reg
+        store=store,
+        cfg=cfg,
+        registry=registry,
+        control_plane=control_plane,
+        log=rt.log,
+        adapters=reg,
+        embedder=embedder,
     ).routes(app)
     TwinEndpoint(store, cfg, adapters=reg, metrics=metrics).routes(app)
     rt.start_relay(SCHEMA)
@@ -66,6 +77,9 @@ async def build_serve(rt: Runtime, cfg: Any) -> FastAPI:
     async def close_clients() -> None:
         await rt.stop.wait()
         await control_plane.close()
+        close = getattr(embedder, "close", None)
+        if close is not None:
+            await close()
 
     rt.spawn("clients", close_clients)
     return app

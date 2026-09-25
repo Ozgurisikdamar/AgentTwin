@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 from agenttwin_core.config import Loader
+from agenttwin_core.embeddings import EmbeddingSettings, load_embedding_settings
 
 __all__ = ["AgentEndpoint", "SimulationConfig", "load_config", "parse_agent_endpoints"]
 
@@ -42,6 +43,8 @@ class SimulationConfig:
     outcome_retry_s: float = 3.0
     outcome_max_attempts: int = 40
     max_run_attempts: int = 3
+    # The embeddings of scenario matching (ADR-0014): hashing-v1 unless configured.
+    embedding: EmbeddingSettings = field(default_factory=EmbeddingSettings)
 
 
 def parse_agent_endpoints(raw: str) -> dict[str, AgentEndpoint]:
@@ -99,4 +102,5 @@ def load_config(loader: Loader) -> SimulationConfig:
         max_fault_delay_ms=loader.integer("SIMULATION_MAX_FAULT_DELAY_MS", 30_000, 0, 600_000),
         outcome_retry_s=loader.duration("SIMULATION_OUTCOME_RETRY", 3.0),
         outcome_max_attempts=loader.integer("SIMULATION_OUTCOME_MAX_ATTEMPTS", 40, 1, 1000),
+        embedding=load_embedding_settings(loader),
     )

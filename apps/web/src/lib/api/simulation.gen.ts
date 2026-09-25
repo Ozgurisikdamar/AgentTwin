@@ -98,8 +98,10 @@ export interface paths {
          *
          *     Similarity is the cosine of two embeddings of `embedding_model`
          *     (the local default `hashing-v1` is lexical: texts are close when
-         *     they share words and identifiers). A scenario's embedding is
-         *     computed from its latest version when it is first matched.
+         *     they share words and identifiers; `EMBEDDING_PROVIDER=openai_compatible`
+         *     selects a hosted model, whose similarity is semantic). A scenario's
+         *     embedding is computed from its latest version when it is first
+         *     matched, and again when the model changes.
          *
          *     With `agent`, scenarios of other agents are left out (scenarios for
          *     every agent are kept). At most 2000 scenarios are answered
@@ -1684,7 +1686,21 @@ export interface operations {
             429: components["responses"]["RateLimited"];
             500: components["responses"]["Internal"];
             502: components["responses"]["UpstreamUnavailable"];
-            503: components["responses"]["Unavailable"];
+            /**
+             * @description The embedding provider could not answer (`EMBEDDINGS_UNAVAILABLE`:
+             *     it is unreachable, busy or failing; retry later), another
+             *     dependency is unavailable (`UNAVAILABLE`), or the simulation
+             *     service is not configured on this control plane
+             *     (`SERVICE_NOT_CONFIGURED`).
+             */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listScenarios: {

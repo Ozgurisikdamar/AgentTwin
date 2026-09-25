@@ -10,6 +10,7 @@ import re
 import pytest
 
 from agenttwin_core.config import ConfigError, Loader
+from agenttwin_core.embeddings import EmbeddingSettings
 from agenttwin_simulation.config import AgentEndpoint, load_config, parse_agent_endpoints
 
 
@@ -23,6 +24,32 @@ def test_defaults_point_at_the_compose_services() -> None:
     assert (cfg.agent_endpoints, cfg.agent_tokens) == ({}, {})
     assert (cfg.worker_concurrency, cfg.lease_seconds, cfg.poll_interval_s) == (2, 60.0, 2.0)
     assert (cfg.max_calls_per_case, cfg.max_fault_delay_ms, cfg.max_run_attempts) == (200, 30_000, 3)
+    # Scenario matching embeds locally unless a hosted model is configured.
+    assert cfg.embedding == EmbeddingSettings()
+
+
+def test_a_hosted_embedding_model_is_configured() -> None:
+    loader = Loader(
+        {
+            "EMBEDDING_PROVIDER": "openai_compatible",
+            "EMBEDDING_MODEL": "text-embedding-3-small",
+            "EMBEDDING_DIMENSIONS": "512",
+            "EMBEDDING_API_KEY": "sk-test",
+            "EMBEDDING_SEND_DIMENSIONS": "true",
+        }
+    )
+    cfg = load_config(loader)
+    loader.raise_for_errors()
+    assert (cfg.embedding.provider, cfg.embedding.model, cfg.embedding.dims) == (
+        "openai_compatible",
+        "text-embedding-3-small",
+        512,
+    )
+    assert cfg.embedding.send_dimensions and cfg.embedding.base_url == "https://api.openai.com/v1"
+    loader = Loader({"EMBEDDING_PROVIDER": "openai_compatible"})
+    load_config(loader)
+    with pytest.raises(ConfigError, match="EMBEDDING_MODEL"):
+        loader.raise_for_errors()
 
 
 def test_endpoints_and_their_tokens() -> None:

@@ -9,12 +9,19 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+import httpx
 import psycopg
 import pytest
 
 from agenttwin_core.auth import Principal, Role
 from agenttwin_core.db import Migrator, load_migrations
-from agenttwin_core.embeddings import HashingEmbedder, vector_literal
+from agenttwin_core.embeddings import (
+    EmbeddingError,
+    EmbeddingSettings,
+    HashingEmbedder,
+    OpenAICompatibleEmbedder,
+    vector_literal,
+)
 from agenttwin_core.ids import new_id
 from agenttwin_core.logx import get_logger
 from agenttwin_simulation import api as api_module
@@ -367,6 +374,64 @@ async def test_a_provider_answering_the_wrong_shape_is_an_error() -> None:
         assert (r.status_code, r.json()["error"]["code"]) == (500, "INTERNAL")
         # Nothing of the wrong shape was stored.
         assert await s.store.all("SELECT 1 FROM scenario_embedding") == []
+
+
+class Down(HashingEmbedder):
+    model = "hosted-model"
+
+    async def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        raise EmbeddingError("rate_limited", "The embedding provider answered HTTP 429.", retryable=True)
+
+
+async def test_a_provider_that_cannot_answer_is_unavailable_not_an_empty_selection() -> None:
+    async with simulation_stack(embedder=Down()) as s:
+        await s.register_demo("refund-happy-path")
+        r = await s.call("POST", MATCH, {"project_id": PROJECT, "queries": [{"id": "p", "text": PROMPT}]})
+        # A 503 the caller can retry: "nothing is similar" would be a lie.
+        assert r.status_code == 503, r.text
+        error = r.json()["error"]
+        assert error["code"] == "EMBEDDINGS_UNAVAILABLE"
+        assert "hosted-model" in error["message"] and "429" in error["message"]
+        assert await s.store.all("SELECT 1 FROM scenario_embedding") == []
+
+
+async def test_a_hosted_provider_selected_by_configuration() -> None:
+    """The OpenAI-compatible adapter end to end, against a fake endpoint that
+    embeds like hashing-v1 under another model name: the vectors are stored
+    and compared under that model, and the answer names it."""
+    local = HashingEmbedder()
+    sent: list[list[str]] = []
+
+    async def endpoint(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        sent.append(body["input"])
+        vectors = await local.embed(body["input"])
+        return httpx.Response(
+            200, json={"data": [{"index": i, "embedding": v} for i, v in enumerate(vectors)]}
+        )
+
+    settings = EmbeddingSettings(
+        provider="openai_compatible",
+        model="fake-semantic-1",
+        dims=local.dims,
+        base_url="http://embeddings.test/v1",
+    )
+    hosted = OpenAICompatibleEmbedder(settings, transport=httpx.MockTransport(endpoint))
+    names = ("refund-happy-path", "refund-over-limit", "cross-tenant-order")
+    async with simulation_stack(embedder=hosted) as s:
+        await s.register_demo(*names)
+        out = await match(s, queries=[{"id": "prompt", "text": PROMPT}])
+        assert out["embedding_model"] == "fake-semantic-1"
+        assert similar_to(out, "prompt")[0] == "refund-over-limit"
+        stored = await s.store.all("SELECT DISTINCT model, dims FROM scenario_embedding")
+        assert stored == [{"model": "fake-semantic-1", "dims": local.dims}]
+        # Each scenario and the query were sent once; matching again sends
+        # only the query (the stored vectors are of this model).
+        texts = [t for batch in sent for t in batch]
+        assert len(texts) == len(names) + 1 and PROMPT in texts
+        await match(s, queries=[{"id": "prompt", "text": PROMPT}])
+        assert [t for batch in sent for t in batch][len(texts) :] == [PROMPT]
+    await hosted.close()
 
 
 async def test_a_scenario_with_nothing_to_compare_is_never_similar(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -36,7 +36,13 @@ from agenttwin.hashing import content_hash
 from agenttwin_core import errors
 from agenttwin_core.auth import Permission, Principal, Role
 from agenttwin_core.db import Conn, transaction
-from agenttwin_core.embeddings import EmbeddingProvider, HashingEmbedder, is_zero, vector_literal
+from agenttwin_core.embeddings import (
+    EmbeddingError,
+    EmbeddingProvider,
+    HashingEmbedder,
+    is_zero,
+    vector_literal,
+)
 from agenttwin_core.errors import APIError
 from agenttwin_core.evaluators import Registry
 from agenttwin_core.events import Envelope, write_outbox
@@ -858,8 +864,24 @@ class SimulationAPI:
     # -- scenario matching ----------------------------------------------------
 
     async def _embed(self, texts: list[str]) -> list[list[float]]:
-        """The provider's vectors, checked: one per text, each of its dimension."""
-        vectors = await self.embedder.embed(texts)
+        """The provider's vectors, checked: one per text, each of its
+        dimension. A provider that cannot answer is 503 (retry later): the
+        caller learns that selection is incomplete, not that nothing is
+        similar."""
+        try:
+            vectors = await self.embedder.embed(texts)
+        except EmbeddingError as err:
+            self.log.warn(
+                "the embedding provider did not answer",
+                model=self.embedder.model,
+                kind=err.kind,
+                error=str(err),
+            )
+            raise errors.APIError(
+                503,
+                "EMBEDDINGS_UNAVAILABLE",
+                f"The embedding provider ({self.embedder.model}) could not answer: {err} Retry later.",
+            ) from None
         if len(vectors) != len(texts) or any(len(v) != self.embedder.dims for v in vectors):
             raise RuntimeError(
                 f"embedding provider {self.embedder.model} answered vectors of the wrong shape"

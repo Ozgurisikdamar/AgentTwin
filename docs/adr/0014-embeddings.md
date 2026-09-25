@@ -40,5 +40,20 @@ plus a re-embedding job.
   scenarios are next matched; a row of another model, recipe or scenario version is
   computed again. `POST /api/v1/scenarios/match` answers each selected scenario with the
   reasons it was selected for.
-* The OpenAI-compatible adapter is not built yet; the provider interface is async
-  (`await embed(texts)`) because a hosted provider is a network call.
+* The provider interface is async (`await embed(texts)`) because a hosted provider is
+  a network call. `OpenAICompatibleEmbedder` (`EMBEDDING_PROVIDER=openai_compatible`)
+  posts to `{EMBEDDING_BASE_URL}/embeddings` in batches (`EMBEDDING_BATCH_SIZE`, 32):
+  plain httpx, no proxies from the environment and no redirects (the key goes to the
+  configured endpoint only), blank texts not sent (zero vector, as with hashing),
+  texts cut at 20 000 characters. Every answer is checked before use — one vector per
+  text matched by `index`, each of exactly `EMBEDDING_DIMENSIONS` finite numbers —
+  and a provider that is down, slow or rate limited is retried with backoff
+  (`Retry-After` up to 10 s); a refusal is not. `EMBEDDING_MODEL` and
+  `EMBEDDING_DIMENSIONS` are required (the model name must not claim `hashing`);
+  `EMBEDDING_API_KEY` is required only by api.openai.com, so local servers work
+  without one; `EMBEDDING_SEND_DIMENSIONS` sends `dimensions` for models that shorten
+  their vectors. Changing the model re-embeds lazily (stored rows of another model
+  are stale).
+* A provider that cannot answer makes `POST /api/v1/scenarios/match` answer `503
+  EMBEDDINGS_UNAVAILABLE` — never an empty selection — so a change impact reports the
+  simulation service as a problem (`complete: false`).

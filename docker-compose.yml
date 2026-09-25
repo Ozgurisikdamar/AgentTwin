@@ -40,6 +40,15 @@ x-simulation-env: &simulation-env
   SIMULATION_AGENT_ENDPOINTS: '{"support-refund-agent": {"url": "http://demo-agent:8090", "token_env": "DEMO_AGENT_TOKEN"}}'
   DEMO_AGENT_TOKEN: ${DEMO_AGENT_TOKEN}
   SIMULATION_WORKER_CONCURRENCY: ${SIMULATION_WORKER_CONCURRENCY:-2}
+  # Scenario matching (ADR-0014): hashing-v1 (local, lexical) unless
+  # EMBEDDING_PROVIDER=openai_compatible with EMBEDDING_MODEL and
+  # EMBEDDING_DIMENSIONS (and EMBEDDING_API_KEY for api.openai.com).
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hashing}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+  EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-}
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-false}
 
 x-evaluation-build: &evaluation-build
   context: .

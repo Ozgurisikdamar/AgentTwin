@@ -482,6 +482,7 @@ make demo-contained  # an over-limit refund through the runtime gateway: approve
 make doctor     # checks Docker, env, ports, PostgreSQL, RabbitMQ, OTel, migrations, services
 make e2e        # Playwright tests against the running stack
 make test       # unit + integration (real PostgreSQL + RabbitMQ) + frontend tests
+make test-security  # every security test of spec §63, item by item (scripts/security-tests.yaml)
 make lint       # formatters, linters and type checkers for Go, Python and TypeScript
 make down       # stop (keeps data) · make reset: wipe data and start again
 ```

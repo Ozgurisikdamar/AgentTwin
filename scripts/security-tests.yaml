@@ -1,0 +1,177 @@
+# Spec §63: every security item and the automated tests that cover it.
+#
+#   make test-security       run them all (real PostgreSQL + RabbitMQ)
+#   make test-security-live  + the browser checks against a running stack
+#
+# go:     package directory -> test functions (integration tests need the
+#         test infrastructure; they cannot skip under make test-security)
+# python: test file -> test functions
+# web:    vitest files (apps/web) · e2e: Playwright specs (apps/web, --live)
+#
+# scripts/tests/test_security_manifest.py fails when an item is missing or a
+# named test no longer exists.
+items:
+  - id: bola
+    title: Broken object-level authorization (another tenant's object by id)
+    go:
+      services/control-plane/internal/server: [TestRBACAndTenantIsolation, TestChangeSetsStayInTheirOrganization, TestCatalogsStayInTheirProject]
+      packages/gokit/authn: [TestRBACMatrix, TestRequireProjectHidesOtherProjects]
+      services/runtime-gateway/internal/api: [TestTenancy]
+      services/graph-service/internal/api: [TestProjectsAndComponentsOfOthersAreInvisible]
+    python:
+      packages/core-py/tests/test_web.py: [test_other_projects_look_missing]
+      services/evaluation-service/tests/test_datasets_integration.py: [test_datasets_of_other_projects_look_missing]
+    note: A foreign or unknown id answers 404, never 403, so ids cannot be probed.
+
+  - id: cross-tenant-reads
+    title: Cross-tenant reads (lists, filters, facets, naming another organization's project)
+    go:
+      services/trace-service/internal/api: [TestExplorerFiltersPaginationAndIsolation]
+      services/control-plane/internal/server: [TestTheEdgeNamesOnlyTheCallersProjects, TestAProjectKeySeesOnlyItsProjectsChangeSets]
+      services/control-plane/internal/proxy: [TestAPersonsTokenNamesTheirOrganizationsProjects, TestNoProjectListNoForwarding]
+    python:
+      services/simulation-service/tests/test_api_integration.py: [test_access_is_scoped_to_the_callers_projects]
+      services/evaluation-service/tests/test_eval_runs_integration.py: [test_runs_are_listed_newest_first_and_hidden_from_other_projects]
+      services/evaluation-service/tests/test_regressions_integration.py: [test_groups_and_neighbours_never_cross_projects]
+      services/simulation-service/tests/test_scenario_match_integration.py: [test_the_schema_keeps_an_embedding_in_its_scenarios_tenant]
+
+  - id: api-key-scopes
+    title: API key scope violations
+    go:
+      packages/gokit/authn: [TestAPIKeyScopes]
+      services/control-plane/internal/server: [TestAPIKeyLifecycleAndScopes, TestTheImpactStaysInItsProject]
+      services/control-plane/internal/proxy: [TestAKeysProjectsAreNotLookedUp]
+      services/trace-service/internal/api: [TestIngestAuthentication]
+
+  - id: expired-revoked-key
+    title: Expired or revoked API key
+    go:
+      services/control-plane/internal/server: [TestAnExpiredKeyIsRefusedEverywhere, TestAPIKeyLifecycleAndScopes]
+      services/trace-service/internal/keys: [TestRevocationTakesEffectWithinTheCacheTTL]
+
+  - id: approval-replay
+    title: Approval replay (a token used twice, by another agent, after expiry)
+    go:
+      services/runtime-gateway/internal/gateway: [TestTokens, TestDecideAndClaim, TestCheckToken]
+      services/runtime-gateway/internal/api: [TestAnOverLimitRefundWaitsForAPersonAndRunsOnce, TestAnApprovalBindsTheAgent, TestConcurrentOverLimitCallsShareOneApproval]
+      services/runtime-gateway/internal/store: [TestApprovalsOnlyMoveForward]
+    python:
+      demo/support-refund-agent/tests/test_containment.py: [test_an_approved_over_limit_refund_runs_once]
+    e2e: [e2e/phase7-runtime.spec.ts]
+
+  - id: approval-tampering
+    title: Approval argument tampering (the approved action changed)
+    go:
+      services/runtime-gateway/internal/gateway: [TestTheActionHash, TestCheckToken, TestDiffArgs]
+      services/runtime-gateway/internal/api: [TestAnOverLimitRefundWaitsForAPersonAndRunsOnce, TestAnApprovalBindsTheAgent]
+    web: [tests/unit/runtime-components.test.tsx]
+    e2e: [e2e/phase7-runtime.spec.ts]
+
+  - id: sql-injection
+    title: SQL injection
+    go:
+      services/trace-service/internal/api: [TestQueryValidation]
+      services/graph-service/internal/api: [TestListingComponents]
+      packages/gokit/httpx: [TestValidTextRefusesWhatNoColumnStores, TestDecodeJSON]
+    python:
+      packages/core-py/tests/test_web.py: [test_text_no_column_stores_is_refused_in_path_and_query, test_text_no_column_stores_is_refused_in_bodies]
+      services/evaluation-service/tests/test_datasets_integration.py: [test_lists_page_and_search]
+    e2e: [e2e/security.spec.ts]
+    note: Queries are parameterized; the e2e walks every GET operation of every contract with injection payloads.
+
+  - id: xss-trace-content
+    title: XSS in trace content
+    go:
+      services/control-plane/internal/server: [TestAnOverrideNeverRewritesTheDecision]
+      services/runtime-gateway/internal/api: [TestToolFailuresAndLimits]
+      packages/gokit/httpx: [TestRequestIDPropagationAndSanitization]
+    web: [tests/unit/untrusted-content.test.tsx, tests/unit/format-csp.test.ts]
+    e2e: [e2e/security.spec.ts]
+
+  - id: malicious-markdown
+    title: Malicious Markdown
+    web: [tests/unit/untrusted-content.test.tsx]
+    e2e: [e2e/security.spec.ts]
+    note: No Markdown or HTML renderer exists to be tricked; Markdown links in content stay text.
+
+  - id: ssrf
+    title: SSRF targets (private ranges, metadata, DNS rebinding, redirects)
+    go:
+      packages/gokit/netguard: [TestCheckURL, TestAllowlist, TestPrivateHostExceptionDoesNotOpenMetadata, TestDNSRebindingIsBlockedAtDialTime, TestRedirectToPrivateIsBlocked]
+      services/runtime-gateway/internal/api: [TestToolFailuresAndLimits, TestToolEndpoints]
+
+  - id: oversized-payload
+    title: Oversized payloads and compression bombs
+    go:
+      packages/gokit/httpx: [TestDecodeJSON]
+      packages/gokit/netguard: [TestReadLimited]
+      services/trace-service/internal/otlp: [TestGzipAndBombLimit]
+      services/trace-service/internal/api: [TestHostileAttributesAreBoundedAndNormalized]
+      services/control-plane/internal/domain: [TestManifestRejectsOversizedAndDeepDocuments]
+      services/control-plane/internal/server: [TestImportRequestsAreValidated]
+    python:
+      packages/core-py/tests/test_web.py: [test_bodies_are_bounded_and_strict]
+      packages/core-py/tests/test_yamlsafe.py: [test_billion_laughs_is_rejected_before_expansion]
+    web: [tests/unit/bff.test.ts]
+
+  - id: malicious-openapi
+    title: Malicious OpenAPI documents (reference bombs, cycles, hostile text)
+    go:
+      services/control-plane/internal/catalog: [TestHostileDocumentsAreBounded, TestAWideReferenceBombEndsQuickly, TestDocumentsThatAreNotImported]
+      services/control-plane/internal/server: [TestImportRequestsAreValidated, TestAnOpenAPIImportFillsTheRegistryWithoutOverridingManifests]
+
+  - id: malicious-mcp
+    title: Malicious MCP metadata (annotations that understate risk)
+    go:
+      services/control-plane/internal/catalog: [TestMCPToolsBecomeEntries, TestTrustedAnnotationsAndOverrides, TestHints]
+      services/control-plane/internal/server: [TestAnMCPImportRecordsHintsAndTrustsThemOnlyWhenAsked, TestAnImportDoesNotTakeAnotherSourcesTool]
+
+  - id: secret-redaction
+    title: Secret redaction (SDK, traces, gateway records, logs)
+    go:
+      packages/gokit/redact: [TestSharedRedactionFixture]
+      packages/gokit/logx: [TestLoggerRedactsSensitiveAttributesAndAddsRequestID]
+      services/trace-service/internal/content: [TestRedactedRequiresClientSideRedaction, TestFullKeepsPIIButNeverSecrets]
+      services/runtime-gateway/internal/gateway: [TestRedactArgs]
+      services/runtime-gateway/internal/api: [TestWhatIsRecordedIsRedactedAndTheCallCompletesWithoutTheAgent]
+      services/control-plane/internal/changes: [TestSecretsInAPromptDiffAreMasked]
+    python:
+      packages/sdk-python/tests/test_tracing.py: [test_redacted_mode_masks_pii_and_secrets, test_full_mode_keeps_pii_but_never_secrets, test_json_path_redaction_applies_to_tool_arguments]
+      packages/sdk-python/tests/test_parity_go.py: [test_redaction_agrees_with_go]
+      packages/sdk-python/tests/test_api_client.py: [test_errors_never_leak_the_key]
+      packages/core-py/tests/test_web.py: [test_logs_are_json_with_redaction]
+      packages/core-py/tests/test_evaluators.py: [test_secret_evidence_never_contains_the_secret]
+
+  - id: prompt-injection
+    title: Prompt injection demo cases
+    python:
+      demo/support-refund-agent/tests/test_agent.py: [test_over_limit_and_prompt_injection_escalate, test_malicious_retrieved_content_is_not_followed, test_cross_tenant_access_is_refused_without_leaking]
+      services/simulation-service/tests/test_demo_suite_integration.py: [test_security_scenarios_catch_an_agent_without_safeguards]
+      services/evaluation-service/tests/test_judges.py: [test_untrusted_material_cannot_forge_the_delimiters]
+    note: The demo scenarios refund-prompt-injection and malicious-retrieved-content run in every release suite.
+
+  - id: poison-message
+    title: Queue poison messages
+    go:
+      packages/gokit/events: [TestBrokerPublishConsumeRetryAndDLQ, TestPublishRefusesInvalidEvent, TestValidatorRejectsUnknownTypeAndBadEnvelope]
+      services/trace-service/internal/api: [TestFinalizerIsolatesPoisonTraces]
+      services/graph-service/internal/api: [TestMalformedEventsAreParkedNotRetried]
+    python:
+      packages/core-py/tests/test_events_integration.py: [test_publish_consume_retry_dlq_and_poison, test_invalid_events_are_never_published, test_exhausted_retries_are_parked]
+      services/evaluation-service/tests/test_regressions_integration.py: [test_a_malformed_runtime_denial_is_parked]
+      services/evaluation-service/tests/test_release_runs_integration.py: [test_requests_that_cannot_describe_a_run_are_parked_and_create_nothing]
+
+  - id: path-traversal
+    title: Path traversal in artifact names and paths
+    go:
+      packages/gokit/events: [TestValidatorRejectsUnknownTypeAndBadEnvelope]
+      services/control-plane/internal/domain: [TestManifestValidationErrors]
+      packages/gokit/openapicheck: [TestEmbeddedSchemaNamesAreChecked]
+    python:
+      services/simulation-service/tests/test_twin_engine.py: [test_path_injection_cannot_traverse_state]
+    web: [tests/unit/bff-route.test.ts, tests/unit/bff.test.ts]
+    e2e: [e2e/security.spec.ts]
+    note: >-
+      No artifact is stored by name (evidence and reports are rows and generated downloads). Names that
+      become paths or keys refuse traversal: the BFF (`..`, `.`, slashes, NUL), event types, manifest and
+      schema names, and the twin's state paths.

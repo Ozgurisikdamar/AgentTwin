@@ -111,6 +111,14 @@ test-integration: ## Integration tests against real PostgreSQL + RabbitMQ
 test-web: ## Frontend + TS SDK unit tests
 	$(PNPM) -r --if-present run test
 
+.PHONY: test-security
+test-security: ## Security tests of spec §63, item by item (real PostgreSQL + RabbitMQ)
+	./scripts/with-test-infra.sh $(UV) run python scripts/security_tests.py
+
+.PHONY: test-security-live
+test-security-live: env ## test-security plus the browser checks against the running stack (make dev first)
+	$(LOAD_ENV); ./scripts/with-test-infra.sh $(UV) run python scripts/security_tests.py --live
+
 .PHONY: fuzz
 fuzz: ## Run Go fuzz targets for 20s each
 	./scripts/fuzz.sh 20s

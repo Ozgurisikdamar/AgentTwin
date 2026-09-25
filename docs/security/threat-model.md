@@ -1,4 +1,4 @@
-# Threat model (extended phase by phase; completed in Phase 8)
+# Threat model
 
 Scope: the AgentTwin platform itself and the runtime gateway that sits in front of
 customer tools.
@@ -23,18 +23,24 @@ Anonymous internet user · authenticated tenant user (per role) · compromised A
 malicious agent output / retrieved document / tool result · malicious MCP server ·
 insider with DB access.
 
-## Attack paths → mitigations (to be expanded)
-| Attack | Mitigation | Test |
+## Attack paths → mitigations
+
+The last column names the item of [`scripts/security-tests.yaml`](../../scripts/security-tests.yaml)
+that lists the tests (`uv run python scripts/security_tests.py --list`).
+
+| Attack | Mitigation | Tests (manifest item) |
 |---|---|---|
-| Cross-tenant read by ID guessing (BOLA) | org scoping in every query + internal JWT + UUIDs | tenant isolation suites per service |
-| Stolen API key | hashed at rest, scoped, revocable, expiring, last-used | security tests |
-| Approval replay / argument tampering | single-use token bound to action hash | runtime-gateway tests |
-| SSRF via tool URL | allowlist, private-range block, redirect re-validation, dial-time IP check | ssrf tests |
-| Prompt injection via trace content rendered in UI | no HTML rendering of content, escaped text only | XSS tests |
-| Malicious YAML/OpenAPI/MCP | safe loaders, size/depth caps, no code execution | parser tests + fuzz |
-| Poison queue message | schema validation, bounded retry, parking DLQ | queue tests |
-| Path traversal in artifacts | content-addressed keys, path normalization | artifact tests |
-| Secret leakage into logs/traces | client-side redaction, log field allowlist | redaction property tests |
+| Cross-tenant read by ID guessing (BOLA) | org scoping in every query, internal JWT naming the caller's projects, UUIDs; foreign ids answer 404 | `bola`, `cross-tenant-reads` |
+| Stolen API key | hashed at rest, scoped, revocable, expiring, last-used | `api-key-scopes`, `expired-revoked-key` |
+| Approval replay / argument tampering | single-use token bound to the action hash and the agent | `approval-replay`, `approval-tampering` |
+| SSRF via tool URL | allowlist, private-range and metadata block, redirect re-validation, dial-time IP check | `ssrf` |
+| SQL injection | parameterized queries only; text no column can store refused at the edge | `sql-injection` |
+| Prompt injection via trace content rendered in UI | no HTML rendering of content, escaped text only, nonce CSP | `xss-trace-content`, `malicious-markdown` |
+| Prompt injection into the agent or the judge | escalation instead of obedience in the demo agent; release suites run the injection scenarios; judge delimiters cannot be forged | `prompt-injection` |
+| Malicious YAML/OpenAPI/MCP | safe loaders, size/depth caps, no fetching, no code execution, annotations are claims | `malicious-openapi`, `malicious-mcp`, `oversized-payload` |
+| Poison queue message | schema validation, bounded retry, parking DLQ | `poison-message` |
+| Path traversal in artifacts | nothing stored by name; names that become paths or keys refuse traversal | `path-traversal` |
+| Secret leakage into logs/traces | client-side redaction, server re-redaction, log field redaction | `secret-redaction` |
 
 ## Controls implemented in Phase 1 (walking skeleton)
 
@@ -75,5 +81,42 @@ stack (Playwright).
 * **CSP allows inline style attributes** (`style-src-attr 'unsafe-inline'`) for
   the waterfall bar geometry. Scripts remain nonce-bound; style injection
   cannot execute code.
-* To be completed in Phase 8 with the runtime gateway, SSRF, artifact and
-  import surfaces.
+* Phases 2–7 added their controls with the features (simulation, evaluation,
+  graph, releases, regressions, runtime gateway); Phase 8 maps every item of
+  spec §63 to its tests below.
+
+## Security tests (spec §63)
+
+Every item of §63 is covered by named, automated tests. The mapping is
+machine-readable, [`scripts/security-tests.yaml`](../../scripts/security-tests.yaml),
+and cannot rot silently: `scripts/tests/test_security_manifest.py` (part of
+`make test`) fails when an item is missing or a named test no longer exists.
+
+```bash
+make test-security        # every §63 test, against real PostgreSQL + RabbitMQ
+make test-security-live   # the same plus the browser checks on a running stack (make dev)
+uv run python scripts/security_tests.py --list   # the items and their tests
+```
+
+Integration tests cannot skip there (`AGENTTWIN_REQUIRE_INTEGRATION=1`): an
+item whose test would skip fails instead.
+
+## Controls added in Phase 8
+
+| Threat | Control | Evidence |
+|---|---|---|
+| SQL injection | Every query is parameterized (pgx, asyncpg; no string-built SQL). Checked from outside: every GET operation of the six API contracts, with every path and query parameter set in turn to 13 payloads (tautology, stacked statement, `UNION`, `pg_sleep`, `LIKE` wildcards, JSON operators, path traversal, CRLF, 10 000 characters, NUL, invalid UTF-8, overlong encoding, lone surrogate) answers without a 5xx, a leaked database error or a delay; the demo project is intact afterwards. | e2e `security.spec.ts` ("every read endpoint answers injection payloads…": 58 operations, 2 093 requests) |
+| Text a database cannot store (NUL, invalid UTF-8, lone surrogate) | Found by that walk: 44 filters of all six services failed inside PostgreSQL with a 500. Every service now refuses such text in the path, the query and JSON bodies with 400 `INVALID_TEXT`, before routing (Go `httpx.ValidText` in the standard handler, a NUL in a body before decoding; Python the same in `agenttwin_core.web`); agent manifests and gateway arguments, read outside the common decoder, check it too. Telemetry is cleaned instead of refused (U+FFFD), because one span with a NUL used to fail the insert of its whole batch and the collector finally dropped it, other traces included. | `TestValidTextRefusesWhatNoColumnStores`, `TestDecodeJSON`, `TestHasNUL`, `TestTheStandardHandlerRefusesUnstorableText`, `test_text_no_column_stores_is_refused_in_path_and_query`, `test_text_no_column_stores_is_refused_in_bodies`, `TestManifestTextMustBeStorable`, `TestArgumentsWithANulAreRefusedBeforeADecision`, `TestTextNoColumnCanStoreIsReplaced` (+ both OTLP fuzzers), `TestTextNoColumnStoresIsCleanedNotRefused`; e2e "every write endpoint refuses a NUL in its body before acting on it" |
+| XSS through trace content, Markdown or a stored URL | Content is React text, never markup: no `dangerouslySetInnerHTML`, `innerHTML`, `eval` or Markdown/HTML renderer in the web app; a stored URL (override ticket, CI run) becomes a link only when it is `http(s)`, and opens with `rel="noopener noreferrer"`. | `untrusted-content.test.tsx`; e2e "hostile text in a trace is shown as text and never runs" (an agent run whose input carries `<script>`, `onerror`, `javascript:` links and a template expression: shown character for character, nothing runs, no dialog, no CSP violation) |
+| An expired API key | Refused everywhere once `expires_at` passes: the public API (401, without echoing the key), internal verification (`valid: false`) and rotation (409 `API_KEY_EXPIRED`). | `TestAnExpiredKeyIsRefusedEverywhere` |
+| A 500 without a request id (Python services) | An unhandled error is answered inside the request-id middleware, so the body and the `X-Request-Id` header carry the same id and the standard headers. | `test_unhandled_errors_do_not_leak` |
+
+## Residual risk (Phase 8)
+
+* **Invalid UTF-8 in OTLP protobuf.** The protobuf decoder refuses a batch
+  whose string fields are not UTF-8 (400, which the collector does not retry);
+  NUL characters, which are valid UTF-8, are cleaned. The Python SDK cannot
+  produce such bytes; an SDK in another language could.
+* **Path traversal in artifact names** has no surface: the platform stores no
+  files by name (evidence and reports are rows and generated downloads), and
+  the BFF and the gateway normalize paths (see the tests in the manifest).

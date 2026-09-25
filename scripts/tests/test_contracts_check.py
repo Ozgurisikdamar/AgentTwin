@@ -373,6 +373,37 @@ def test_openapi_breaking_changes_are_reported(mutate: Any, expected: str) -> No
     assert any(expected in p for p in problems), problems
 
 
+def test_type_changes_follow_the_direction_of_the_data() -> None:
+    old = copy.deepcopy(API)
+    _post_body(old)["properties"]["seed"]["type"] = ["integer", "null"]
+    baseline = {"svc": cc.openapi_fingerprint(old)}
+
+    def check(doc: dict[str, Any]) -> list[str]:
+        return cc.openapi_breaking_changes(baseline, {"svc": cc.openapi_fingerprint(doc)})
+
+    # A response that stops sending null, a request that also takes a string:
+    # every client that followed the old document still works.
+    compatible = copy.deepcopy(old)
+    compatible["components"]["schemas"]["Run"]["properties"]["error"] = {"type": "string"}
+    _post_body(compatible)["properties"]["seed"]["type"] = ["integer", "null", "string"]
+    assert check(compatible) == []
+
+    # A response that may now send null, a request that no longer takes null.
+    widened = copy.deepcopy(old)
+    widened["components"]["schemas"]["Run"]["properties"]["id"]["type"] = ["string", "null"]
+    assert any("POST /runs 202 response: type of /id changed" in p for p in check(widened))
+    narrowed = copy.deepcopy(old)
+    _post_body(narrowed)["properties"]["seed"]["type"] = "integer"
+    assert any("POST /runs request: type of /seed changed" in p for p in check(narrowed))
+
+
+def test_an_event_field_may_not_change_type_in_either_direction() -> None:
+    for types in ("string", ["string", "null", "integer"]):
+        new = copy.deepcopy(SCHEMA)
+        new["properties"]["note"]["type"] = types
+        assert any("type of /note changed" in p for p in check(new)), types
+
+
 def test_a_removed_api_document_is_breaking() -> None:
     old = {"svc": cc.openapi_fingerprint(API)}
     assert cc.openapi_breaking_changes(old, {}) == ["svc: the published API document was removed"]

@@ -424,9 +424,8 @@ export interface components {
             classification: "NEW_CRITICAL_FAILURE" | "REGRESSED" | "IMPROVED" | "UNCHANGED" | "INCOMPLETE";
             baseline_version: string;
             candidate_version: string;
-            /** @description The baseline case's status (`PASSED`, `FAILED`, …; `null` when it did not run). */
-            baseline_status: string | null;
-            candidate_status: string | null;
+            baseline_status: components["schemas"]["SideStatus"];
+            candidate_status: components["schemas"]["SideStatus"];
             finished_at: components["schemas"]["Timestamp"] | null;
         };
         DatasetCase: {
@@ -589,10 +588,14 @@ export interface components {
             cost_usd: number | null;
             semantic_score: number | null;
         };
+        /**
+         * @description One side's case status after judging (a simulation case status), or `MISSING` when the case was not run on that side.
+         * @enum {string}
+         */
+        SideStatus: "PENDING" | "RUNNING" | "PASSED" | "FAILED" | "ERRORED" | "CANCELLED" | "MISSING";
         SideSummary: {
             case_id: components["schemas"]["Uuid"] | null;
-            /** @description The case status after judging (`PASSED`, `FAILED`, `ERRORED`, `CANCELLED`, …). */
-            status: string;
+            status: components["schemas"]["SideStatus"];
             reason: string | null;
             trace_id: string | null;
             /** @description Failure classes of the failing expectations. */
@@ -698,8 +701,8 @@ export interface components {
         /** @description Where a value differs, baseline → candidate. */
         ValueChange: {
             path: string;
-            /** @description `add`, `remove` or `replace`. */
-            change: string;
+            /** @enum {string} */
+            change: "added" | "removed" | "changed";
             /** @description The baseline's value (absent when added). */
             baseline?: unknown;
             /** @description The candidate's value (absent when removed). */

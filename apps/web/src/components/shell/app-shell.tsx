@@ -1,6 +1,16 @@
 "use client";
 
-import { Activity, Bot, FlaskConical, LayoutDashboard, ListChecks, LogOut } from "lucide-react";
+import {
+  Activity,
+  Bot,
+  Database,
+  FlaskConical,
+  GitCompareArrows,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  UserCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
@@ -19,6 +29,9 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/simulations", label: "Simulations", icon: FlaskConical },
+  { href: "/evaluations", label: "Evaluations", icon: GitCompareArrows },
+  { href: "/datasets", label: "Datasets", icon: Database },
+  { href: "/reviews", label: "Reviews", icon: UserCheck },
   { href: "/scenarios", label: "Scenarios", icon: ListChecks },
   { href: "/traces", label: "Traces", icon: Activity },
   { href: "/agents", label: "Agents", icon: Bot },

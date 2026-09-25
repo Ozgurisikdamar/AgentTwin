@@ -1211,10 +1211,9 @@ components:
         candidate_version:
           type: string
         baseline_status:
-          type: [string, 'null']
-          description: The baseline case's status (`PASSED`, `FAILED`, …; `null` when it did not run).
+          $ref: '#/components/schemas/SideStatus'
         candidate_status:
-          type: [string, 'null']
+          $ref: '#/components/schemas/SideStatus'
         finished_at:
           oneOf:
             - $ref: '#/components/schemas/Timestamp'
@@ -1576,6 +1575,12 @@ components:
           type: [number, 'null']
         semantic_score:
           type: [number, 'null']
+    SideStatus:
+      type: string
+      enum: [PENDING, RUNNING, PASSED, FAILED, ERRORED, CANCELLED, MISSING]
+      description: >-
+        One side's case status after judging (a simulation case status), or
+        `MISSING` when the case was not run on that side.
     SideSummary:
       type: object
       required: [case_id, status, reason, trace_id, labels, tools, metrics]
@@ -1585,8 +1590,7 @@ components:
             - $ref: '#/components/schemas/Uuid'
             - type: 'null'
         status:
-          type: string
-          description: The case status after judging (`PASSED`, `FAILED`, `ERRORED`, `CANCELLED`, …).
+          $ref: '#/components/schemas/SideStatus'
         reason:
           type: [string, 'null']
         trace_id:
@@ -1805,7 +1809,7 @@ components:
           type: string
         change:
           type: string
-          description: '`add`, `remove` or `replace`.'
+          enum: [added, removed, changed]
         baseline:
           description: The baseline's value (absent when added).
         candidate:

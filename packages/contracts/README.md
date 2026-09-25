@@ -55,8 +55,8 @@ service in four ways (ADR-0021), by the same checker in Python
 
 | Part | Breaking | Compatible |
 |---|---|---|
-| Request (parameters, body) | operation, parameter or body field removed (bodies are strict: unknown fields are rejected); new required parameter or field; body newly required; type changed; allowed enum value removed | new optional parameter or field; new enum value |
-| Response (success statuses) | success status removed; required field removed or made optional; type changed; an embedded document (`x-agenttwin-schema`) changes its schema or loses it | new field; new enum value; new status; a field becomes an embedded document |
+| Request (parameters, body) | operation, parameter or body field removed (bodies are strict: unknown fields are rejected); new required parameter or field; body newly required; type changed, except to accept more types; allowed enum value removed | new optional parameter or field; new enum value; a field accepts more types (e.g. also `null`) |
+| Response (success statuses) | success status removed; required field removed or made optional; type changed, except to send fewer types; an embedded document (`x-agenttwin-schema`) changes its schema or loses it | new field; new enum value; new status; a field sends fewer types (e.g. no longer `null`); a field becomes an embedded document |
 | Webhook | the same rules with the roles reversed: the service sends the request and reads the answer (ignoring unknown fields) | |
 
 Clients must ignore response fields and enum values they do not know. Error

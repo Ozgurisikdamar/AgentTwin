@@ -13,12 +13,13 @@ send it), the JSON type of a field changes or an allowed enum value is removed.
 HTTP APIs, per operation —
 * requests (clients may send what was documented): an operation disappears, a
   parameter or body field is removed (servers reject unknown fields), a new
-  parameter or field is required, a type changes or an allowed enum value is
-  removed;
+  parameter or field is required, a type changes (other than taking more
+  types, e.g. also ``null``) or an allowed enum value is removed;
 * responses (clients may rely on what was documented): a success status
-  disappears, a required field is removed or made optional, a type changes or
-  an embedded document (``x-agenttwin-schema``) changes its schema. New fields
-  and new enum values are compatible: clients ignore what they do not know.
+  disappears, a required field is removed or made optional, a type changes
+  (other than sending fewer types, e.g. no longer ``null``) or an embedded
+  document (``x-agenttwin-schema``) changes its schema. New fields and new
+  enum values are compatible: clients ignore what they do not know.
 Webhooks reverse the roles: the service sends the request (response rules) and
 reads the answer (request rules).
 
@@ -157,11 +158,24 @@ def _removed_or_optional(where: str, old: Fingerprint, new: Fingerprint) -> list
     return problems
 
 
-def _type_changes(where: str, old: Fingerprint, new: Fingerprint) -> list[str]:
+def _type_changes(where: str, old: Fingerprint, new: Fingerprint, *, allow: str = "") -> list[str]:
+    """Fields whose JSON types changed. ``allow="narrower"`` accepts fewer
+    types (what a client receives: a response that stops sending ``null``
+    still only sends what was documented); ``allow="wider"`` accepts more
+    (what a client sends: a request that also takes ``null`` still takes what
+    was documented). An event has readers and writers, so any change counts."""
+
+    def compatible(before: list[str], after: list[str]) -> bool:
+        if allow == "narrower":
+            return set(after) <= set(before)
+        if allow == "wider":
+            return set(after) >= set(before)
+        return after == before
+
     return [
         f"{where}: type of {path} changed from {types} to {new['types'][path]}"
         for path, types in old["types"].items()
-        if path in new["types"] and new["types"][path] != types
+        if path in new["types"] and not compatible(types, new["types"][path])
     ]
 
 
@@ -273,7 +287,7 @@ def _request_changes(where: str, old: Fingerprint, new: Fingerprint, *, strict: 
                 problems.append(f"{where}: {_join(path, f)} became required")
     return (
         problems
-        + _type_changes(where, old, new)
+        + _type_changes(where, old, new, allow="wider")
         + _enum_removals(where, old, new)
         + _embedded_changes(where, old, new, reader=False)
     )
@@ -298,7 +312,7 @@ def _response_changes(where: str, old: Fingerprint, new: Fingerprint) -> list[st
     """What a client that followed the old document may no longer receive."""
     return (
         _removed_or_optional(where, old, new)
-        + _type_changes(where, old, new)
+        + _type_changes(where, old, new, allow="narrower")
         + _embedded_changes(where, old, new, reader=True)
     )
 

@@ -5630,6 +5630,24 @@
       "responses": {
         "200": {
           "enums": {
+            "/version/cases/[]/last_result/baseline_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
             "/version/cases/[]/last_result/classification": [
               "\"IMPROVED\"",
               "\"INCOMPLETE\"",
@@ -5776,14 +5794,12 @@
               "object"
             ],
             "/version/cases/[]/last_result/baseline_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/baseline_version": [
               "string"
             ],
             "/version/cases/[]/last_result/candidate_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/candidate_version": [
@@ -6066,6 +6082,24 @@
       "responses": {
         "200": {
           "enums": {
+            "/version/cases/[]/last_result/baseline_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
             "/version/cases/[]/last_result/classification": [
               "\"IMPROVED\"",
               "\"INCOMPLETE\"",
@@ -6212,14 +6246,12 @@
               "object"
             ],
             "/version/cases/[]/last_result/baseline_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/baseline_version": [
               "string"
             ],
             "/version/cases/[]/last_result/candidate_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/candidate_version": [
@@ -6747,6 +6779,24 @@
       "responses": {
         "200": {
           "enums": {
+            "/cases/[]/baseline/status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/cases/[]/candidate/status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
             "/cases/[]/classification": [
               "\"IMPROVED\"",
               "\"INCOMPLETE\"",
@@ -7650,12 +7700,35 @@
       "responses": {
         "200": {
           "enums": {
+            "/comparison/baseline/status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/comparison/candidate/status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
             "/comparison/classification": [
               "\"IMPROVED\"",
               "\"INCOMPLETE\"",
               "\"NEW_CRITICAL_FAILURE\"",
               "\"REGRESSED\"",
               "\"UNCHANGED\""
+            ],
+            "/comparison/divergence/argument_changes/[]/change": [
+              "\"added\"",
+              "\"changed\"",
+              "\"removed\""
             ],
             "/comparison/divergence/baseline/effect": [
               "\"applied\"",
@@ -7683,6 +7756,11 @@
               "\"not_comparable\"",
               "\"same\"",
               "\"still_failing\""
+            ],
+            "/comparison/state_changes/[]/change": [
+              "\"added\"",
+              "\"changed\"",
+              "\"removed\""
             ],
             "/comparison/trajectories/alignment/[]/match": [
               "\"baseline_only\"",
@@ -9947,6 +10025,24 @@
       "responses": {
         "201": {
           "enums": {
+            "/version/cases/[]/last_result/baseline_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
             "/version/cases/[]/last_result/classification": [
               "\"IMPROVED\"",
               "\"INCOMPLETE\"",
@@ -10093,14 +10189,12 @@
               "object"
             ],
             "/version/cases/[]/last_result/baseline_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/baseline_version": [
               "string"
             ],
             "/version/cases/[]/last_result/candidate_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/candidate_version": [
@@ -10398,6 +10492,24 @@
       "responses": {
         "200": {
           "enums": {
+            "/version/cases/[]/last_result/baseline_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
             "/version/cases/[]/last_result/classification": [
               "\"IMPROVED\"",
               "\"INCOMPLETE\"",
@@ -10544,14 +10656,12 @@
               "object"
             ],
             "/version/cases/[]/last_result/baseline_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/baseline_version": [
               "string"
             ],
             "/version/cases/[]/last_result/candidate_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/candidate_version": [
@@ -10629,6 +10739,24 @@
         },
         "201": {
           "enums": {
+            "/version/cases/[]/last_result/baseline_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "\"CANCELLED\"",
+              "\"ERRORED\"",
+              "\"FAILED\"",
+              "\"MISSING\"",
+              "\"PASSED\"",
+              "\"PENDING\"",
+              "\"RUNNING\""
+            ],
             "/version/cases/[]/last_result/classification": [
               "\"IMPROVED\"",
               "\"INCOMPLETE\"",
@@ -10775,14 +10903,12 @@
               "object"
             ],
             "/version/cases/[]/last_result/baseline_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/baseline_version": [
               "string"
             ],
             "/version/cases/[]/last_result/candidate_status": [
-              "null",
               "string"
             ],
             "/version/cases/[]/last_result/candidate_version": [

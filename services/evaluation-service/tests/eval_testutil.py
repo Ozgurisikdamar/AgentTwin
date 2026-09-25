@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import httpx
+from prometheus_client import CollectorRegistry
 
 from agenttwin_core import api_fakes as fake
 from agenttwin_core.auth import Principal, Role, TokenService
@@ -40,6 +41,7 @@ from agenttwin_evaluation.clients import SimulationClient, TraceClient
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import FakeJudge, JudgeProvider
+from agenttwin_evaluation.metrics import EvaluationMetrics
 from agenttwin_evaluation.miner import Miner
 from agenttwin_evaluation.regression_store import RegressionStore
 from agenttwin_evaluation.regressions import RegressionsAPI
@@ -226,6 +228,13 @@ class Stack:
     def token(self, p: Principal | None = None) -> str:
         return self.tokens.mint(p or self.principal, "evaluation-service")
 
+    def metric(self, name: str, **labels: str) -> float:
+        """A sample of the worker's metrics (0 when never observed)."""
+        assert self.worker.metrics is not None
+        labels = {**labels, "service": "evaluation-worker"}
+        value = self.worker.metrics.registry.get_sample_value(name, labels)
+        return 0.0 if value is None else value
+
     async def call(
         self, method: str, path: str, body: Any = None, *, as_: Principal | None = None, **params: Any
     ) -> httpx.Response:
@@ -311,6 +320,7 @@ async def evaluation_stack(
             traces=traces,
             judge=judge or FakeJudge(),
             log=get_logger("worker"),
+            metrics=EvaluationMetrics.on(CollectorRegistry(), "evaluation-worker"),
             miner=Miner(
                 store=regressions,
                 traces=traces,

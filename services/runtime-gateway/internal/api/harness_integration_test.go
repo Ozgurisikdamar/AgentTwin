@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/contracts"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
@@ -108,7 +109,7 @@ func newHarness(t *testing.T) *harness {
 	h.api = &api.Server{Store: store.New(pool), Tokens: h.tokens, Log: slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		Egress: netguard.Policy{AllowedHosts: []string{"127.0.0.1", "tools.example.com"}, AllowLoopback: true,
 			AllowHTTP: true, Timeout: time.Minute},
-		Now: h.clock.now}
+		Now: h.clock.now, Metrics: api.NewMetrics(prometheus.NewRegistry())}
 	mux := http.NewServeMux()
 	h.api.Routes(mux)
 	h.srv = httptest.NewServer(contract.Checking(httpx.Chain(mux, httpx.RequestID()), func(err error) {

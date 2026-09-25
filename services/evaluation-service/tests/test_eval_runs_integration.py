@@ -4,6 +4,7 @@ checked against the evaluation, simulation and trace contracts."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -59,6 +60,8 @@ async def test_the_candidate_is_compared_with_its_baseline_case_by_case() -> Non
             "user:engineer",
             None,
         )
+        # The queue the worker claims from is what the metrics report.
+        assert await ev.store.active_run_counts() == {"QUEUED": 1}
         assert run["selection"] == {
             "scenarios": None,
             "tags": None,
@@ -102,6 +105,12 @@ async def test_the_candidate_is_compared_with_its_baseline_case_by_case() -> Non
             "UNCHANGED": 6,
             "INCOMPLETE": 0,
         }
+        # Counted once, after the commit, with its duration and compared cases.
+        assert ev.metric("agenttwin_eval_runs_total", status="COMPLETED") == 1
+        assert ev.metric("agenttwin_eval_run_duration_seconds_count", status="COMPLETED") == 1
+        assert ev.metric("agenttwin_eval_cases_total", classification="NEW_CRITICAL_FAILURE") == 2
+        assert ev.metric("agenttwin_eval_cases_total", classification="UNCHANGED") == 6
+        assert await ev.store.active_run_counts() == {}
         classes = {c["scenario_name"]: c["classification"] for c in out["cases"]}
         assert classes["refund-timeout-after-mutation"] == "NEW_CRITICAL_FAILURE"
         assert classes["refund-tool-success-lie"] == "NEW_CRITICAL_FAILURE"
@@ -224,6 +233,10 @@ async def test_semantic_expectations_are_judged_once_and_reused() -> None:
         second = await ev.ok("GET", f"/api/v1/eval-runs/{again['id']}/cases/refund-judged")
         assert all(v["cached"] for side in ("baseline", "candidate") for v in second["verdicts"][side])
         assert second["comparison"]["expectations"] == case["comparison"]["expectations"]
+        # Two fresh verdicts, then six served from the cache (2 + 4 over the two runs).
+        calls = "agenttwin_judge_calls_total"
+        assert ev.metric(calls, provider="deterministic-fake", outcome="verdict") == 2
+        assert ev.metric(calls, provider="deterministic-fake", outcome="cached") == 6
 
 
 async def test_a_spent_judge_budget_leaves_expectations_unjudged_and_says_so() -> None:
@@ -245,6 +258,7 @@ async def test_refused_simulations_fail_the_run_with_the_reason() -> None:
         out = await detail(ev, run["id"])
         assert out["run"]["status"] == "FAILED" and out["run"]["baseline_run_id"] is None
         assert "The simulations could not start" in out["run"]["error"] and "candidate" in out["run"]["error"]
+        assert ev.metric("agenttwin_eval_runs_total", status="FAILED") == 1
         [event] = await ev.outbox("evaluation.run_completed.v1")
         assert event["payload"]["status"] == "FAILED" and event["payload"]["error"] == out["run"]["error"]
         assert await run_simulations(sim) == []
@@ -344,6 +358,7 @@ async def test_runs_whose_worker_is_lost_are_retried_then_failed() -> None:
             assert await ev.worker.recover_expired() == [(run["id"], expected)]
         out = (await detail(ev, run["id"]))["run"]
         assert out["status"] == "FAILED" and "Gave up after 2 attempts" in out["error"]
+        assert ev.metric("agenttwin_eval_runs_total", status="FAILED") == 1
         assert [t["to_status"] for t in (await detail(ev, run["id"]))["transitions"]] == [
             "QUEUED",
             "PREPARING",
@@ -505,3 +520,21 @@ async def test_a_worker_that_lost_the_run_cannot_end_it() -> None:
         await stale.finish(claimed, JobStatus.FAILED, "stale", held=True)
         out = (await detail(ev, run["id"]))["run"]
         assert (out["status"], out["error"], out["attempts"]) == ("RUNNING", None, 2)
+
+
+async def test_the_janitor_reports_the_queue_and_the_runs_in_progress() -> None:
+    async with evaluation_stack() as ev:
+        await start(ev)
+        await start(ev)
+        stop = asyncio.Event()
+        janitor = asyncio.create_task(ev.worker.janitor_loop(stop))
+        try:
+            for _ in range(100):
+                if ev.metric("agenttwin_eval_runs_in_progress", status="QUEUED") == 2:
+                    break
+                await asyncio.sleep(0.02)
+        finally:
+            stop.set()
+            await janitor
+        assert ev.metric("agenttwin_eval_runs_in_progress", status="QUEUED") == 2
+        assert ev.metric("agenttwin_eval_runs_in_progress", status="RUNNING") == 0

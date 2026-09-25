@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	promtest "github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/ids"
 )
@@ -175,6 +177,31 @@ func TestAnOverLimitRefundWaitsForAPersonAndRunsOnce(t *testing.T) {
 	want := []string{"approval.approved", "approval.token_issued", "approval.token_issued", "approval.used"}
 	if got := h.audits(); !slices.Equal(got[len(got)-4:], want) {
 		t.Fatalf("audit %v", got)
+	}
+
+	// The metrics tell the same story, with bounded labels (spec §54).
+	m := h.api.Metrics
+	for _, c := range []struct {
+		effect, outcome string
+		want            float64
+	}{
+		{"require_approval", "approval_required", 2},
+		{"require_approval", "approval_refused", 3}, // voided token, mismatch, used
+		{"require_approval", "executed", 1},
+		{"none", "replayed", 1},
+	} {
+		if got := promtest.ToFloat64(m.Decisions.WithLabelValues(c.effect, c.outcome)); got != c.want {
+			t.Errorf("decisions{%s,%s} = %v, want %v", c.effect, c.outcome, got, c.want)
+		}
+	}
+	for event, want := range map[string]float64{"requested": 1, "approved": 1, "token_claimed": 2, "used": 1,
+		"token_refused": 3, "denied": 0} {
+		if got := promtest.ToFloat64(m.Approvals.WithLabelValues(event)); got != want {
+			t.Errorf("approvals{%s} = %v, want %v", event, got, want)
+		}
+	}
+	if n := promtest.CollectAndCount(m.Upstream); n != 1 {
+		t.Errorf("upstream series %d, want 1 (executed)", n)
 	}
 }
 
@@ -723,5 +750,36 @@ spec:
 	}
 	if r := h.invoke(h.key("agent"), "lookup_order", map[string]any{}, nil); r.status != 200 {
 		t.Fatalf("agent: %d", r.status)
+	}
+}
+
+// When the gateway cannot record its decision (here: the database refuses the
+// insert), nothing is forwarded: the agent gets 503 and may retry (ADR-0033).
+func TestADecisionThatCannotBeRecordedForwardsNothing(t *testing.T) {
+	h := newHarness(t)
+	h.demo()
+	agent := h.key("agent")
+	ctx := context.Background()
+	if _, err := h.pool.Exec(ctx, `CREATE FUNCTION refuse_decision() RETURNS trigger LANGUAGE plpgsql AS
+		$$ BEGIN RAISE EXCEPTION 'disk full'; END $$;
+		CREATE TRIGGER refuse_decision BEFORE INSERT ON policy_decision FOR EACH ROW EXECUTE FUNCTION refuse_decision();`); err != nil {
+		t.Fatal(err)
+	}
+	r := h.invoke(agent, "refund_payment", map[string]any{"order_id": "ORD-1001", "amount": 40}, agentHeaders(7, "k-down"))
+	expectRefused(t, r, 503, "GATEWAY_UNAVAILABLE")
+	if n := len(h.tools.received("refund_payment")); n != 0 {
+		t.Fatalf("the tool was called %d times without a recorded decision", n)
+	}
+	if got := promtest.ToFloat64(h.api.Metrics.Decisions.WithLabelValues("none", "unavailable")); got != 1 {
+		t.Fatalf("unavailable decisions %v", got)
+	}
+
+	// Once the database accepts it again, the same call (same key) is decided and runs once.
+	if _, err := h.pool.Exec(ctx, `DROP TRIGGER refuse_decision ON policy_decision`); err != nil {
+		t.Fatal(err)
+	}
+	r = h.invoke(agent, "refund_payment", map[string]any{"order_id": "ORD-1001", "amount": 40}, agentHeaders(7, "k-down"))
+	if r.status != 200 || len(h.tools.received("refund_payment")) != 1 {
+		t.Fatalf("after recovery: %d %s", r.status, r.body)
 	}
 }

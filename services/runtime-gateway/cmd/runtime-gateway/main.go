@@ -34,8 +34,23 @@ func main() {
 		},
 		Build: func(ctx context.Context, rt *service.Runtime) (http.Handler, error) {
 			st := store.New(rt.Pool)
-			srv := &api.Server{Store: st, Tokens: rt.Tokens, Log: rt.Log, Egress: egress, Client: egress.Client()}
+			srv := &api.Server{Store: st, Tokens: rt.Tokens, Log: rt.Log, Egress: egress, Client: egress.Client(),
+				Metrics: api.NewMetrics(rt.Tel.Registry)}
 			rt.Relay(ctx, migrations.Schema)
+			rt.Go(ctx, "approvals-gauge", func(ctx context.Context) error {
+				t := time.NewTicker(30 * time.Second)
+				defer t.Stop()
+				for {
+					if n, err := st.CountPending(ctx, time.Now().UTC()); err == nil {
+						srv.Metrics.SetPending(n)
+					}
+					select {
+					case <-ctx.Done():
+						return nil
+					case <-t.C:
+					}
+				}
+			})
 			rt.Go(ctx, "retention", func(ctx context.Context) error {
 				t := time.NewTicker(10 * time.Minute)
 				defer t.Stop()

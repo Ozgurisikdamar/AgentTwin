@@ -43,6 +43,7 @@ from agenttwin_evaluation.common import AGENT, NAME, PRODUCER
 from agenttwin_evaluation.comparison import EVALUATED, CaseComparison, Side, compare_case, summarize
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.judges import JudgeProvider, judge_identity
+from agenttwin_evaluation.metrics import EvaluationMetrics
 from agenttwin_evaluation.miner import MINED_EVENTS, Miner
 from agenttwin_evaluation.reviewing import needs_review
 from agenttwin_evaluation.semantic import JudgeBudget, Judged, SemanticJudging
@@ -236,6 +237,15 @@ class EvalWorker:
     owner: str = field(default_factory=_default_owner)
     # Mines production traces into regressions and fixes promoted ones.
     miner: Miner | None = None
+    metrics: EvaluationMetrics | None = None
+
+    def _ended(self, run: Row | None, counts: Mapping[str, int] | None = None) -> None:
+        """Counts a run that reached its terminal status (after its commit)."""
+        if self.metrics is None or run is None:
+            return
+        self.metrics.run_ended(run)
+        if counts:
+            self.metrics.cases_compared(counts)
 
     # ------------------------------------------------------------ steps
 
@@ -401,6 +411,7 @@ class EvalWorker:
             cache=JudgmentCache(self.store),
             calibrated=frozenset(name for name, row in latest.items() if row["calibrated"]),
             timeout_s=self.cfg.judge_call_timeout_s,
+            metrics=self.metrics,
         )
         limit = asyncio.Semaphore(self.cfg.fetch_concurrency)
 
@@ -437,10 +448,11 @@ class EvalWorker:
         counts = summary["counts"]
         try:
             async with transaction(self.store.pool) as conn:
-                await self._complete(conn, run_id, [row for _, row in results], summary, judging)
+                done = await self._complete(conn, run_id, [row for _, row in results], summary, judging)
         except _LeaseLost:
             self.log.warn("eval run lease lost before completion; results discarded", eval_run_id=run_id)
             return
+        self._ended(done, counts)
         self.log.info("eval run completed", eval_run_id=run_id, **{k.lower(): v for k, v in counts.items()})
 
     async def _complete(
@@ -450,7 +462,7 @@ class EvalWorker:
         rows: Sequence[Mapping[str, Any]],
         summary: Mapping[str, Any],
         judging: SemanticJudging,
-    ) -> None:
+    ) -> Row:
         counts = summary["counts"]
         await self.store.save_case_results(conn, run_id, rows)
         done = await self.store.transition(
@@ -478,6 +490,7 @@ class EvalWorker:
             if fixed:
                 self.log.info("regressions fixed", eval_run_id=run_id, regression_group_ids=fixed)
         await write_outbox(conn, SCHEMA, completed_event(done, JobStatus.COMPLETED, None))
+        return done
 
     # ------------------------------------------------------------ endings
 
@@ -486,7 +499,8 @@ class EvalWorker:
     ) -> None:
         """Ends the run (``held``: only while this worker holds its lease)."""
         async with transaction(self.store.pool) as conn:
-            await self._finish_in(conn, run, status, error, reason, owner=self.owner if held else None)
+            done = await self._finish_in(conn, run, status, error, reason, owner=self.owner if held else None)
+        self._ended(done)
 
     async def _finish_in(
         self,
@@ -522,14 +536,17 @@ class EvalWorker:
         """Runs whose worker lost its lease go back to the queue, or fail after
         ``max_run_attempts``."""
         out: list[tuple[str, str]] = []
+        ended: list[Row | None] = []
         async with transaction(self.store.pool) as conn:
             for run in await self.store.expired_leases(conn):
                 if int(run["attempts"]) >= self.cfg.max_run_attempts:
                     error = f"Gave up after {run['attempts']} attempts (the worker lost its lease each time)."
-                    await self._finish_in(conn, run, JobStatus.FAILED, error)
+                    ended.append(await self._finish_in(conn, run, JobStatus.FAILED, error))
                     out.append((str(run["id"]), "FAILED"))
                 elif await self.store.transition(conn, str(run["id"]), JobStatus.QUEUED, "lease expired"):
                     out.append((str(run["id"]), "QUEUED"))
+        for done in ended:
+            self._ended(done)
         return out
 
     async def calibrate_next(self) -> str | None:
@@ -607,6 +624,7 @@ class EvalWorker:
             run = release_run(env)
         except (ValueError, KeyError, TypeError) as err:
             raise Permanent(f"not a release evaluation run: {err}") from err
+        failed: Row | None = None
         async with transaction(self.store.pool) as conn:
             row = await self.store.insert_release_run(conn, run)
             if row is None:
@@ -616,7 +634,8 @@ class EvalWorker:
                 )
                 return None
             if not run["selection"]["scenario_versions"]:
-                await self._finish_in(conn, row, JobStatus.FAILED, EMPTY_SUITE)
+                failed = await self._finish_in(conn, row, JobStatus.FAILED, EMPTY_SUITE)
+        self._ended(failed)
         self.log.info(
             "release eval run requested",
             eval_run_id=run["id"],
@@ -650,6 +669,8 @@ class EvalWorker:
             try:
                 for run_id, status in await self.recover_expired():
                     self.log.warn("eval run recovered", eval_run_id=run_id, status=status)
+                if self.metrics is not None:
+                    self.metrics.active(await self.store.active_run_counts())
             except Exception as err:  # noqa: BLE001 - keep recovering
                 self.log.error("eval run recovery failed", error=repr(err))
             with suppress(TimeoutError):

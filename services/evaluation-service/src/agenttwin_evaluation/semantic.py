@@ -24,6 +24,7 @@ Discipline:
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -39,6 +40,7 @@ from agenttwin_evaluation.judges import (
     JudgeVerdict,
     judge_identity,
 )
+from agenttwin_evaluation.metrics import EvaluationMetrics
 
 __all__ = [
     "DEFAULT_THRESHOLD",
@@ -172,6 +174,11 @@ class SemanticJudging:
     timeout_s: float = 120.0
     # The criteria this judging graded (for the run-level identity).
     used: set[str] = field(default_factory=set)
+    metrics: EvaluationMetrics | None = None
+
+    def _count(self, outcome: str, seconds: float | None = None) -> None:
+        if self.metrics is not None:
+            self.metrics.judge_call(self.judge.provider, outcome, seconds)
 
     def is_calibrated(self, criterion: str) -> bool:
         if isinstance(self.calibrated, bool):
@@ -250,6 +257,7 @@ class SemanticJudging:
             hit = await self.cache.get(key)
             if hit is not None:
                 self.used.add(request.criterion)
+                self._count("cached")
                 return Judged(
                     self._graded(spec, index, hit, request.criterion),
                     identity,
@@ -258,6 +266,7 @@ class SemanticJudging:
                     cache_key=key,
                 )
         if not self.budget.allows():
+            self._count("budget_spent")
             return Judged(
                 self._result(
                     spec,
@@ -268,11 +277,13 @@ class SemanticJudging:
                 identity,
                 cache_key=key,
             )
+        started = time.perf_counter()
         try:
             async with asyncio.timeout(self.timeout_s):
                 verdict = await self.judge.judge(request)
         except JudgeError as err:
             self.budget.calls += 1
+            self._count(f"error_{err.kind}", time.perf_counter() - started)
             return Judged(
                 self._result(
                     spec,
@@ -287,6 +298,7 @@ class SemanticJudging:
             )
         except TimeoutError:
             self.budget.calls += 1
+            self._count("timeout", time.perf_counter() - started)
             return Judged(
                 self._result(
                     spec,
@@ -299,6 +311,7 @@ class SemanticJudging:
                 identity,
                 cache_key=key,
             )
+        self._count("verdict", time.perf_counter() - started)
         self.budget.record(verdict)
         if self.cache is not None:
             await self.cache.put(key, verdict, identity)

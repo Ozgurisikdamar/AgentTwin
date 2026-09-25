@@ -61,6 +61,8 @@ type verdict struct {
 	replay  *store.Idem
 	forward bool
 	limits  *policy.Limits
+	// approvalEvent is counted once the transaction commits.
+	approvalEvent string
 }
 
 // gatewayProject is the project a gateway call acts in: the header, or the
@@ -166,13 +168,21 @@ func (s *Server) invoke(w http.ResponseWriter, r *http.Request) error {
 	})
 	if err != nil {
 		s.Log.ErrorContext(ctx, "gateway decision failed", "tool", inv.tool, "error", err.Error())
+		s.Metrics.Decision(nil, "unavailable")
 		return unavailable(err)
 	}
+	s.Metrics.Approval(v.approvalEvent)
 	setDecisionHeaders(w.Header(), v.decision, v.version)
 	switch {
 	case v.refusal != nil:
+		if v.decision.ID == "" {
+			s.Metrics.Decision(nil, "refused") // an idempotency conflict: nothing was decided
+		} else {
+			s.Metrics.Decision(v.decision.Effect, v.decision.Outcome)
+		}
 		return v.refusal
 	case v.replay != nil:
+		s.Metrics.Decision(v.decision.Effect, v.decision.Outcome)
 		w.Header().Set(gateway.HeaderReplayed, "true")
 		if orig, err := s.Store.Decision(ctx, inv.sc, v.replay.DecisionID); err == nil && orig.Effect != nil {
 			w.Header().Set(gateway.HeaderDecision, *orig.Effect)
@@ -333,6 +343,7 @@ func (s *Server) admit(ctx context.Context, tx pgx.Tx, inv invocation, d store.D
 			map[string]any{"tool": inv.tool, "action_hash": inv.hash, "decision_id": d.ID}); err != nil {
 			return err
 		}
+		v.approvalEvent = ApprovalUsed
 	}
 	v.decision, v.forward = d, true
 	return s.Store.InsertDecision(ctx, tx, sc, d)
@@ -364,6 +375,9 @@ func (s *Server) askApproval(ctx context.Context, tx pgx.Tx, inv invocation, d s
 	if err != nil {
 		return err
 	}
+	if a.DecisionID == d.ID {
+		v.approvalEvent = ApprovalRequested // a new request, not the same action asked again
+	}
 	d.Outcome, d.ApprovalID = store.OutcomeApprovalRequired, &a.ID
 	v.decision = d
 	v.refusal = httpx.NewError(http.StatusForbidden, "APPROVAL_REQUIRED", d.Message+" A person must approve this exact action.").
@@ -381,7 +395,7 @@ func (s *Server) askApproval(ctx context.Context, tx pgx.Tx, inv invocation, d s
 func (s *Server) useToken(ctx context.Context, tx pgx.Tx, inv invocation, d store.Decision, v *verdict, now time.Time) error {
 	refuse := func(code, message string, details map[string]any) error {
 		d.Outcome = store.OutcomeApprovalRefused
-		v.decision = d
+		v.decision, v.approvalEvent = d, ApprovalRefused
 		if details == nil {
 			details = map[string]any{}
 		}
@@ -488,7 +502,8 @@ func (s *Server) complete(ctx context.Context, w http.ResponseWriter, inv invoca
 	ans, ferr := s.forward(ctx, call{Endpoint: inv.endpoint, Tool: inv.tool, Args: inv.args.Canonical(),
 		IdempotencyKey: inv.ctx.IdempotencyKey, Traceparent: inv.traceparent, Headers: inv.headers,
 		Timeout: timeout, MaxBytes: maxBytes, RequestID: logx.RequestID(ctx)})
-	latency := int(time.Since(start).Milliseconds())
+	elapsed := time.Since(start)
+	latency := int(elapsed.Milliseconds())
 	outcome, code := store.OutcomeExecuted, ""
 	var status *int
 	switch {
@@ -500,6 +515,8 @@ func (s *Server) complete(ctx context.Context, w http.ResponseWriter, inv invoca
 	default:
 		status = &ans.Status
 	}
+	s.Metrics.Decision(v.decision.Effect, outcome)
+	s.Metrics.Forwarded(outcome, elapsed)
 	statusCode := 0
 	if status != nil {
 		statusCode = *status
@@ -624,6 +641,7 @@ func (s *Server) claimToken(w http.ResponseWriter, r *http.Request) error {
 	if refusal != nil {
 		return refusal
 	}
+	s.Metrics.Approval(ApprovalClaimed)
 	w.Header().Set("Cache-Control", "no-store")
 	httpx.WriteJSON(w, http.StatusCreated, out)
 	return nil

@@ -440,6 +440,14 @@ class Store:
             (run_id,),
         )
 
+    async def active_run_counts(self) -> dict[str, int]:
+        """Unfinished runs by status (QUEUED is the queue a worker claims from)."""
+        rows = await self.all(
+            """SELECT status, count(*) AS n FROM eval_run
+               WHERE status IN ('QUEUED', 'PREPARING', 'RUNNING', 'EVALUATING') GROUP BY status"""
+        )
+        return {str(r["status"]): int(r["n"]) for r in rows}
+
     async def expired_leases(self, conn: Conn, limit: int = 20) -> list[Row]:
         return await self._all(
             conn,

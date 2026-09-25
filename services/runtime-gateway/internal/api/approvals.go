@@ -201,6 +201,11 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request, status string) e
 	if closed != nil {
 		return closed
 	}
+	if status == gateway.StatusDenied {
+		s.Metrics.Approval(ApprovalDenied)
+	} else {
+		s.Metrics.Approval(ApprovalApproved)
+	}
 	a, err := s.Store.Approval(r.Context(), s.Store.Pool, sc, id, false)
 	if err != nil {
 		return err

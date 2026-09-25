@@ -25,6 +25,7 @@ from agenttwin_evaluation.clients import SimulationClient, TraceClient
 from agenttwin_evaluation.config import EvaluationConfig, load_config
 from agenttwin_evaluation.datasets import DatasetsAPI
 from agenttwin_evaluation.judges import build_judge
+from agenttwin_evaluation.metrics import EvaluationMetrics
 from agenttwin_evaluation.miner import Miner
 from agenttwin_evaluation.regression_store import RegressionStore
 from agenttwin_evaluation.regressions import RegressionsAPI
@@ -85,6 +86,7 @@ async def build_worker(rt: Runtime, cfg: Any) -> FastAPI | None:
         traces=traces,
         judge=build_judge(cfg.judge),
         log=rt.log,
+        metrics=EvaluationMetrics.on(rt.metrics.registry, rt.metrics.service),
         miner=Miner(
             store=RegressionStore(rt.pool),
             traces=traces,

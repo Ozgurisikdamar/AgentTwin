@@ -161,6 +161,15 @@ type ApprovalFilter struct {
 	Tool   string
 }
 
+// CountPending is the number of approval requests, in every project, that
+// wait for a person and have not reached their expiry (a gauge of the
+// gateway's metrics, not an API answer).
+func (s *Store) CountPending(ctx context.Context, now time.Time) (int, error) {
+	var n int
+	err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM approval_request WHERE status = 'PENDING' AND expires_at > $1`, now).Scan(&n)
+	return n, err
+}
+
 // Approvals lists requests, newest first, from after.
 func (s *Store) Approvals(ctx context.Context, sc Scope, f ApprovalFilter, now time.Time, after *httpx.Cursor, limit int) ([]Approval, error) {
 	var afterTS any

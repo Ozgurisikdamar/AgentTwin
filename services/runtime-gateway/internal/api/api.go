@@ -41,6 +41,8 @@ type Server struct {
 	// Client forwards calls to tools (built from Egress when nil).
 	Client *http.Client
 	Now    func() time.Time
+	// Metrics counts decisions and approvals (nil records nothing).
+	Metrics *Metrics
 
 	policies policyCache
 }

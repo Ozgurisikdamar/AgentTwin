@@ -20,6 +20,7 @@ Content capture is off by default; see ``Config.content_mode``.
 from agenttwin._version import __version__
 from agenttwin.api import APIError, Client
 from agenttwin.config import Config
+from agenttwin.gateway import Gateway, GatewayError, ToolResponse
 from agenttwin.hashing import canonical_json, content_hash, sha256_hex
 from agenttwin.manifest import AgentManifest, load_manifest
 from agenttwin.outcomes import OutcomeReportError, report_outcome
@@ -48,12 +49,15 @@ __all__ = [
     "Client",
     "Config",
     "ExportStats",
+    "Gateway",
+    "GatewayError",
     "ModelCall",
     "OutcomeReportError",
     "RedactionConfig",
     "Redactor",
     "Retrieval",
     "ToolCall",
+    "ToolResponse",
     "__version__",
     "canonical_json",
     "configure",

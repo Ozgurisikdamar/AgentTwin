@@ -26,6 +26,8 @@ __all__ = [
     "agent_result",
     "agent_version",
     "agent_version_detail",
+    "approval",
+    "approval_token",
     "case_detail",
     "case_summary",
     "catalog_entry",
@@ -1250,6 +1252,46 @@ def promoted_regression(regression_: Mapping[str, Any], **over: Any) -> dict[str
     } | over
 
 
+# ------------------------------------------------------------ runtime gateway
+
+
+def approval(approval_id: str, **over: Any) -> dict[str, Any]:
+    """An approval request (``getGatewayApproval``, ``getApproval``)."""
+    return {
+        "id": approval_id,
+        "project_id": PROJECT,
+        "tool": "refund_payment",
+        "risk": "WRITE_IRREVERSIBLE",
+        "agent": "support-refund-agent",
+        "agent_version": "1.3.1",
+        "environment": "production",
+        "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+        "action_hash": sha256("a"),
+        "arguments": {"order_id": "ORD-1003", "amount": 150},
+        "summary": "refund_payment order_id=ORD-1003 amount=150",
+        "policy": "refund-limits",
+        "policy_version_id": uuid(0xF001),
+        "rule": "approval-above-100",
+        "reason": "Refunds above 100 need a person's approval.",
+        "decision_id": uuid(0xF002),
+        "status": "PENDING",
+        "requested_by": ACTOR,
+        "expires_at": "2026-01-01T00:20:00Z",
+        "decided_by": None,
+        "decided_at": None,
+        "decision_reason": None,
+        "used_at": None,
+        "used_decision_id": None,
+        "created_at": NOW,
+        "updated_at": NOW,
+    } | over
+
+
+def approval_token(approval_id: str) -> dict[str, Any]:
+    """A claimed approval token (``claimApprovalToken``)."""
+    return {"approval_id": approval_id, "token": "apt_" + "T" * 43, "expires_at": "2026-01-01T00:10:00Z"}
+
+
 def error(code: str, message: str, **details: Any) -> dict[str, Any]:
     body: dict[str, Any] = {"code": code, "message": message, "request_id": "0" * 32}
     if details:
@@ -1273,6 +1315,11 @@ _ROUTES: tuple[tuple[str, str], ...] = (
     ("/api/v1/reviews", "evaluation-service"),
     ("/api/v1/judges", "evaluation-service"),
     ("/api/v1/regressions", "evaluation-service"),
+    ("/api/v1/tool-endpoints", "runtime-gateway"),
+    ("/api/v1/policies", "runtime-gateway"),
+    ("/api/v1/policy-decisions", "runtime-gateway"),
+    ("/api/v1/approvals", "runtime-gateway"),
+    ("/gateway/v1", "runtime-gateway"),
     ("/internal/v1", "control-plane"),
     ("/api/v1", "control-plane"),
 )

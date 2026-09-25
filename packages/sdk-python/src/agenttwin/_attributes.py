@@ -84,6 +84,10 @@ POLICY_DECISION = "agenttwin.policy.decision"
 POLICY_NAME = "agenttwin.policy.name"
 POLICY_VERSION = "agenttwin.policy.version"
 POLICY_RULE = "agenttwin.policy.rule"
+#: The runtime gateway's record of the decision (ADR-0033).
+POLICY_DECISION_ID = "agenttwin.policy.decision_id"
+#: The approval request a require_approval decision opened or used.
+POLICY_APPROVAL_ID = "agenttwin.policy.approval_id"
 
 # Outcome
 OUTCOME_STATUS = "agenttwin.outcome.status"

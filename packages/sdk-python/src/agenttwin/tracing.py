@@ -436,6 +436,16 @@ class _SpanScope:
     def span_id(self) -> str:
         return format(self.span.get_span_context().span_id, "016x")
 
+    @property
+    def traceparent(self) -> str | None:
+        """The W3C ``traceparent`` of this span, to pass to a service that
+        joins the trace (the runtime gateway records its decision on it);
+        ``None`` when tracing is not recording."""
+        ctx = self.span.get_span_context()
+        if not ctx.is_valid:
+            return None
+        return f"00-{ctx.trace_id:032x}-{ctx.span_id:016x}-{int(ctx.trace_flags):02x}"
+
 
 class AgentRun(_SpanScope):
     """The root span of one agent run."""
@@ -559,8 +569,13 @@ class AgentRun(_SpanScope):
         rule: str | None = None,
         tool: str | None = None,
         reason: str | None = None,
+        decision_id: str | None = None,
+        approval_id: str | None = None,
     ) -> None:
-        """Record a policy decision taken for this run (point-in-time span)."""
+        """Record a policy decision taken for this run (point-in-time span,
+        a child of the current span: inside a tool call, of that call).
+        ``decision_id`` and ``approval_id`` link it to the runtime gateway's
+        record."""
         try:
             attrs: dict[str, Any] = {A.SPAN_KIND: "policy", A.POLICY_DECISION: decision}
             for key, value in (
@@ -568,6 +583,8 @@ class AgentRun(_SpanScope):
                 (A.POLICY_VERSION, version),
                 (A.POLICY_RULE, rule),
                 (A.GENAI_TOOL_NAME, tool),
+                (A.POLICY_DECISION_ID, decision_id),
+                (A.POLICY_APPROVAL_ID, approval_id),
             ):
                 if value:
                     attrs[key] = value

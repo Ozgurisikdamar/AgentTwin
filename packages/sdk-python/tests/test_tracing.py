@@ -159,6 +159,42 @@ def test_span_contract_and_hierarchy(make_client: Any, exporter: InMemorySpanExp
     assert resource["deployment.environment.name"] == "production"
 
 
+def test_a_gateway_decision_is_recorded_under_its_tool_call(
+    make_client: Any, exporter: InMemorySpanExporter
+) -> None:
+    """The traceparent a tool call passes to the runtime gateway names that
+    call; the gateway's decision is recorded as a child of it, linked to the
+    gateway's record."""
+    client = make_client()
+    decision_id, approval_id = "0190f3b4-0000-7000-8000-00000000f102", "0190f3b4-0000-7000-8000-00000000f101"
+    with (
+        client.agent_run("support-refund-agent", "1.3.1") as run,
+        run.tool_call("refund_payment", args={"amount": 150}) as tool,
+    ):
+        traceparent = tool.traceparent
+        run.policy_decision(
+            "require_approval",
+            policy="refund-limits",
+            rule="approval-above-100",
+            tool="refund_payment",
+            decision_id=decision_id,
+            approval_id=approval_id,
+        )
+        tool.set_error("denied", "APPROVAL_REQUIRED", http_status=403)
+    assert client.flush()
+    spans = by_name(exporter.get_finished_spans())
+    call, decision = spans["execute_tool refund_payment"], spans["policy.decision"]
+    ctx = call.context
+    assert traceparent == f"00-{ctx.trace_id:032x}-{ctx.span_id:016x}-{int(ctx.trace_flags):02x}"
+    assert decision.parent is not None and decision.parent.span_id == call.context.span_id
+    a = attrs(decision)
+    assert (a["agenttwin.policy.decision_id"], a["agenttwin.policy.approval_id"]) == (
+        decision_id,
+        approval_id,
+    )
+    assert "agenttwin.policy.version" not in a
+
+
 def test_redacted_mode_masks_pii_and_secrets(make_client: Any, exporter: InMemorySpanExporter) -> None:
     client = make_client(content_mode="redacted")
     run_refund(client)

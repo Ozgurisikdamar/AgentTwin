@@ -89,7 +89,7 @@ flowchart TB
 
   cp <-->|events| mq
   ts -->|trace.ingested.v1| mq
-  mq -->|trace.ingested.v1| gs
+  mq -->|agent.version_registered.v1, tool.catalog_imported.v1,<br/>trace.ingested.v1, scenario.upserted.v1, policy.activated.v1| gs
   mq -->|trace.ingested.v1 / outcome / flag| es
   es <-->|simulation.run_*| mq
   mq <--> ss
@@ -194,13 +194,11 @@ sequenceDiagram
   participant ES as evaluation-service
   participant MQ as RabbitMQ
   U->>CP: POST /releases/{id}/evaluate (Idempotency-Key)
-  CP->>CP: compute ChangeSet (manifest + tool registry diff)
-  CP->>GS: POST /internal/v1/blast-radius (changed components)
-  GS-->>CP: affected components, paths, impacted scenario keys
-  CP->>SS: POST /internal/v1/scenarios/select (components, text, tags)
-  SS-->>CP: scenarios + selection reasons (graph / tag / similarity)
-  CP->>ES: GET /internal/v1/regressions/active
-  ES-->>CP: known-regression scenarios
+  CP->>CP: the release's change set (stored, immutable — §3.7)
+  CP->>GS: POST /api/v1/blast-radius (changed components)
+  GS-->>CP: affected components, paths, linked scenarios
+  CP->>SS: POST /api/v1/scenarios/match (names, tags, sources, similarity queries)
+  SS-->>CP: scenarios + selection reasons (graph / tag / known regression / similarity)
   CP->>CP: persist ReleaseEvaluation + outbox(evaluation.run_requested.v1) in one tx
   CP-->>U: 202 {evaluation_id, status: QUEUED}
   CP->>MQ: evaluation.run_requested.v1 (outbox relay, publisher confirms)
@@ -216,6 +214,8 @@ sequenceDiagram
 
 Any missing mandatory result, failed simulation, evaluator `ERROR` or stale run
 produces **BLOCK (INCOMPLETE)** — infrastructure uncertainty never yields PASS.
+Steps 2–6 exist since Phase 4 as the change impact of §3.7; an impact that is
+not `complete` counts as a missing mandatory result.
 
 ### 3.4 Simulation run
 
@@ -292,7 +292,57 @@ without the simulation service. Design decisions:
 (the pinned pair), [ADR-0024](../adr/0024-evaluation-runs-wait-without-a-lease.md)
 (waiting without a lease).
 
-### 3.6 Runtime containment (opt-in)
+### 3.6 The dependency graph (from events)
+
+The graph service builds each project's graph from events, and people add
+manual mappings (ADR-0026):
+
+| Event (producer) | Components and relationships | Evidence |
+|---|---|---|
+| `agent.version_registered.v1` (control plane) | agent, version (`VERSION_OF`), prompt, model, tools (`USES`), retrieval sources, declared dependencies of each tool | `MANIFEST` |
+| `tool.catalog_imported.v1` (control plane, ADR-0028) | tool → `HTTP_API` or `MCP_SERVER` → `SERVICE` | `OPENAPI` (0.9), `MCP` (0.8) |
+| `trace.ingested.v1` (trace service; production traffic only, not simulations or tests) | version `USES` the tools it called, a tool `CALLS` the host it reached; counted, not stored per trace | `OBSERVED` |
+| `scenario.upserted.v1` (simulation service) | scenario, `TESTED_BY` from the agent and the components it covers | `SCENARIO` |
+| `policy.activated.v1` (runtime gateway, Phase 7) | policy, the tool it targets `GUARDED_BY` it | `MANUAL` (the policy author's) |
+| `PUT /api/v1/graph/mappings/{tool}` (a person, `graph.write`, audited) | tool → dependencies | `MANUAL` |
+
+Every relationship keeps one evidence row per source and reference; the
+edge's sources and confidence follow from them. Writes to one project are
+serialized (advisory lock) and idempotent per event (`processed_event`); an
+event that cannot be mapped is parked, not retried.
+
+### 3.7 Change impact
+
+What a change requires, available on its own since Phase 4 (UI, SDK, and
+`make seed`, which compares the pairs in `SEED_CHANGES`), and the input of
+the release gate (Phase 5):
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as UI / CLI / SDK
+  participant CP as control-plane
+  participant GS as graph-service
+  participant SS as simulation-service
+  participant E as embedding provider (hashing-v1 / OpenAI-compatible)
+  U->>CP: POST /api/v1/projects/{id}/change-sets {agent, base, candidate}
+  CP->>CP: compare the two manifests → items + seeds scoped to the candidate<br/>stored once, keyed by the request's hash, immutable (ADR-0027)
+  CP-->>U: 201 {change set} (200 for a repeat)
+  U->>CP: GET /api/v1/change-sets/{id}/impact
+  CP->>GS: POST /api/v1/blast-radius (seeds, scope, max depth)<br/>as the caller, this project only
+  GS-->>CP: affected components with paths and scores,<br/>linked scenarios, policies, evaluators, irreversible actions
+  CP->>SS: POST /api/v1/scenarios/match (graph-linked names, always-run tags,<br/>known-regression source, similarity queries from the items)
+  SS->>E: embed stale scenarios and the queries
+  SS-->>CP: scenarios, each with the reasons it matched
+  CP-->>U: required scenarios with a sentence per reason, affected components,<br/>new privileges, complete / problems / notes (ADR-0029)
+```
+
+A service that cannot answer makes the impact `complete: false` with the
+problem named; it never shrinks the suite silently. The web shows the change
+set, the diff of each item, the required scenarios with why, and the blast
+radius on the dependency graph (ADR-0030).
+
+### 3.8 Runtime containment (opt-in)
 
 `agent → POST /gateway/v1/tools/{tool}/invoke → policy (CEL) → allow | allow_with_limits | require_approval | deny → upstream tool`
 
@@ -308,11 +358,11 @@ through REST (synchronous, owner-validated) or events (asynchronous).
 
 | Schema | Owner | Main tables |
 |---|---|---|
-| `control` | control-plane | organization, app_user, membership, project, environment, api_key, agent, agent_version, prompt_version, tool, tool_version, release_candidate, release_evaluation, gate_decision, gate_override, gate_policy, audit_event, outbox, processed_event |
+| `control` | control-plane | organization, app_user, membership, project, environment, api_key, agent, agent_version, prompt_version, tool, tool_version, tool_catalog, change_set, release_candidate, release_evaluation, gate_decision, gate_override, gate_policy, audit_event, outbox, processed_event |
 | `trace` | trace-service | trace, span, outcome, trace_flag, outbox |
-| `graph` | graph-service | component, dependency_edge, edge_evidence, processed_event |
+| `graph` | graph-service | component, dependency_edge, edge_evidence, outbox, processed_event |
 | `evaluation` | evaluation-service | dataset, dataset_version, eval_run, eval_run_transition, eval_case_result, judgment (verdict cache), human_review, judge_calibration, outbox, processed_event (regression mining adds its tables in Phase 6) |
-| `simulation` | simulation-service | twin_definition, scenario, scenario_version, simulation_run, simulation_run_transition, simulation_case, simulation_step, outbox, processed_event |
+| `simulation` | simulation-service | twin_definition, scenario, scenario_version, scenario_embedding (pgvector), simulation_run, simulation_run_transition, simulation_case, simulation_step, outbox, processed_event |
 | `runtime` | runtime-gateway | policy, policy_version, policy_decision, approval_request, approval_token, idempotency_record, tool_endpoint, trace_tool_counter, outbox |
 
 Each service ships its own versioned migrations (`<service>/migrations`), applied

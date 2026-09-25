@@ -130,8 +130,8 @@ if is_running postgres && $COMPOSE exec -T postgres pg_isready -q -U "${POSTGRES
     "SELECT default_version FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | tr -d '[:space:]')
   [ -n "$vec" ] && ok "pgvector $vec available" || fail "pgvector extension is not available (use the pgvector/pgvector image)"
   schemas=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
-    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','evaluation','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
-  [ "$schemas" = "control,evaluation,simulation,trace" ] && ok "service schemas: control, evaluation, simulation, trace" ||
+    "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','evaluation','graph','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
+  [ "$schemas" = "control,evaluation,graph,simulation,trace" ] && ok "service schemas: control, evaluation, graph, simulation, trace" ||
     fail "service schemas missing (found: ${schemas:-none})"
 else
   fail "postgres is not ready ($COMPOSE logs postgres)"

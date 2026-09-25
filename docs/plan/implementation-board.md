@@ -9,7 +9,7 @@ tested software and is committed separately. Status is updated as work lands.
 | 1 | Walking skeleton: auth dev flow, projects/agents/versions, trace-service, OTel collector, Python SDK, demo agent, web trace page | `make dev` → demo agent trace visible in browser | done |
 | 2 | Scenarios, declarative stateful tool twin, fault injection, simulation runs + UI | happy path and timeout-after-mutation scenarios run | done |
 | 3 | Evaluators (deterministic, trajectory, judge adapter), datasets, eval runs, baseline vs candidate | candidate regression detected | done |
-| 4 | Graph, manifest/OpenAPI/MCP import, observed edges, change set, bounded blast radius, impacted selection | prompt/tool change selects refund scenarios with reasons | pending |
+| 4 | Graph, manifest/OpenAPI/MCP import, observed edges, change set, bounded blast radius, impacted selection | prompt/tool change selects refund scenarios with reasons | done |
 | 5 | Release, gate rules, immutable evidence, CLI CI output, release UI | bad candidate BLOCKED | pending |
 | 6 | Regression miner: features, embeddings, grouping, taxonomy, inbox, promotion | demo failure → regression case → auto-included in next gate | pending |
 | 7 | Runtime gateway: CEL policies, approvals, idempotency, SSRF-safe proxy, audit | over-limit refund requires approval; tampered args rejected | pending |
@@ -214,6 +214,57 @@ files); `make lint-web` clean; Python 559 passed on the test infrastructure
 (real PostgreSQL and RabbitMQ) — evaluation service 121, simulation service
 145; `make contracts-check`: 14 event schemas and 4 API documents (66
 operations) compatible with the baselines, generated web types up to date.
+
+## Phase 4 evidence (2026-09-25)
+
+Acceptance: *a prompt or tool change selects the refund scenarios and says
+why.* It holds on a stack built from scratch, through the API (the seed) and
+through the UI (the Phase 4 e2e tests). Commands run on the Phase 4 code, with
+their results:
+
+| Command | Result |
+|---|---|
+| `make reset` (drop volumes, then `make dev`: build, start, wait until healthy, seed) | Stack healthy and seeded in 90 s. Seeded: 5 manifests (1.2.3 to 1.3.2); tool twin `demo-co-support` v1; 9 scenarios; 3 tool catalogs (OpenAPI `payments-api` r1 and `orders-api` r1, MCP `support-desk` r1, 3 tools each; the manifests' tools kept); 2 change sets; simulations of 1.2.4 (9/9 passed) and 1.3.0 (6 passed, 3 failed, 2 critical); dataset `refund-regression-suite` v1; the evaluation of 1.3.0 against 1.2.4 (2 new critical failures, 1 regressed, 6 unchanged); 40 conversations |
+| Change impact, prompt change 1.2.4 → 1.3.0 | **complete**, **9 scenarios required**. The item: "prompt modified; changed lines mention get_refund_policy, lookup_order, refund_payment". **7 scenarios test `refund_payment`** (the six refund scenarios and `cross-tenant-order`). Each is linked by the graph ("tests tool refund_payment, which the change to the prompt reaches in 2 steps") and is close to the change, with text similarity 0.28 to 0.50. `refund-happy-path` is also linked through `get_refund_policy` and `lookup_order`. `malicious-retrieved-content` and `unauthorized-admin-tool` run because they are tagged `security`, and are linked only weakly, through the agent. Blast radius: prompt → support-refund-agent@1.3.0 → refund_payment → payments-api. Irreversible actions within reach: `refund_payment` and `export_customer_data` |
+| Change impact, tool change 1.3.1 → 1.3.2 | **complete**, **9 scenarios required**. The item: "tool refund_payment: description changed; 2 schema changes (2 breaking)". The same 7 scenarios are required, each because it "tests tool refund_payment, which changed". Four of them are also close to the change, with text similarity 0.27 to 0.41. The two other security scenarios run because they are tagged `security`. Irreversible action: `refund_payment` |
+| `make doctor` | 0 failed, 1 warning (development placeholder secrets). Services checked: the graph service ready, all migrations applied (control plane 3, graph 1, simulation 3), no event waiting without a consumer. `make doctor` now also checks the graph schema; see "Found on the way" below |
+| `make e2e` | 20/20 Playwright tests against the fresh stack. Phase 1: 7, Phase 2: 5, Phase 3: 4, Phase 4: 4. The Phase 4 tests cover: the prompt change and its reasons; the required scenarios opened as a simulation of the candidate; the tool change; the graph opened on a change's blast radius, with a component's evidence, the evidence filter and the component search; an engineer's manual mapping round trip; a viewer's read-only view. Screenshots in `docs/screenshots/phase4-*.png` |
+| `make lint` | gofmt clean; `go vet` clean; golangci-lint 0 issues; ruff, ruff format and mypy strict (84 files) clean; Prettier, ESLint and `tsc` clean |
+| `make test` | Go: 245 tests and 141 subtests pass with real PostgreSQL and RabbitMQ (0 failed, 0 skipped). Python: 666 (core 194, simulation service 168, evaluation service 133, SDK 73, demo 49, contracts and document checks 49). Web: 214 (22 files) |
+| `make contracts-check` | 14 event schemas and 5 API documents (86 operations) compatible with the baselines. The five generated web type files are up to date, including the new `graph.gen.ts` |
+
+## Phase 4 progress (2026-09-25)
+
+Pieces landed, each with its tests and the mutations they catch (same
+method as Phase 3: a mutation is applied to the source, the tests run, the
+source is restored; "caught" means the tests failed):
+
+| Piece | Tests | Mutations caught |
+|---|---|---|
+| Graph domain and bounded blast radius (`graph-service/internal/graph`, ADR-0026) — components, edges, evidence sources and their confidence; up/down traversal with depth, node budget and version scope; deterministic scores, severities and the path to every affected component; scenarios, policies and evaluators linked with a reason | 17 traversal tests and 7 neighbourhood tests, including properties over random graphs of every kind and edge type, run over 20,000 graphs once (depth bounded, every path step an edge in its direction, the same result whatever order the store answers in, a deeper bound never loses a component, scores in range, no version outside the scope) | 27 of 27 — nine survived a first run: three rules proved unnecessary and were removed, the other six got tests |
+| The graph from events, its API and contract (`ingest`, `api`, the consumer) — manifests, catalog imports, production traffic (counted), scenarios, policies and manual mappings; evidence per source and reference; one project's writes serialized; unmappable events parked | 11 ingest tests; 14 integration tests on PostgreSQL + the contract walk, every exchange checked against `graph-service.openapi.yaml`; route parity; the consumer's handlers held to the queue's bindings | 13 of 13. Live: the 196 events the running stack had queued for the graph consumed, none parked |
+| The edge names a person's projects (ADR-0025) — found by the graph's tests: another organization's project id could be written to | proxy unit tests, an end-to-end integration test through the edge, the 100-project limit under 10 concurrent creations, the size of a 100-project token | 5 of 5. Live: another organization's owner gets `404` from the demo project's graph, datasets and scenarios |
+| Change-set domain (`control-plane/internal/changes`, ADR-0027) — prompt with masked line diff and the tools the changed lines name, model and parameters, limits, tools (risk escalation as a new privilege, input-schema changes breaking or not per spec §118), retrieval sources, dependencies, code by file names, declared changes; seeds scoped to the candidate | 16 (demo manifests: 1.2.4 → 1.3.0 changes only the prompt, whose changed lines name `get_refund_policy`, `lookup_order`, `refund_payment`; a synthetic pair covering every kind; table tests of schema and text diffs; bounds on untrusted schema depth and size) | 25 of 25 — two survived a first run and got two more tests |
+| Change sets stored and served — `release.write`, prompt diff only with `settings.read`, content-addressed, immutable, composite keys | 9 integration tests through the contract checker (content, repeat, visibility, validation, paging, tenancy, project keys, schema invariants, concurrency) and the migration rollback test | 16 of 16 |
+| Tool catalogs read from OpenAPI 3.0/3.1 and MCP `tools/list` (`internal/catalog`, ADR-0028) — names, input schemas, risk (override, `x-agenttwin-risk`, method; MCP hints only when trusted), hostile documents bounded | 11, including hostile documents (external references, cycles, reference bombs, depth, size) | 19 of 19 |
+| Catalog import API — registry outcomes (`kept_manifest`, `kept_other_source`), immutable revisions, `tool.catalog_imported.v1` | 6 integration tests through the contract checker (outcomes, revisions, JSON and YAML, MCP hints trusted only on request, tenancy, project keys, concurrency) | 15 of 15. Live: `TOOL refund_payment -CAN_MUTATE→ HTTP_API payments-api -DEPENDS_ON→ SERVICE payments-api` after an import through the edge |
+| Scenario matching (simulation service `POST /api/v1/scenarios/match`, ADR-0014) — `hashing-v1` embeddings, pgvector per scenario with model, recipe and version, lazy re-embedding, reasons per scenario | 17 integration tests on PostgreSQL with pgvector, 5 of the scenario text, 12 of the embedder | 45 of 45. Live: the nine demo scenarios embedded; a refund-limit prompt change selects the refund scenarios and not the data export one |
+| OpenAI-compatible embedding provider — batches, no proxies or redirects, every answer checked, retries with `Retry-After`; `503 EMBEDDINGS_UNAVAILABLE` rather than an empty selection | 13 against fake `/embeddings` servers (mock transport and a real socket with proxy variables set), plus the service's roles against a fake hosted model and the match API with a provider that cannot answer | 35 of 35 |
+| Change impact (`GET /api/v1/change-sets/{id}/impact`, `internal/impact`, ADR-0029) — the graph's blast radius and the scenario library in one answer, every scenario with every reason and a sentence, `complete: false` with problems and notes | 8 unit tests; 7 integration tests with fake graph and simulation services that check every request and answer against those services' own contracts | 41 of 41 |
+| Demo imports and acceptance — the payments and orders APIs and the support desk's MCP tools imported by the seed, version 1.3.2 (the refund tool's contract only), `--changes` pairs, SDK `import_openapi`, `import_mcp`, `create_change_set`, `change_set_impact` | SDK and seed tests with fakes held to the control-plane contract | — (wiring; the behaviour behind it is covered above). The live acceptance is in the evidence table above |
+| Web: change sets (`/changes`, `/changes/{id}`) — compare two versions, the masked prompt diff, schema changes with what breaks, whether the impact is complete, the required scenarios with a badge and a sentence per reason, the paths behind them, irreversible actions and new privileges; "Simulate the required scenarios" opens the candidate's simulation with them preselected | 35 (helpers 20, components 15) on the live payloads, typed by the contract | 19 of 19 |
+| Web: the dependency graph (`/graph`, ADR-0030) — bounded neighbourhood, deterministic layered layout, edges styled by evidence, evidence and risk-tier filters, a change's blast radius outlined by severity, component panel with relationships as sentences, find and centre, manual mapping for `graph.write` | 29 (graph helpers 16, canvas 5, explorer and panel 8) | 23 of 23 |
+| Phase 4 end to end (`apps/web/e2e/phase4-changes.spec.ts`) | 4 Playwright tests against the running stack: the prompt change, the tool change, the graph from a change set, the manual mapping round trip and a viewer's read-only view | — |
+
+Found on the way and fixed:
+
+* **Cross-organization writes.** A person of one organization could write
+  rows under another organization's project id. The graph's tests found it
+  (ADR-0025).
+* **`make doctor`'s schema check skipped the graph schema.** It now expects
+  all five service schemas.
+* **The graph's component search form shared its input's accessible name.**
+  The Phase 4 e2e test found it; the form is now "Component search".
 
 ## Definition of Done tracking
 

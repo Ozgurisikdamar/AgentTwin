@@ -324,12 +324,12 @@ AgentTwin does **not** turn these into a misleading “95% safe” claim.
 
 ## Development
 
-> **AgentTwin is under active phased development.** Phases 0–3 are done; the
-> blast radius, release gate, regression miner and runtime gateway follow.
+> **AgentTwin is under active phased development.** Phases 0–4 are done; the
+> release gate, regression miner and runtime gateway follow.
 
 Track live build status and the evidence of each phase: [docs/plan/implementation-board.md](docs/plan/implementation-board.md)
 
-### What works today (Phases 1–3)
+### What works today (Phases 1–4)
 
 * **Trace ingestion** from any OpenTelemetry-instrumented agent through the
   OTel Collector into the trace service: GenAI semantic conventions, per-project
@@ -354,10 +354,24 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   incomplete, improved or unchanged, with the first step where the two
   diverged. Versioned datasets, human reviews that replace a verdict, and
   judge calibration against labels people gave (agreement and Cohen's kappa).
+* **Dependency graph and change impact**: the graph of each project is built
+  from agent manifests, imported OpenAPI documents and MCP tool lists,
+  production traffic, scenarios and manual mappings, and every relationship
+  says how it is known (declared, observed or inferred) and how far to trust
+  it. A change set compares two versions of an agent — prompt (with a masked
+  diff), model, limits, tools and their input schemas, risk, retrieval
+  sources, dependencies, code — and its impact lists the scenarios the
+  change requires, each with why: linked by the graph through the changed
+  component, close to what changed (text similarity by default; a hosted
+  embedding model behind `EMBEDDING_PROVIDER`), always run by the gate
+  policy, or a known production regression. An impact a service could not
+  compute says so (`complete: false`) instead of listing fewer scenarios.
 * **Web UI**: trace explorer and trace detail with waterfall; scenarios and
   simulations with the evidence down to the tool call and the state diff;
   evaluations, compared cases side by side, datasets, the review queue and
-  judge calibration.
+  judge calibration; change sets with what each change requires and why,
+  and the dependency graph with a change's blast radius, evidence filters
+  and manual mappings.
 * **Demo**: *Demo Co*'s support-refund agent with production-like tools,
   driven by a deterministic scripted planner (or Anthropic Claude when
   `DEMO_AGENT_MODEL=anthropic` and a key are set). Version 1.2.4 is good,
@@ -420,9 +434,9 @@ apps/
   web/                Next.js UI and its BFF (/api/v1 through the control plane)
 
 services/
-  control-plane/      Go · auth, tenancy, projects, agents, audit, API edge
+  control-plane/      Go · auth, tenancy, projects, agents, tool imports, change sets, audit, API edge
   trace-service/      Go · OTLP ingestion, traces, outcomes
-  graph-service/      Go · dependency graph, bounded blast radius (Phase 4, in progress)
+  graph-service/      Go · dependency graph, evidence, bounded blast radius
   simulation-service/ Python · scenarios, tool twins, faults, simulation runs
   evaluation-service/ Python · datasets, evaluation runs, judges, reviews
 

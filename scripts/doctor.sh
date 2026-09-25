@@ -257,6 +257,22 @@ if [ -n "${AGENTTWIN_DEMO_API_KEY:-}" ]; then
   else
     warn "no regression mined yet - run 'make seed'"
   fi
+  policies=""
+  pending=""
+  if [ -n "$project" ]; then
+    policies=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
+      "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/policies?project_id=$project" 2>/dev/null)
+    pending=$(curl --noproxy '*' -s --max-time 5 -H "X-AgentTwin-Api-Key: $AGENTTWIN_DEMO_API_KEY" \
+      "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/api/v1/approvals?project_id=$project&status=PENDING&limit=200" 2>/dev/null)
+  fi
+  active=$(grep -o '"active": \?{' <<<"$policies" | wc -l | tr -d ' ')
+  waiting=$(grep -o '"status": \?"PENDING"' <<<"$pending" | wc -l | tr -d ' ')
+  if [ "${active:-0}" -gt 0 ]; then
+    if [ "$waiting" = "1" ]; then held="1 approval request waits"; else held="$waiting approval requests wait"; fi
+    ok "demo project has $active active runtime policies; $held for a person"
+  else
+    warn "no active runtime policy - run 'make seed'"
+  fi
 fi
 
 printf '\n%d failed, %d warnings\n' "$fails" "$warns"

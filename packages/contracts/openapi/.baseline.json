@@ -2146,6 +2146,7 @@
             ],
             "/principal/scopes/[]": [
               "\"ci\"",
+              "\"policies:deploy\"",
               "\"read\"",
               "\"runtime:invoke\"",
               "\"traces:write\""
@@ -2754,6 +2755,7 @@
           "enums": {
             "/items/[]/scopes/[]": [
               "\"ci\"",
+              "\"policies:deploy\"",
               "\"read\"",
               "\"runtime:invoke\"",
               "\"traces:write\""
@@ -7728,6 +7730,7 @@
           "enums": {
             "/scopes/[]": [
               "\"ci\"",
+              "\"policies:deploy\"",
               "\"read\"",
               "\"runtime:invoke\"",
               "\"traces:write\""
@@ -7840,6 +7843,7 @@
           "enums": {
             "/scopes/[]": [
               "\"ci\"",
+              "\"policies:deploy\"",
               "\"read\"",
               "\"runtime:invoke\"",
               "\"traces:write\""
@@ -9310,6 +9314,7 @@
           "enums": {
             "/scopes/[]": [
               "\"ci\"",
+              "\"policies:deploy\"",
               "\"read\"",
               "\"runtime:invoke\"",
               "\"traces:write\""
@@ -9345,6 +9350,7 @@
           "enums": {
             "/scopes/[]": [
               "\"ci\"",
+              "\"policies:deploy\"",
               "\"read\"",
               "\"runtime:invoke\"",
               "\"traces:write\""
@@ -17624,6 +17630,7 @@
             ],
             "/scopes/[]": [
               "\"ci\"",
+              "\"policies:deploy\"",
               "\"read\"",
               "\"runtime:invoke\"",
               "\"traces:write\""

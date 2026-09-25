@@ -28,6 +28,7 @@ export const API_TYPES = [
   { document: "control-plane.openapi.yaml", output: "src/lib/api/control-plane.gen.ts" },
   { document: "trace-service.openapi.yaml", output: "src/lib/api/traces.gen.ts" },
   { document: "simulation-service.openapi.yaml", output: "src/lib/api/simulation.gen.ts" },
+  { document: "evaluation-service.openapi.yaml", output: "src/lib/api/evaluation.gen.ts" },
 ] as const;
 
 type Json = Record<string, unknown>;

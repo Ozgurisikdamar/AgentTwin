@@ -5,9 +5,12 @@ from pathlib import Path
 
 import pytest
 
-# The factories and the integration harness (eval_testutil) are imported by
-# the test modules.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HERE = Path(__file__).resolve().parent
+# The integration harness (eval_testutil) is imported by the test modules; it
+# builds on the simulation service's harness (sim_testutil): an evaluation
+# drives real simulation runs.
+sys.path.insert(0, str(HERE))
+sys.path.insert(1, str(HERE.parents[1] / "simulation-service" / "tests"))
 
 
 @pytest.fixture

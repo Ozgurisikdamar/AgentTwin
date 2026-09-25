@@ -5574,6 +5574,1754 @@
       }
     }
   },
+  "evaluation-service": {
+    "DELETE /api/v1/datasets/{dataset_id}/cases/{scenario}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:dataset_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:scenario": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/version/cases/[]/last_result/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/version/cases/[]/privacy": [
+              "\"redacted\"",
+              "\"synthetic\""
+            ],
+            "/version/cases/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy\"",
+              "\"production_regression\""
+            ]
+          },
+          "required": {
+            "/": [
+              "dataset",
+              "version",
+              "versions"
+            ],
+            "/dataset": [
+              "archived",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "owner",
+              "project_id",
+              "tags",
+              "updated_at"
+            ],
+            "/version": [
+              "case_count",
+              "cases",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ],
+            "/version/cases/[]": [
+              "added_at",
+              "added_by",
+              "last_result",
+              "note",
+              "privacy",
+              "scenario",
+              "source",
+              "tags",
+              "trace_id"
+            ],
+            "/version/cases/[]/last_result": [
+              "baseline_status",
+              "baseline_version",
+              "candidate_status",
+              "candidate_version",
+              "classification",
+              "eval_run_id",
+              "finished_at"
+            ],
+            "/versions/[]": [
+              "case_count",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/dataset": [
+              "object"
+            ],
+            "/dataset/archived": [
+              "boolean"
+            ],
+            "/dataset/created_at": [
+              "string"
+            ],
+            "/dataset/created_by": [
+              "string"
+            ],
+            "/dataset/description": [
+              "null",
+              "string"
+            ],
+            "/dataset/id": [
+              "string"
+            ],
+            "/dataset/latest_version": [
+              "integer"
+            ],
+            "/dataset/name": [
+              "string"
+            ],
+            "/dataset/organization_id": [
+              "string"
+            ],
+            "/dataset/owner": [
+              "null",
+              "string"
+            ],
+            "/dataset/project_id": [
+              "string"
+            ],
+            "/dataset/tags": [
+              "array"
+            ],
+            "/dataset/tags/[]": [
+              "string"
+            ],
+            "/dataset/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/case_count": [
+              "integer"
+            ],
+            "/version/cases": [
+              "array"
+            ],
+            "/version/cases/[]": [
+              "object"
+            ],
+            "/version/cases/[]/added_at": [
+              "string"
+            ],
+            "/version/cases/[]/added_by": [
+              "string"
+            ],
+            "/version/cases/[]/last_result": [
+              "null",
+              "object"
+            ],
+            "/version/cases/[]/last_result/baseline_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/baseline_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/classification": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/eval_run_id": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/finished_at": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/note": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/privacy": [
+              "string"
+            ],
+            "/version/cases/[]/scenario": [
+              "string"
+            ],
+            "/version/cases/[]/source": [
+              "string"
+            ],
+            "/version/cases/[]/tags": [
+              "array"
+            ],
+            "/version/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/version/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/note": [
+              "null",
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/case_count": [
+              "integer"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/note": [
+              "null",
+              "string"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/datasets": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:include_archived": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "boolean"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:q": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "archived",
+              "case_count",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "owner",
+              "project_id",
+              "tags",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/archived": [
+              "boolean"
+            ],
+            "/items/[]/case_count": [
+              "integer"
+            ],
+            "/items/[]/created_at": [
+              "string"
+            ],
+            "/items/[]/created_by": [
+              "string"
+            ],
+            "/items/[]/description": [
+              "null",
+              "string"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/latest_version": [
+              "integer"
+            ],
+            "/items/[]/name": [
+              "string"
+            ],
+            "/items/[]/organization_id": [
+              "string"
+            ],
+            "/items/[]/owner": [
+              "null",
+              "string"
+            ],
+            "/items/[]/project_id": [
+              "string"
+            ],
+            "/items/[]/tags": [
+              "array"
+            ],
+            "/items/[]/tags/[]": [
+              "string"
+            ],
+            "/items/[]/updated_at": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/datasets/{dataset_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:dataset_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:version": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/version/cases/[]/last_result/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/version/cases/[]/privacy": [
+              "\"redacted\"",
+              "\"synthetic\""
+            ],
+            "/version/cases/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy\"",
+              "\"production_regression\""
+            ]
+          },
+          "required": {
+            "/": [
+              "dataset",
+              "version",
+              "versions"
+            ],
+            "/dataset": [
+              "archived",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "owner",
+              "project_id",
+              "tags",
+              "updated_at"
+            ],
+            "/version": [
+              "case_count",
+              "cases",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ],
+            "/version/cases/[]": [
+              "added_at",
+              "added_by",
+              "last_result",
+              "note",
+              "privacy",
+              "scenario",
+              "source",
+              "tags",
+              "trace_id"
+            ],
+            "/version/cases/[]/last_result": [
+              "baseline_status",
+              "baseline_version",
+              "candidate_status",
+              "candidate_version",
+              "classification",
+              "eval_run_id",
+              "finished_at"
+            ],
+            "/versions/[]": [
+              "case_count",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/dataset": [
+              "object"
+            ],
+            "/dataset/archived": [
+              "boolean"
+            ],
+            "/dataset/created_at": [
+              "string"
+            ],
+            "/dataset/created_by": [
+              "string"
+            ],
+            "/dataset/description": [
+              "null",
+              "string"
+            ],
+            "/dataset/id": [
+              "string"
+            ],
+            "/dataset/latest_version": [
+              "integer"
+            ],
+            "/dataset/name": [
+              "string"
+            ],
+            "/dataset/organization_id": [
+              "string"
+            ],
+            "/dataset/owner": [
+              "null",
+              "string"
+            ],
+            "/dataset/project_id": [
+              "string"
+            ],
+            "/dataset/tags": [
+              "array"
+            ],
+            "/dataset/tags/[]": [
+              "string"
+            ],
+            "/dataset/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/case_count": [
+              "integer"
+            ],
+            "/version/cases": [
+              "array"
+            ],
+            "/version/cases/[]": [
+              "object"
+            ],
+            "/version/cases/[]/added_at": [
+              "string"
+            ],
+            "/version/cases/[]/added_by": [
+              "string"
+            ],
+            "/version/cases/[]/last_result": [
+              "null",
+              "object"
+            ],
+            "/version/cases/[]/last_result/baseline_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/baseline_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/classification": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/eval_run_id": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/finished_at": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/note": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/privacy": [
+              "string"
+            ],
+            "/version/cases/[]/scenario": [
+              "string"
+            ],
+            "/version/cases/[]/source": [
+              "string"
+            ],
+            "/version/cases/[]/tags": [
+              "array"
+            ],
+            "/version/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/version/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/note": [
+              "null",
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/case_count": [
+              "integer"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/note": [
+              "null",
+              "string"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/datasets": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/cases/[]/privacy": [
+              "\"redacted\"",
+              "\"synthetic\""
+            ],
+            "/cases/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy\"",
+              "\"production_regression\""
+            ]
+          },
+          "required": {
+            "/": [
+              "name",
+              "project_id"
+            ],
+            "/cases/[]": [
+              "scenario"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/note": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/privacy": [
+              "string"
+            ],
+            "/cases/[]/scenario": [
+              "string"
+            ],
+            "/cases/[]/source": [
+              "string"
+            ],
+            "/cases/[]/tags": [
+              "array"
+            ],
+            "/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/description": [
+              "null",
+              "string"
+            ],
+            "/name": [
+              "string"
+            ],
+            "/owner": [
+              "null",
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/tags": [
+              "array"
+            ],
+            "/tags/[]": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "enums": {
+            "/version/cases/[]/last_result/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/version/cases/[]/privacy": [
+              "\"redacted\"",
+              "\"synthetic\""
+            ],
+            "/version/cases/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy\"",
+              "\"production_regression\""
+            ]
+          },
+          "required": {
+            "/": [
+              "dataset",
+              "version",
+              "versions"
+            ],
+            "/dataset": [
+              "archived",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "owner",
+              "project_id",
+              "tags",
+              "updated_at"
+            ],
+            "/version": [
+              "case_count",
+              "cases",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ],
+            "/version/cases/[]": [
+              "added_at",
+              "added_by",
+              "last_result",
+              "note",
+              "privacy",
+              "scenario",
+              "source",
+              "tags",
+              "trace_id"
+            ],
+            "/version/cases/[]/last_result": [
+              "baseline_status",
+              "baseline_version",
+              "candidate_status",
+              "candidate_version",
+              "classification",
+              "eval_run_id",
+              "finished_at"
+            ],
+            "/versions/[]": [
+              "case_count",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/dataset": [
+              "object"
+            ],
+            "/dataset/archived": [
+              "boolean"
+            ],
+            "/dataset/created_at": [
+              "string"
+            ],
+            "/dataset/created_by": [
+              "string"
+            ],
+            "/dataset/description": [
+              "null",
+              "string"
+            ],
+            "/dataset/id": [
+              "string"
+            ],
+            "/dataset/latest_version": [
+              "integer"
+            ],
+            "/dataset/name": [
+              "string"
+            ],
+            "/dataset/organization_id": [
+              "string"
+            ],
+            "/dataset/owner": [
+              "null",
+              "string"
+            ],
+            "/dataset/project_id": [
+              "string"
+            ],
+            "/dataset/tags": [
+              "array"
+            ],
+            "/dataset/tags/[]": [
+              "string"
+            ],
+            "/dataset/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/case_count": [
+              "integer"
+            ],
+            "/version/cases": [
+              "array"
+            ],
+            "/version/cases/[]": [
+              "object"
+            ],
+            "/version/cases/[]/added_at": [
+              "string"
+            ],
+            "/version/cases/[]/added_by": [
+              "string"
+            ],
+            "/version/cases/[]/last_result": [
+              "null",
+              "object"
+            ],
+            "/version/cases/[]/last_result/baseline_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/baseline_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/classification": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/eval_run_id": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/finished_at": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/note": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/privacy": [
+              "string"
+            ],
+            "/version/cases/[]/scenario": [
+              "string"
+            ],
+            "/version/cases/[]/source": [
+              "string"
+            ],
+            "/version/cases/[]/tags": [
+              "array"
+            ],
+            "/version/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/version/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/note": [
+              "null",
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/case_count": [
+              "integer"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/note": [
+              "null",
+              "string"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/datasets/{dataset_id}/archive": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:dataset_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {},
+          "required": {
+            "/": [
+              "dataset"
+            ],
+            "/dataset": [
+              "archived",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "owner",
+              "project_id",
+              "tags",
+              "updated_at"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/dataset": [
+              "object"
+            ],
+            "/dataset/archived": [
+              "boolean"
+            ],
+            "/dataset/created_at": [
+              "string"
+            ],
+            "/dataset/created_by": [
+              "string"
+            ],
+            "/dataset/description": [
+              "null",
+              "string"
+            ],
+            "/dataset/id": [
+              "string"
+            ],
+            "/dataset/latest_version": [
+              "integer"
+            ],
+            "/dataset/name": [
+              "string"
+            ],
+            "/dataset/organization_id": [
+              "string"
+            ],
+            "/dataset/owner": [
+              "null",
+              "string"
+            ],
+            "/dataset/project_id": [
+              "string"
+            ],
+            "/dataset/tags": [
+              "array"
+            ],
+            "/dataset/tags/[]": [
+              "string"
+            ],
+            "/dataset/updated_at": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/datasets/{dataset_id}/cases": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:dataset_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/cases/[]/privacy": [
+              "\"redacted\"",
+              "\"synthetic\""
+            ],
+            "/cases/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy\"",
+              "\"production_regression\""
+            ]
+          },
+          "required": {
+            "/": [
+              "cases"
+            ],
+            "/cases/[]": [
+              "scenario"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/cases": [
+              "array"
+            ],
+            "/cases/[]": [
+              "object"
+            ],
+            "/cases/[]/note": [
+              "null",
+              "string"
+            ],
+            "/cases/[]/privacy": [
+              "string"
+            ],
+            "/cases/[]/scenario": [
+              "string"
+            ],
+            "/cases/[]/source": [
+              "string"
+            ],
+            "/cases/[]/tags": [
+              "array"
+            ],
+            "/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/note": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/version/cases/[]/last_result/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/version/cases/[]/privacy": [
+              "\"redacted\"",
+              "\"synthetic\""
+            ],
+            "/version/cases/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy\"",
+              "\"production_regression\""
+            ]
+          },
+          "required": {
+            "/": [
+              "dataset",
+              "version",
+              "versions"
+            ],
+            "/dataset": [
+              "archived",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "owner",
+              "project_id",
+              "tags",
+              "updated_at"
+            ],
+            "/version": [
+              "case_count",
+              "cases",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ],
+            "/version/cases/[]": [
+              "added_at",
+              "added_by",
+              "last_result",
+              "note",
+              "privacy",
+              "scenario",
+              "source",
+              "tags",
+              "trace_id"
+            ],
+            "/version/cases/[]/last_result": [
+              "baseline_status",
+              "baseline_version",
+              "candidate_status",
+              "candidate_version",
+              "classification",
+              "eval_run_id",
+              "finished_at"
+            ],
+            "/versions/[]": [
+              "case_count",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/dataset": [
+              "object"
+            ],
+            "/dataset/archived": [
+              "boolean"
+            ],
+            "/dataset/created_at": [
+              "string"
+            ],
+            "/dataset/created_by": [
+              "string"
+            ],
+            "/dataset/description": [
+              "null",
+              "string"
+            ],
+            "/dataset/id": [
+              "string"
+            ],
+            "/dataset/latest_version": [
+              "integer"
+            ],
+            "/dataset/name": [
+              "string"
+            ],
+            "/dataset/organization_id": [
+              "string"
+            ],
+            "/dataset/owner": [
+              "null",
+              "string"
+            ],
+            "/dataset/project_id": [
+              "string"
+            ],
+            "/dataset/tags": [
+              "array"
+            ],
+            "/dataset/tags/[]": [
+              "string"
+            ],
+            "/dataset/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/case_count": [
+              "integer"
+            ],
+            "/version/cases": [
+              "array"
+            ],
+            "/version/cases/[]": [
+              "object"
+            ],
+            "/version/cases/[]/added_at": [
+              "string"
+            ],
+            "/version/cases/[]/added_by": [
+              "string"
+            ],
+            "/version/cases/[]/last_result": [
+              "null",
+              "object"
+            ],
+            "/version/cases/[]/last_result/baseline_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/baseline_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/classification": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/eval_run_id": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/finished_at": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/note": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/privacy": [
+              "string"
+            ],
+            "/version/cases/[]/scenario": [
+              "string"
+            ],
+            "/version/cases/[]/source": [
+              "string"
+            ],
+            "/version/cases/[]/tags": [
+              "array"
+            ],
+            "/version/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/version/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/note": [
+              "null",
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/case_count": [
+              "integer"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/note": [
+              "null",
+              "string"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ]
+          }
+        },
+        "201": {
+          "enums": {
+            "/version/cases/[]/last_result/classification": [
+              "\"IMPROVED\"",
+              "\"INCOMPLETE\"",
+              "\"NEW_CRITICAL_FAILURE\"",
+              "\"REGRESSED\"",
+              "\"UNCHANGED\""
+            ],
+            "/version/cases/[]/privacy": [
+              "\"redacted\"",
+              "\"synthetic\""
+            ],
+            "/version/cases/[]/source": [
+              "\"generated\"",
+              "\"imported\"",
+              "\"manual\"",
+              "\"policy\"",
+              "\"production_regression\""
+            ]
+          },
+          "required": {
+            "/": [
+              "dataset",
+              "version",
+              "versions"
+            ],
+            "/dataset": [
+              "archived",
+              "created_at",
+              "created_by",
+              "description",
+              "id",
+              "latest_version",
+              "name",
+              "organization_id",
+              "owner",
+              "project_id",
+              "tags",
+              "updated_at"
+            ],
+            "/version": [
+              "case_count",
+              "cases",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ],
+            "/version/cases/[]": [
+              "added_at",
+              "added_by",
+              "last_result",
+              "note",
+              "privacy",
+              "scenario",
+              "source",
+              "tags",
+              "trace_id"
+            ],
+            "/version/cases/[]/last_result": [
+              "baseline_status",
+              "baseline_version",
+              "candidate_status",
+              "candidate_version",
+              "classification",
+              "eval_run_id",
+              "finished_at"
+            ],
+            "/versions/[]": [
+              "case_count",
+              "created_at",
+              "created_by",
+              "note",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/dataset": [
+              "object"
+            ],
+            "/dataset/archived": [
+              "boolean"
+            ],
+            "/dataset/created_at": [
+              "string"
+            ],
+            "/dataset/created_by": [
+              "string"
+            ],
+            "/dataset/description": [
+              "null",
+              "string"
+            ],
+            "/dataset/id": [
+              "string"
+            ],
+            "/dataset/latest_version": [
+              "integer"
+            ],
+            "/dataset/name": [
+              "string"
+            ],
+            "/dataset/organization_id": [
+              "string"
+            ],
+            "/dataset/owner": [
+              "null",
+              "string"
+            ],
+            "/dataset/project_id": [
+              "string"
+            ],
+            "/dataset/tags": [
+              "array"
+            ],
+            "/dataset/tags/[]": [
+              "string"
+            ],
+            "/dataset/updated_at": [
+              "string"
+            ],
+            "/version": [
+              "object"
+            ],
+            "/version/case_count": [
+              "integer"
+            ],
+            "/version/cases": [
+              "array"
+            ],
+            "/version/cases/[]": [
+              "object"
+            ],
+            "/version/cases/[]/added_at": [
+              "string"
+            ],
+            "/version/cases/[]/added_by": [
+              "string"
+            ],
+            "/version/cases/[]/last_result": [
+              "null",
+              "object"
+            ],
+            "/version/cases/[]/last_result/baseline_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/baseline_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_status": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/last_result/candidate_version": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/classification": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/eval_run_id": [
+              "string"
+            ],
+            "/version/cases/[]/last_result/finished_at": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/note": [
+              "null",
+              "string"
+            ],
+            "/version/cases/[]/privacy": [
+              "string"
+            ],
+            "/version/cases/[]/scenario": [
+              "string"
+            ],
+            "/version/cases/[]/source": [
+              "string"
+            ],
+            "/version/cases/[]/tags": [
+              "array"
+            ],
+            "/version/cases/[]/tags/[]": [
+              "string"
+            ],
+            "/version/cases/[]/trace_id": [
+              "null",
+              "string"
+            ],
+            "/version/created_at": [
+              "string"
+            ],
+            "/version/created_by": [
+              "string"
+            ],
+            "/version/note": [
+              "null",
+              "string"
+            ],
+            "/version/version": [
+              "integer"
+            ],
+            "/versions": [
+              "array"
+            ],
+            "/versions/[]": [
+              "object"
+            ],
+            "/versions/[]/case_count": [
+              "integer"
+            ],
+            "/versions/[]/created_at": [
+              "string"
+            ],
+            "/versions/[]/created_by": [
+              "string"
+            ],
+            "/versions/[]/note": [
+              "null",
+              "string"
+            ],
+            "/versions/[]/version": [
+              "integer"
+            ]
+          }
+        }
+      }
+    }
+  },
   "simulation-service": {
     "GET /api/v1/scenarios": {
       "parameters": {

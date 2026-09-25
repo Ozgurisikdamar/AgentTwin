@@ -86,7 +86,12 @@ def document(request: pytest.FixtureRequest) -> Path:
 
 
 def test_there_is_a_document_per_service_api() -> None:
-    assert [service(p) for p in DOCUMENTS] == ["control-plane", "simulation-service", "trace-service"]
+    assert [service(p) for p in DOCUMENTS] == [
+        "control-plane",
+        "evaluation-service",
+        "simulation-service",
+        "trace-service",
+    ]
 
 
 def test_the_document_is_valid_openapi_31(document: Path) -> None:

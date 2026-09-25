@@ -1,0 +1,756 @@
+openapi: 3.1.0
+info:
+  title: AgentTwin evaluation API
+  version: 1.0.0
+  summary: Datasets, evaluation runs, human reviews and judge calibration.
+  description: |
+    Curate versioned datasets of scenarios, evaluate a candidate agent
+    version against its baseline on one pinned suite, review what the
+    evaluators decided and calibrate the LLM judge against labels people gave.
+
+    **Where to call it.** The public API is served by the control plane (the
+    edge), which authenticates the caller, applies rate limits and
+    `Idempotency-Key`, and forwards the request to the evaluation service.
+
+    **Conventions.**
+    * Every response carries `X-Request-Id`; errors are
+      `{"error": {"code", "message", "request_id", "details"?}}` with a stable
+      machine-readable `code`.
+    * Request bodies are strict: unknown fields are rejected (`400
+      INVALID_REQUEST`). Responses may gain fields: clients ignore fields and
+      enum values they do not know.
+    * Resources of projects outside the caller's access answer `404`, never
+      `403`, so their existence cannot be probed.
+    * Lists are ordered and paginated with an opaque `next_cursor`.
+
+    Compatibility and the checks that keep this document true are described
+    in `packages/contracts/README.md`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: The control plane of a local stack (`make dev`).
+tags:
+  - name: Datasets
+    description: Versioned collections of the project's scenarios (spec §17).
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  /api/v1/datasets:
+    post:
+      operationId: createDataset
+      tags: [Datasets]
+      summary: Create a dataset
+      description: |
+        Stores version 1 of a dataset. Every case names a scenario of the
+        project that is not archived (`400 SCENARIO_NOT_FOUND` with
+        `details.missing`); a case that comes from production must be redacted
+        (`400 CASE_NOT_REDACTED`). A second dataset with the same name in the
+        project answers `409 DATASET_EXISTS`. Announced to the audit log.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDatasetRequest'
+      responses:
+        '201':
+          description: The dataset, at version 1.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DatasetConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listDatasets
+      tags: [Datasets]
+      summary: List datasets
+      description: The datasets of the caller's projects, ordered by name; archived ones on request.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ProjectFilter'
+        - name: q
+          in: query
+          description: Matches the name or the description (substring, case-insensitive).
+          schema:
+            type: string
+            maxLength: 200
+        - name: include_archived
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of datasets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/datasets/{dataset_id}:
+    get:
+      operationId: getDataset
+      tags: [Datasets]
+      summary: Get a dataset version
+      description: |
+        A dataset with the cases of one version (default the latest), each with
+        its latest result in a completed evaluation run of the dataset, and the
+        version list.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/DatasetId'
+        - name: version
+          in: query
+          description: The version to return (default the latest).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000000
+      responses:
+        '200':
+          description: The dataset version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/datasets/{dataset_id}/cases:
+    post:
+      operationId: addDatasetCases
+      tags: [Datasets]
+      summary: Add or update cases
+      description: |
+        Adds the cases, or replaces the case of a scenario already in the
+        dataset, as a new version (`201`). A request that changes nothing
+        answers the latest version (`200`). Archived datasets answer `409
+        DATASET_ARCHIVED`. Concurrent changes are applied one after the other,
+        each to the version the one before it made.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/DatasetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddDatasetCasesRequest'
+      responses:
+        '201':
+          description: The new version.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetDetail'
+        '200':
+          description: Nothing changed; the latest version.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DatasetConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/datasets/{dataset_id}/cases/{scenario}:
+    delete:
+      operationId: removeDatasetCase
+      tags: [Datasets]
+      summary: Remove a case
+      description: Removes the case of a scenario as a new version. Earlier versions keep it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/DatasetId'
+        - name: scenario
+          in: path
+          required: true
+          description: The scenario name of the case.
+          schema:
+            $ref: '#/components/schemas/Name'
+      responses:
+        '200':
+          description: The new version.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DatasetConflict'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/datasets/{dataset_id}/archive:
+    post:
+      operationId: archiveDataset
+      tags: [Datasets]
+      summary: Archive a dataset
+      description: |
+        An archived dataset is hidden from lists (unless asked for), can no
+        longer change and can no longer be evaluated; its versions and results
+        stay readable.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/DatasetId'
+      responses:
+        '200':
+          description: The archived dataset.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A session token (dev login), an OIDC access token or an API key.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-AgentTwin-Api-Key
+      description: A project API key.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        One key per user action (ADR-0019). A repeat of the same request
+        returns the stored response with `Idempotent-Replayed: true`; the same
+        key with a different request answers `422`; while the first request
+        runs, `409`. Keys expire after 24 hours.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9._:-]{8,128}$
+    Organization:
+      name: X-AgentTwin-Org
+      in: header
+      required: false
+      description: The organization to act in, for credentials that belong to several.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    ProjectFilter:
+      name: project_id
+      in: query
+      description: Restricts the list to one project (default every project the caller can access).
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Cursor:
+      name: cursor
+      in: query
+      description: The `next_cursor` of the previous page.
+      schema:
+        type: string
+        maxLength: 512
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    DatasetId:
+      name: dataset_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+
+  headers:
+    IdempotentReplayed:
+      description: '`true` when the response is the stored answer to an earlier request with the same `Idempotency-Key`.'
+      schema:
+        type: string
+        enum: ['true']
+
+  responses:
+    BadRequest:
+      description: |
+        The request is invalid. `INVALID_REQUEST` (body fields; `details.errors`),
+        `INVALID_PARAMETER` (`details.field`), `INVALID_JSON`, `EMPTY_BODY`,
+        `INVALID_CURSOR`, `INVALID_IDEMPOTENCY_KEY` or an operation-specific code.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: No valid credential (`UNAUTHENTICATED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The credential lacks the permission (`FORBIDDEN`; `details.required_permission`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The resource does not exist or is outside the caller's projects (`NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyInProgress:
+      description: The first request with this `Idempotency-Key` is still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    DatasetConflict:
+      description: |
+        `DATASET_EXISTS` (the project has a dataset of that name),
+        `DATASET_ARCHIVED` or `IDEMPOTENCY_IN_PROGRESS`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: The request body is too large (`PAYLOAD_TOO_LARGE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsupportedMediaType:
+      description: The body is not `application/json` (`UNSUPPORTED_MEDIA_TYPE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyKeyReused:
+      description: The `Idempotency-Key` was used for a different request (`IDEMPOTENCY_KEY_REUSED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests (`RATE_LIMITED`).
+      headers:
+        Retry-After:
+          description: Seconds to wait.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Internal:
+      description: An unexpected error (`INTERNAL`); quote the `request_id`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UpstreamUnavailable:
+      description: The evaluation service is not reachable from the control plane (`UPSTREAM_UNAVAILABLE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: |
+        A dependency is unavailable (`UNAVAILABLE`; e.g. the simulation service
+        while checking scenario names), or the evaluation service is not
+        configured on this control plane (`SERVICE_NOT_CONFIGURED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    Name:
+      type: string
+      description: A scenario or dataset name.
+      pattern: ^[a-z0-9][a-z0-9_-]{0,98}$
+    Tag:
+      type: string
+      pattern: ^[a-z0-9][a-z0-9_:.-]{0,62}$
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable (e.g. `SCENARIO_NOT_FOUND`).
+              pattern: ^[A-Z][A-Z0-9_]*$
+            message:
+              type: string
+              description: For people; may change.
+            request_id:
+              type: string
+              description: Equals the `X-Request-Id` response header.
+            details:
+              type: object
+              description: Code-specific context (field names, missing names).
+
+    CaseSource:
+      type: string
+      enum: [manual, production_regression, generated, policy, imported]
+      description: Where the case came from; `production_regression` cases must be `redacted`.
+    CasePrivacy:
+      type: string
+      enum: [synthetic, redacted]
+
+    DatasetCaseInput:
+      type: object
+      additionalProperties: false
+      required: [scenario]
+      properties:
+        scenario:
+          $ref: '#/components/schemas/Name'
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Tag'
+        source:
+          $ref: '#/components/schemas/CaseSource'
+        trace_id:
+          type: [string, 'null']
+          description: The production trace the case came from.
+          pattern: ^[a-f0-9]{32}$
+        privacy:
+          $ref: '#/components/schemas/CasePrivacy'
+        note:
+          type: [string, 'null']
+          maxLength: 2000
+    CreateDatasetRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, name]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          $ref: '#/components/schemas/Name'
+        description:
+          type: [string, 'null']
+          maxLength: 2000
+        owner:
+          type: [string, 'null']
+          maxLength: 200
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Tag'
+        cases:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/DatasetCaseInput'
+    AddDatasetCasesRequest:
+      type: object
+      additionalProperties: false
+      required: [cases]
+      properties:
+        cases:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/DatasetCaseInput'
+        note:
+          type: [string, 'null']
+          maxLength: 500
+          description: Recorded on the new version (default a summary of the change).
+
+    Dataset:
+      type: object
+      required: [id, organization_id, project_id, name, description, owner, tags, latest_version, archived,
+                 created_by, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organization_id:
+          $ref: '#/components/schemas/Uuid'
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          $ref: '#/components/schemas/Name'
+        description:
+          type: [string, 'null']
+        owner:
+          type: [string, 'null']
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        latest_version:
+          type: integer
+          minimum: 1
+        archived:
+          type: boolean
+        created_by:
+          type: string
+          description: The actor that created the dataset (e.g. `user:…`, `apikey:…`).
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+    DatasetListItem:
+      allOf:
+        - $ref: '#/components/schemas/Dataset'
+        - type: object
+          required: [case_count]
+          properties:
+            case_count:
+              type: integer
+              minimum: 0
+              description: Cases in the latest version.
+    DatasetPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DatasetListItem'
+        next_cursor:
+          type: [string, 'null']
+    DatasetVersionSummary:
+      type: object
+      required: [version, case_count, note, created_by, created_at]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        case_count:
+          type: integer
+          minimum: 0
+        note:
+          type: [string, 'null']
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    LastResult:
+      type: object
+      description: The case's result in the latest completed evaluation run of the dataset.
+      required: [eval_run_id, classification, baseline_version, candidate_version, baseline_status,
+                 candidate_status, finished_at]
+      properties:
+        eval_run_id:
+          $ref: '#/components/schemas/Uuid'
+        classification:
+          type: string
+          enum: [NEW_CRITICAL_FAILURE, REGRESSED, IMPROVED, UNCHANGED, INCOMPLETE]
+        baseline_version:
+          type: string
+        candidate_version:
+          type: string
+        baseline_status:
+          type: [string, 'null']
+          description: The baseline case's status (`PASSED`, `FAILED`, …; `null` when it did not run).
+        candidate_status:
+          type: [string, 'null']
+        finished_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+    DatasetCase:
+      type: object
+      required: [scenario, tags, source, trace_id, privacy, note, added_by, added_at, last_result]
+      properties:
+        scenario:
+          $ref: '#/components/schemas/Name'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        source:
+          $ref: '#/components/schemas/CaseSource'
+        trace_id:
+          type: [string, 'null']
+          pattern: ^[a-f0-9]{32}$
+        privacy:
+          $ref: '#/components/schemas/CasePrivacy'
+        note:
+          type: [string, 'null']
+        added_by:
+          type: string
+          description: The actor that added the case in its current form.
+        added_at:
+          $ref: '#/components/schemas/Timestamp'
+        last_result:
+          oneOf:
+            - $ref: '#/components/schemas/LastResult'
+            - type: 'null'
+    DatasetDetail:
+      type: object
+      required: [dataset, version, versions]
+      properties:
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+        version:
+          allOf:
+            - $ref: '#/components/schemas/DatasetVersionSummary'
+            - type: object
+              required: [cases]
+              properties:
+                cases:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DatasetCase'
+        versions:
+          type: array
+          description: Every version, newest first.
+          items:
+            $ref: '#/components/schemas/DatasetVersionSummary'
+    DatasetResponse:
+      type: object
+      required: [dataset]
+      properties:
+        dataset:
+          $ref: '#/components/schemas/Dataset'

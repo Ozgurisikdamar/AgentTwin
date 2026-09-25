@@ -1,5 +1,6 @@
 /** Pure helpers for evaluation runs, compared cases, datasets and reviews. */
 import type {
+  BodyOf,
   CaseComparison,
   ClassCounts,
   Classification,
@@ -307,4 +308,69 @@ export function totalChange(
   const worse = SIDE_TOTALS.find((t) => t.name === name)?.worse;
   if (!worse) return "changed";
   return (worse === "higher") === c > b ? "worse" : "better";
+}
+
+// ------------------------------------------------------------------ datasets
+
+/** A dataset or case tag (the evaluation API's `Tag`). */
+export const TAG = /^[a-z0-9][a-z0-9_:.-]{0,62}$/;
+
+/** Tags typed as text: split on commas and spaces, deduplicated in order; the ones the API would refuse. */
+export function parseTags(text: string): { tags: string[]; invalid: string[] } {
+  const tags = [...new Set(text.split(/[\s,]+/).filter(Boolean))];
+  return { tags, invalid: tags.filter((t) => !TAG.test(t)) };
+}
+
+// ------------------------------------------------------------------ judge calibration
+
+export type CalibrationExample = BodyOf<"startJudgeCalibration">["examples"][number];
+
+/**
+ * Human-labeled examples pasted as a JSON array or as JSON Lines (one object
+ * per line). Each problem names the example it is about; nothing is sent
+ * while there is one.
+ */
+export function parseCalibrationExamples(text: string): {
+  examples: CalibrationExample[];
+  problems: string[];
+} {
+  const trimmed = text.trim();
+  if (!trimmed) return { examples: [], problems: [] };
+  let raw: unknown[];
+  try {
+    raw = trimmed.startsWith("[")
+      ? (JSON.parse(trimmed) as unknown[])
+      : trimmed
+          .split(/\r?\n/)
+          .filter((l) => l.trim())
+          .map((l) => JSON.parse(l) as unknown);
+  } catch (err) {
+    return { examples: [], problems: [`Not JSON: ${(err as Error).message}`] };
+  }
+  if (!Array.isArray(raw)) return { examples: [], problems: ["Expected a JSON array of examples."] };
+  const problems: string[] = [];
+  const examples: CalibrationExample[] = [];
+  const seen = new Set<string>();
+  raw.forEach((item, i) => {
+    const at = `example ${i + 1}`;
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      problems.push(`${at}: not an object`);
+      return;
+    }
+    const e = item as Record<string, unknown>;
+    const missing = ["id", "rubric", "customer_message", "answer"].filter((k) => typeof e[k] !== "string");
+    if (missing.length) problems.push(`${at}: ${missing.join(", ")} must be text`);
+    if (e.human_label !== "pass" && e.human_label !== "fail")
+      problems.push(`${at}: human_label must be pass or fail`);
+    if (typeof e.id === "string") {
+      if (seen.has(e.id)) problems.push(`${at}: id ${e.id} is used twice`);
+      seen.add(e.id);
+    }
+    const unknown = Object.keys(e).filter(
+      (k) => !["id", "rubric", "customer_message", "answer", "tool_calls", "human_label"].includes(k),
+    );
+    if (unknown.length) problems.push(`${at}: unknown field ${unknown.join(", ")}`);
+    examples.push(e as CalibrationExample);
+  });
+  return problems.length ? { examples: [], problems } : { examples, problems };
 }

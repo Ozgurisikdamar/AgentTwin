@@ -12,6 +12,7 @@ import {
   isHumanReviewed,
   isReviewable,
   latestReviews,
+  parseCalibrationExamples,
   pendingReviews,
   sortComparedCases,
   suiteLabel,
@@ -221,5 +222,50 @@ describe("reviews", () => {
     expect(isReviewable({ expectation: { id: "agent-run", type: "agentRun", critical: true } })).toBe(false);
     expect(isHumanReviewed(first!)).toBe(false);
     expect(isHumanReviewed({ evaluator: "human.review" })).toBe(true);
+  });
+});
+
+describe("calibration examples", () => {
+  const example = (id: string, label = "pass") => ({
+    id,
+    rubric: "The reply says the refund is not confirmed.",
+    customer_message: "Where is my refund?",
+    answer: "The refund is not confirmed yet.",
+    human_label: label,
+  });
+
+  it("reads a JSON array or JSON Lines", () => {
+    const array = parseCalibrationExamples(JSON.stringify([example("a"), example("b", "fail")]));
+    expect(array.problems).toEqual([]);
+    expect(array.examples.map((e) => [e.id, e.human_label])).toEqual([
+      ["a", "pass"],
+      ["b", "fail"],
+    ]);
+    const lines = parseCalibrationExamples(
+      `${JSON.stringify(example("a"))}\n\n${JSON.stringify(example("b"))}\n`,
+    );
+    expect(lines.examples.map((e) => e.id)).toEqual(["a", "b"]);
+    expect(parseCalibrationExamples("   ")).toEqual({ examples: [], problems: [] });
+  });
+
+  it("names every problem and sends nothing while there is one", () => {
+    const bad = parseCalibrationExamples(
+      JSON.stringify([
+        example("a"),
+        { ...example("a"), human_label: "maybe" },
+        { id: "c", rubric: "r", answer: "x", human_label: "pass", score: 1 },
+        "text",
+      ]),
+    );
+    expect(bad.examples).toEqual([]);
+    expect(bad.problems).toEqual([
+      "example 2: human_label must be pass or fail",
+      "example 2: id a is used twice",
+      "example 3: customer_message must be text",
+      "example 3: unknown field score",
+      "example 4: not an object",
+    ]);
+    expect(parseCalibrationExamples("[{").problems[0]).toMatch(/^Not JSON: /);
+    expect(parseCalibrationExamples('{"id": "a"}\n{').problems[0]).toMatch(/^Not JSON: /);
   });
 });

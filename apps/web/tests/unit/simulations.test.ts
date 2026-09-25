@@ -130,8 +130,8 @@ describe("cases", () => {
 describe("actorLabel", () => {
   it("names who started a run without leaking full ids", () => {
     expect(actorLabel("user:u1", "u1")).toBe("You");
-    expect(actorLabel("user:01a0d5d1-08dc", "u1")).toBe("User 01a0d5d1");
-    expect(actorLabel("apikey:01a0d5d0-9568-74a7")).toBe("API key 01a0d5d0");
+    expect(actorLabel("user:01a0d5d1-08dc-7a2b-9c3d-4e5f60718293", "u1")).toBe("User 60718293");
+    expect(actorLabel("apikey:01a0d5d0-9568-74a7-8b1c-2d3e4f5a6b7c")).toBe("API key 4f5a6b7c");
     expect(actorLabel("service:simulation-service")).toBe("Service simulation-service");
     expect(actorLabel(null)).toBe("—");
   });

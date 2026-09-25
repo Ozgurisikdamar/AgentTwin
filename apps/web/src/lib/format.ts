@@ -53,9 +53,17 @@ export function formatRelative(iso: string | null | undefined, now: Date = new D
   return `${Math.round(diff / 86400)}d ago`;
 }
 
-/** First n characters of an identifier or hash. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A short, recognisable form of an identifier or hash. A hash keeps its first
+ * n characters, as git does. A UUID keeps its last n: a UUIDv7 starts with
+ * its creation time, so ids made within minutes of each other (a user, an API
+ * key, the runs they started) would all read alike; its end is random.
+ */
 export function shortId(id: string | null | undefined, n = 8): string {
   if (!id) return DASH;
+  if (UUID.test(id)) return id.replace(/-/g, "").slice(-n);
   return id.length <= n ? id : id.slice(0, n);
 }
 

@@ -24,6 +24,16 @@ describe("format", () => {
     expect(formatRelative("2026-09-24T10:00:00Z", now)).toBe("2h ago");
     expect(formatRelative("not a date", now)).toBe("—");
     expect(shortId("0123456789abcdef", 8)).toBe("01234567");
+    // A UUID keeps its random end: two UUIDv7s of the same minute differ there.
+    expect(shortId("01a0d92e-0943-701b-a499-9776fbc2defb")).toBe("fbc2defb");
+    expect(shortId("01a0d92e-ede4-7b9b-bbe9-1b63017a349d")).toBe("017a349d");
+    expect(shortId("01A0D92E-EDE4-7B9B-BBE9-1B63017A349D", 12)).toBe("1B63017A349D");
+    expect(shortId("01a0d92e-ede4-7b9b-bbe9-1b63017a349d", 40)).toBe("01a0d92eede47b9bbbe91b63017a349d");
+    // Not quite a UUID: treated as a hash.
+    expect(shortId("01a0d92e-ede4-7b9b-bbe9-1b63017a349", 8)).toBe("01a0d92e");
+    expect(shortId("run-01a0d92e-ede4-7b9b-bbe9-1b63017a349d", 8)).toBe("run-01a0");
+    expect(shortId("short", 8)).toBe("short");
+    expect(shortId(null)).toBe("—");
     expect(humanize("WRITE_IRREVERSIBLE")).toBe("Write irreversible");
     expect(humanize("state_assertion")).toBe("State assertion");
   });

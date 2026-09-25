@@ -65,16 +65,16 @@ function Versions({ agent }: { agent: Agent }) {
                 aria-expanded={open === v.id}
                 onClick={() => setOpen(open === v.id ? null : v.id)}
               >
-                {v.tools?.length ?? 0} tools
+                {v.manifest.tools?.length ?? 0} tools
               </button>
               {open === v.id ? (
                 <ul className="mt-1 space-y-1">
-                  {(v.tools ?? []).map((t) => (
+                  {(v.manifest.tools ?? []).map((t) => (
                     <li key={t.name} className="flex flex-wrap items-center gap-1 text-xs">
                       <code>{t.name}</code>
                       <RiskBadge risk={t.risk} />
-                      {t.approval_condition ? (
-                        <span className="text-slate-500">approval when {t.approval_condition}</span>
+                      {t.approval_required_when ? (
+                        <span className="text-slate-500">approval when {t.approval_required_when}</span>
                       ) : null}
                     </li>
                   ))}

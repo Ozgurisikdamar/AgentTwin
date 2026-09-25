@@ -257,7 +257,7 @@ export function SimulationDetail({ runId }: { runId: string }) {
             <RunProgress run={r} />
             <KeyValue
               items={[
-                { label: "Requested by", value: actorLabel(r.requested_by, me?.user.id) },
+                { label: "Requested by", value: actorLabel(r.requested_by, me?.user?.id) },
                 { label: "Created", value: formatDateTime(r.created_at) },
                 { label: "Duration", value: formatDuration(runDurationMs(r, now)) },
                 {

@@ -97,7 +97,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           <div className="flex items-center gap-3">
             <div className="text-right leading-tight">
               <p className="text-sm font-medium text-slate-900" data-testid="current-user">
-                {me.user.display_name}
+                {me.user?.display_name ?? me.principal.email ?? me.principal.sub}
               </p>
               <p className="text-xs text-slate-500">{humanize(me.principal.role)}</p>
             </div>

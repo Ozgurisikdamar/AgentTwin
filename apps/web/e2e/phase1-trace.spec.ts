@@ -98,6 +98,29 @@ test.describe("Phase 1 acceptance: a demo agent run is visible in the browser", 
     expect(problems, problems.join("\n")).toEqual([]);
   });
 
+  test("explorer ignores filter values the service would refuse", async ({ page }) => {
+    // `from` must be RFC 3339 and `source` one of the service's values: a
+    // shared link with anything else used to end in `400 INVALID_FILTER`.
+    const problems = watchConsole(page);
+    await signIn(page, "viewer@demo.agenttwin.dev", "/traces?status=OK&source=bogus&from=2026-09-24");
+    await expect(page.getByTestId("trace-row").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clear 1 filter" })).toBeVisible();
+    expect(problems, problems.join("\n")).toEqual([]);
+  });
+
+  test("agent versions list the tools their manifest declares", async ({ page }) => {
+    const problems = watchConsole(page);
+    await signIn(page, "viewer@demo.agenttwin.dev", "/agents");
+    // Every demo version declares seven tools (the list used to show "0 tools").
+    const toggles = page.getByRole("button", { name: /^\d+ tools$/ });
+    await expect(toggles.first()).toBeVisible();
+    expect(new Set(await toggles.allTextContents())).toEqual(new Set(["7 tools"]));
+    await toggles.first().click();
+    await expect(toggles.first()).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText("approval when args.amount > 100")).toBeVisible();
+    expect(problems, problems.join("\n")).toEqual([]);
+  });
+
   test("overview summarizes production health and signing out ends the session", async ({
     page,
     context,

@@ -25,44 +25,31 @@ import type {
   TwinDetail,
   TwinList,
 } from "../types";
+import * as contract from "./contract";
+import type { Accepts } from "./contract";
 import type { components, operations } from "./simulation.gen";
 
 export type SimulationSchemas = components["schemas"];
 export type SimulationOperation = keyof operations;
 
 /** The query parameters an operation documents. */
-export type QueryOf<Op extends SimulationOperation> = NonNullable<operations[Op]["parameters"]["query"]>;
+export type QueryOf<Op extends SimulationOperation> = contract.QueryOf<operations, Op>;
 
 /** The JSON body an operation accepts. */
-export type BodyOf<Op extends SimulationOperation> =
-  NonNullable<operations[Op]["requestBody"]> extends { content: { "application/json": infer B } } ? B : never;
+export type BodyOf<Op extends SimulationOperation> = contract.BodyOf<operations, Op>;
 
 /** The JSON body of one documented response of an operation. */
 export type ResponseOf<
   Op extends SimulationOperation,
-  Status extends keyof operations[Op]["responses"],
-> = operations[Op]["responses"][Status] extends { content: { "application/json": infer B } }
-  ? B
-  : { missing: "this response has no JSON body" };
+  Status extends keyof contract.ResponsesOf<operations, Op>,
+> = contract.ResponseOf<operations, Op, Status>;
 
 /** URL query parameters from the documented ones; unset and empty values are left out. */
 export function queryOf<Op extends SimulationOperation>(params: QueryOf<Op>): URLSearchParams {
-  const out = new URLSearchParams();
-  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
-    if (value === undefined || value === null || value === "") continue;
-    out.set(key, String(value));
-  }
-  return out;
+  return contract.toQuery(params);
 }
 
 // ------------------------------------------------------------------ checks
-
-/**
- * Compiles only when a client type that reads `Server` accepts every value of
- * it; otherwise the compiler reports the first field that disagrees ("does
- * not satisfy the constraint", then the path to the field).
- */
-type Accepts<Client, Server extends Client> = Server;
 
 /** Each hand-written response type accepts the documented response of the operation that returns it. */
 export type ClientTypesAcceptTheContract = [

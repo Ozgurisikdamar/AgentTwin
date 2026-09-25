@@ -258,7 +258,7 @@ export function SimulationList() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {items.map((r) => (
-                    <RunRow key={r.id} run={r} now={now} meUserId={me?.user.id} />
+                    <RunRow key={r.id} run={r} now={now} meUserId={me?.user?.id} />
                   ))}
                 </tbody>
               </table>

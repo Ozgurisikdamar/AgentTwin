@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  type TraceFilters,
   activeFilterCount,
   filtersToParams,
   isoToLocalInput,
@@ -21,6 +22,19 @@ describe("trace filters", () => {
       min_duration_ms: "12.5",
       from: "2026-09-24T10:00:00Z",
     });
+  });
+
+  it("drops what the trace service would refuse", () => {
+    // Enum values are the service's canonical ones, and times are RFC 3339:
+    // `?from=2026-09-24` answered `400 INVALID_FILTER` and broke the page.
+    const f = parseFilters(
+      new URLSearchParams(
+        "source=simulation&from=2026-09-24&to=2026-09-24T10:00:00.5%2B03:00&status=error&outcome=Failure",
+      ),
+    );
+    expect(f).toEqual({ source: "simulation", to: "2026-09-24T10:00:00.5+03:00" });
+    expect(parseFilters(new URLSearchParams("source=bogus&from=Sep 24 2026"))).toEqual({});
+    expect(filtersToParams({ source: "bogus" } as unknown as TraceFilters).toString()).toBe("");
   });
 
   it("serializes in a stable order and round-trips", () => {

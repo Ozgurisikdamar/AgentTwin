@@ -25,6 +25,8 @@ const EMBEDDED = /^([a-z][a-z0-9-]*\.v[0-9]+)(?:#\/\$defs\/([A-Za-z][A-Za-z0-9_]
 
 /** Each document and the file its types go to (relative to apps/web). */
 export const API_TYPES = [
+  { document: "control-plane.openapi.yaml", output: "src/lib/api/control-plane.gen.ts" },
+  { document: "trace-service.openapi.yaml", output: "src/lib/api/traces.gen.ts" },
   { document: "simulation-service.openapi.yaml", output: "src/lib/api/simulation.gen.ts" },
 ] as const;
 

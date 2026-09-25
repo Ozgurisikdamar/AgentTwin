@@ -588,7 +588,7 @@ export function ScenarioEditor({ scenarioId }: { scenarioId?: string }) {
                         </Link>
                       )}
                       <span className="truncate text-xs text-slate-500" title={v.spec_hash}>
-                        {actorLabel(v.created_by, me?.user.id)} · {formatDateTime(v.created_at)}
+                        {actorLabel(v.created_by, me?.user?.id)} · {formatDateTime(v.created_at)}
                       </span>
                     </li>
                   ))}

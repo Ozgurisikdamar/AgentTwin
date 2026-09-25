@@ -7,9 +7,10 @@ export type SpanKind =
 
 export interface Me {
   principal: { org: string; sub: string; email?: string; role: string; all_projects?: boolean };
-  user: { id: string; email: string; display_name: string };
+  /** Absent for an API key or a service. */
+  user?: { id: string; email: string; display_name: string };
   organization: { id: string; slug: string; name: string };
-  memberships: {
+  memberships?: {
     organization_id: string;
     organization_slug: string;
     organization_name: string;
@@ -26,27 +27,28 @@ export interface Project {
   content_mode?: string;
 }
 
+/** The structured summary of a trace: empty (`{}`) until the trace is finalized. */
 export interface TraceSummary {
-  agent: string;
+  agent?: string;
   agent_version?: string;
-  outcome: OutcomeStatus | null;
+  outcome?: OutcomeStatus | null;
   outcome_verified?: boolean;
-  tools: string[] | null;
-  errors: string[] | null;
-  violations: string[] | null;
-  policy_decisions: string[] | null;
-  step_count: number;
-  retry_count: number;
-  cost_usd: number;
-  cost_known: boolean;
-  duration_ms: number;
-  model: string | null;
-  prompt_hash: string | null;
+  tools?: string[] | null;
+  errors?: string[] | null;
+  violations?: string[] | null;
+  policy_decisions?: string[] | null;
+  step_count?: number;
+  retry_count?: number;
+  cost_usd?: number;
+  cost_known?: boolean;
+  duration_ms?: number;
+  model?: string | null;
+  prompt_hash?: string | null;
   final_state_diff?: Record<string, unknown>;
   failing_tool?: string;
   last_successful_step?: string;
   error_type?: string;
-  tool_sequence_sketch: string;
+  tool_sequence_sketch?: string;
 }
 
 export interface Trace {
@@ -267,20 +269,22 @@ export interface Agent {
   latest_version?: string | null;
 }
 
-export interface AgentVersionTool {
+/** A tool as the version's manifest declares it. */
+export interface ManifestTool {
   name: string;
-  tool_version: number;
   risk: string;
-  definition_sha256: string;
-  approval_condition?: string;
+  /** The condition under which a call needs a human approval. */
+  approval_required_when?: string;
 }
 
+/** An agent version as the version list answers it (its manifest carries the tools). */
 export interface AgentVersion {
   id: string;
   agent_id: string;
   agent_name: string;
   project_id: string;
   version: string;
+  manifest: { tools: ManifestTool[] | null };
   manifest_sha256: string;
   prompt_sha256?: string | null;
   model_provider?: string | null;
@@ -289,7 +293,6 @@ export interface AgentVersion {
   commit_sha?: string | null;
   created_by: string;
   created_at: string;
-  tools: AgentVersionTool[] | null;
 }
 
 export interface ApiErrorBody {

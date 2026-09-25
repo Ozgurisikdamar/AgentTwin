@@ -43,7 +43,7 @@ from agenttwin_evaluation.common import AGENT, NAME, PRODUCER
 from agenttwin_evaluation.comparison import EVALUATED, CaseComparison, Side, compare_case, summarize
 from agenttwin_evaluation.config import EvaluationConfig
 from agenttwin_evaluation.judges import JudgeProvider, judge_identity
-from agenttwin_evaluation.miner import TRACE_EVENTS, Miner
+from agenttwin_evaluation.miner import MINED_EVENTS, Miner
 from agenttwin_evaluation.reviewing import needs_review
 from agenttwin_evaluation.semantic import JudgeBudget, Judged, SemanticJudging
 from agenttwin_evaluation.store import SCHEMA, JudgmentCache, Row, Store
@@ -581,9 +581,9 @@ class EvalWorker:
     async def on_event(self, env: Envelope) -> None:
         """``simulation.run_completed.v1`` makes the waiting run due at once;
         ``evaluation.run_requested.v1`` queues a release's run; the trace
-        events are mined for regressions. The other events of the queue are
-        for later phases."""
-        if env.type in TRACE_EVENTS:
+        events and the runtime gateway's denials are mined for regressions.
+        The other events of the queue are for later phases."""
+        if env.type in MINED_EVENTS:
             if self.miner is not None:
                 await self.miner.on_event(env)
             return

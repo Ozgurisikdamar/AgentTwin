@@ -3,11 +3,15 @@
 ``trace.ingested.v1`` carries a finalized trace's summary and signals;
 ``trace.outcome_recorded.v1`` and ``trace.flagged.v1`` say something new
 about a trace, so its detail is read again from the trace service (the
-authority on it). Each event is applied once (``processed_event``), in one
+authority on it). ``policy.violation_detected.v1`` (ADR-0033) says the
+runtime gateway refused one of a trace's actions: a denial is a failure
+signal even when the agent did not record the decision itself (an approval
+request is not). Each event is applied once (``processed_event``), in one
 transaction:
 
-1. the observation of the trace (flags received before it was finalized are
-   kept in ``regression_flag`` and added);
+1. the observation of the trace (flags and runtime denials received before it
+   was finalized are kept in ``regression_flag`` and
+   ``regression_runtime_denial`` and added);
 2. no failure signal: nothing, or, if the trace was mined before and is no
    longer a failure (its outcome was corrected), it leaves its group;
 3. otherwise the rules suggest its label and severity, and its occurrence is
@@ -26,6 +30,7 @@ the group (:meth:`Miner.record_fixes`, in the run's completing transaction).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
@@ -52,17 +57,22 @@ from agenttwin_evaluation.mining import (
     title,
     transition,
     with_flag,
+    with_runtime_denial,
 )
 from agenttwin_evaluation.regression_store import MINER_ACTOR, RegressionStore
 
-__all__ = ["CONSUMER", "EVALUATION_ACTOR", "TRACE_EVENTS", "Mined", "Miner"]
+__all__ = ["CONSUMER", "EVALUATION_ACTOR", "MINED_EVENTS", "RUNTIME_EVENTS", "TRACE_EVENTS", "Mined", "Miner"]
 
 CONSUMER = "evaluation-service.regression-miner"
 EVALUATION_ACTOR = "system:evaluation"
 TRACE_EVENTS = frozenset({"trace.ingested.v1", "trace.outcome_recorded.v1", "trace.flagged.v1"})
+RUNTIME_EVENTS = frozenset({"policy.violation_detected.v1"})
+#: The events the miner applies.
+MINED_EVENTS = TRACE_EVENTS | RUNTIME_EVENTS
+_TRACE_ID = re.compile(r"[a-f0-9]{32}")
 
 Outcome = Literal[
-    "ignored",  # not a production trace, or no longer known to the trace service
+    "ignored",  # not a production trace, no longer known to the trace service, or not a failure
     "duplicate",  # the event was applied before
     "waiting",  # the trace is not finalized yet; its ingestion will mine it
     "not_candidate",  # no failure signal
@@ -105,7 +115,9 @@ class Miner:
     # ------------------------------------------------------------ events
 
     async def on_event(self, env: Envelope) -> Mined | None:
-        """Applies a trace event (other events: None)."""
+        """Applies a trace event or a runtime denial (other events: None)."""
+        if env.type in RUNTIME_EVENTS:
+            return await self._on_runtime(env)
         if env.type not in TRACE_EVENTS:
             return None
         project = env.project_id
@@ -145,8 +157,7 @@ class Miner:
                 )
             if not finalized:
                 return Mined(trace_id, "waiting", reason="the trace is not finalized yet")
-            for kind, reason in await self.store.flags_of(conn, project, trace_id):
-                obs = with_flag(obs, kind, reason)
+            obs = await self._known(conn, project, obs)
             mined = await self.mine(conn, org, project, obs, occurred_at=env.occurred_at)
         self.log.info(
             "trace mined",
@@ -154,6 +165,70 @@ class Miner:
             outcome=mined.outcome,
             regression_group_id=mined.group_id,
             event=env.type,
+        )
+        return mined
+
+    async def _known(self, conn: Conn, project: str, obs: Observation) -> Observation:
+        """The observation with what was received about the trace before:
+        people's flags and the runtime gateway's denials."""
+        for kind, reason in await self.store.flags_of(conn, project, obs.trace_id):
+            obs = with_flag(obs, kind, reason)
+        for tool in await self.store.runtime_denials_of(conn, project, obs.trace_id):
+            obs = with_runtime_denial(obs, tool)
+        return obs
+
+    async def _on_runtime(self, env: Envelope) -> Mined:
+        """``policy.violation_detected.v1``: the runtime gateway refused an
+        action of the trace (a policy denied it, or its approval token did
+        not fit it), or held it for approval. A refusal is kept for the
+        trace and the trace is mined again; an approval request is not a
+        failure."""
+        project, payload = env.project_id, env.payload
+        if not project:
+            raise Permanent(f"{env.type} names no project")
+        trace_id = str(payload.get("trace_id") or "").strip().lower()
+        tool = str(payload.get("tool") or "").strip()
+        refused = payload.get("decision") == "deny" or payload.get("outcome") == "approval_refused"
+        if not refused:
+            return Mined(trace_id, "ignored", reason="an approval request is not a failure")
+        if not trace_id:
+            return Mined(trace_id, "ignored", reason="the call named no trace")
+        decision_id = str(payload.get("decision_id") or "")
+        if not tool or not decision_id or not _TRACE_ID.fullmatch(trace_id):
+            raise Permanent(f"{env.type} names no tool, no decision or no valid trace")
+        environment = payload.get("environment")
+        if environment not in (None, "", "production"):
+            return Mined(trace_id, "ignored", reason=f"a {environment} call, not a production one")
+        org = env.organization_id
+        detail = await self.traces.trace(org, project, trace_id)
+        obs = observation_from_detail(detail) if detail is not None else None
+        if obs is not None and not obs.production:
+            return Mined(trace_id, "ignored")
+        async with transaction(self.pool) as conn:
+            if not await claim_event(conn, CONSUMER, env.id):
+                return Mined(trace_id, "duplicate")
+            await self.store.add_runtime_denial(
+                conn,
+                decision_id=decision_id,
+                project_id=project,
+                trace_id=trace_id,
+                tool=tool,
+                rule=str(payload.get("rule") or ""),
+                outcome=str(payload["outcome"]) if payload.get("outcome") else None,
+                reason=str(payload.get("reason") or "").strip()[:2000] or None,
+            )
+            if obs is None or not (detail and detail["trace"].get("finalized")):
+                # Its ingestion will mine it, with this denial.
+                return Mined(trace_id, "waiting", reason="the trace is not finalized yet")
+            obs = await self._known(conn, project, obs)
+            mined = await self.mine(conn, org, project, obs, occurred_at=env.occurred_at)
+        self.log.info(
+            "trace mined",
+            trace_id=trace_id,
+            outcome=mined.outcome,
+            regression_group_id=mined.group_id,
+            event=env.type,
+            tool=tool,
         )
         return mined
 

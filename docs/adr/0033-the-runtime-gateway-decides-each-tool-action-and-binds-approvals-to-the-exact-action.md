@@ -159,7 +159,11 @@ What exists already:
   the tool's status and the latency. `deny` and `require_approval` publish
   `policy.violation_detected.v1`; the miner turns a runtime denial on a trace
   into a regression signal even when the agent did not record the decision
-  itself.
+  itself: a `deny`, or a refused approval token (the agent changed the
+  approved action), becomes the trace's violation `policy_denied:<tool>`,
+  kept (`regression_runtime_denial`) until the trace is finalized, like a
+  flag. A pending approval request is not a failure and is not mined; nor is
+  a call without a trace or outside production.
 
 * **Tenancy.** Every row carries the organization and project; every read and
   write is scoped by the internal token's projects. An API key reaches only

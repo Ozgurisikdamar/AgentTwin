@@ -18,7 +18,7 @@ import pytest
 
 from agenttwin_core.db import transaction
 from agenttwin_core.embeddings import EmbeddingError
-from agenttwin_core.events import Envelope
+from agenttwin_core.events import Envelope, Permanent
 from agenttwin_core.ids import new_id
 from agenttwin_evaluation.clients import UpstreamError
 from agenttwin_evaluation.miner import CONSUMER, EVALUATION_ACTOR, Miner
@@ -42,6 +42,7 @@ from regression_testutil import (
     mine,
     outcome_recorded,
     variant,
+    violation,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.anyio]
@@ -562,6 +563,135 @@ async def test_a_merged_group_sends_new_failures_to_the_one_it_joined() -> None:
         mined = await mine(ev, ingested(variant(load("cross-tenant-denied"))))
         assert mined.group_id == str(dup["id"])
         assert [g["occurrence_count"] for g in await groups(ev)] == [2, 1]
+
+
+# ---------------------------------------------------------------- runtime denials
+
+
+async def denials(ev: Stack, tid: str) -> list[tuple[Any, ...]]:
+    rows = await ev.store.all(
+        "SELECT tool, rule, outcome, reason FROM regression_runtime_denial WHERE trace_id = %s", (tid,)
+    )
+    return [(r["tool"], r["rule"], r["outcome"], r["reason"]) for r in rows]
+
+
+async def test_a_runtime_denial_makes_a_trace_a_policy_violation() -> None:
+    async with evaluation_stack() as ev:
+        ok = clean(load("duplicate-refund"))
+        tid = ok["trace"]["trace_id"]
+        ev.traces.details[tid] = ok
+        assert (await mine(ev, ingested(ok))).outcome == "not_candidate"
+        # The agent recorded nothing; the gateway's event is enough.
+        env = violation(tid)
+        mined = await mine(ev, env)
+        assert mined.outcome == "created"
+        assert (await mine(ev, env)).outcome == "duplicate"
+        [g] = await groups(ev)
+        [o] = await occurrences(ev, g["id"])
+        assert o["reasons"] == ["a policy denied one of its actions"]
+        assert (g["taxonomy"], g["severity"]) == ("POLICY_VIOLATION", "high")
+        assert o["observation"]["violations"] == ["policy_denied:refund_payment"]
+        assert await denials(ev, tid) == [
+            ("refund_payment", "refund_over_limit", "denied", "Refunds over 100 USD need a person's approval.")
+        ]
+        # A later fact about the trace reads it again and keeps the denial.
+        assert (await mine(ev, outcome_recorded(ok))).outcome == "updated"
+        [o] = await occurrences(ev, g["id"])
+        assert o["observation"]["violations"] == ["policy_denied:refund_payment"]
+
+
+async def test_a_runtime_denial_before_its_trace_waits_for_the_ingestion() -> None:
+    async with evaluation_stack() as ev:
+        ok = clean(load("duplicate-refund"))
+        tid = ok["trace"]["trace_id"]
+        # The trace service does not know the trace yet.
+        assert (await mine(ev, violation(tid, tool="issue_credit"))).outcome == "waiting"
+        assert await groups(ev) == []
+        mined = await mine(ev, ingested(ok))
+        assert mined.outcome == "created"
+        [o] = await occurrences(ev, mined.group_id)
+        assert o["observation"]["violations"] == ["policy_denied:issue_credit"]
+        # Known but not finalized: kept too.
+        other = clean(load("duplicate-refund"))
+        pending = copy.deepcopy(other)
+        pending["trace"]["finalized"] = False
+        ev.traces.details[other["trace"]["trace_id"]] = pending
+        assert (await mine(ev, violation(other["trace"]["trace_id"]))).outcome == "waiting"
+        assert len(await denials(ev, other["trace"]["trace_id"])) == 1
+
+
+async def test_a_refused_approval_token_is_a_denial_and_an_approval_request_is_not() -> None:
+    async with evaluation_stack() as ev:
+        ok = clean(load("duplicate-refund"))
+        tid = ok["trace"]["trace_id"]
+        ev.traces.details[tid] = ok
+        asked = await mine(ev, violation(tid, decision="require_approval", outcome="approval_required"))
+        assert (asked.outcome, asked.reason) == ("ignored", "an approval request is not a failure")
+        assert await ev.store.all("SELECT * FROM processed_event") == []
+        assert await denials(ev, tid) == []
+        # The agent changed the approved action: the gateway refused its token.
+        reused = await mine(ev, violation(tid, decision="require_approval", outcome="approval_refused"))
+        assert reused.outcome == "created"
+        assert [d[2] for d in await denials(ev, tid)] == ["approval_refused"]
+
+
+async def test_runtime_denials_outside_production_or_without_a_trace_are_not_mined() -> None:
+    async with evaluation_stack() as ev:
+        ok = clean(load("duplicate-refund"))
+        tid = ok["trace"]["trace_id"]
+        ev.traces.details[tid] = ok
+        staged = await mine(ev, violation(tid, environment="staging"))
+        assert (staged.outcome, staged.reason) == ("ignored", "a staging call, not a production one")
+        untraced = await mine(ev, violation(None))
+        assert (untraced.outcome, untraced.reason) == ("ignored", "the call named no trace")
+        simulated = variant(ok, source="simulation", simulation_run_id=str(uuid.uuid4()))
+        ev.traces.details[simulated["trace"]["trace_id"]] = simulated
+        assert (await mine(ev, violation(simulated["trace"]["trace_id"]))).outcome == "ignored"
+        assert await ev.store.all("SELECT * FROM regression_runtime_denial") == []
+        assert await ev.store.all("SELECT * FROM processed_event") == []
+        # Unnamed environment: the trace decides.
+        assert (await mine(ev, violation(tid, environment=None))).outcome == "created"
+
+
+async def test_a_denial_the_agent_recorded_too_is_counted_once() -> None:
+    async with evaluation_stack() as ev:
+        ok = clean(load("duplicate-refund"))
+        recorded = variant(
+            ok, signals=["policy_denied"], summary={"violations": ["policy_denied:refund_payment"]}
+        )
+        tid = recorded["trace"]["trace_id"]
+        ev.traces.details[tid] = recorded
+        first = await mine(ev, ingested(recorded))
+        assert first.outcome == "created"
+        assert (await mine(ev, violation(tid))).outcome == "updated"
+        [o] = await occurrences(ev, first.group_id)
+        assert o["observation"]["violations"] == ["policy_denied:refund_payment"]
+        assert o["reasons"] == ["a policy denied one of its actions"]
+
+
+async def test_the_worker_hands_runtime_denials_to_the_miner() -> None:
+    async with evaluation_stack() as ev:
+        ok = clean(load("duplicate-refund"))
+        tid = ok["trace"]["trace_id"]
+        ev.traces.details[tid] = ok
+        await ev.worker.on_event(violation(tid))
+        [g] = await groups(ev)
+        assert g["taxonomy"] == "POLICY_VIOLATION"
+
+
+async def test_a_malformed_runtime_denial_is_parked() -> None:
+    async with evaluation_stack() as ev:
+        assert ev.worker.miner is not None
+        env = violation("f" * 32)
+        broken = replace(env, payload={**env.payload, "tool": " "})
+        with pytest.raises(Permanent):
+            await ev.worker.miner.on_event(broken)
+        nameless = replace(env, project_id=None)
+        with pytest.raises(Permanent):
+            await ev.worker.miner.on_event(nameless)
+        bad_trace = replace(env, payload={**env.payload, "trace_id": "not-a-trace"})
+        with pytest.raises(Permanent):
+            await ev.worker.miner.on_event(bad_trace)
 
 
 # ---------------------------------------------------------------- fixed and reopened

@@ -95,6 +95,35 @@ def flagged(tid: str, reason: str, kind: str = "incident", project: str = PROJEC
     return validate_envelope(env.to_dict())
 
 
+def violation(
+    tid: str | None,
+    *,
+    tool: str = "refund_payment",
+    decision: str = "deny",
+    outcome: str = "denied",
+    environment: str | None = "production",
+    project: str = PROJECT,
+) -> Envelope:
+    """``policy.violation_detected.v1`` as the runtime gateway writes it."""
+    payload = {
+        "decision_id": str(uuid.uuid4()),
+        "trace_id": tid,
+        "agent": AGENT,
+        "agent_version": "1.3.1",
+        "environment": environment,
+        "tool": tool,
+        "decision": decision,
+        "rule": "refund_over_limit",
+        "category": "runtime_policy",
+        "policy_version_id": str(uuid.uuid4()),
+        "reason": "Refunds over 100 USD need a person's approval.",
+        "outcome": outcome,
+        "approval_id": None,
+    }
+    env = Envelope.new("policy.violation_detected.v1", "runtime-gateway", ORG, project, None, payload)
+    return validate_envelope(env.to_dict())
+
+
 def clean(detail: dict[str, Any]) -> dict[str, Any]:
     """The trace without any failure signal: a verified success."""
     d = variant(

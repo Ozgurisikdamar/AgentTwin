@@ -71,6 +71,37 @@ class RegressionStore:
         )
         return [(str(r["kind"]), str(r["reason"])) for r in rows]
 
+    async def add_runtime_denial(
+        self,
+        conn: Conn,
+        *,
+        decision_id: str,
+        project_id: str,
+        trace_id: str,
+        tool: str,
+        rule: str,
+        outcome: str | None,
+        reason: str | None,
+    ) -> None:
+        """An action the runtime gateway refused on the trace (once per
+        decision)."""
+        await conn.execute(
+            """INSERT INTO regression_runtime_denial
+                 (decision_id, project_id, trace_id, tool, rule, outcome, reason)
+               VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (decision_id) DO NOTHING""",
+            (decision_id, project_id, trace_id, tool, rule, outcome, reason),
+        )
+
+    async def runtime_denials_of(self, conn: Conn, project_id: str, trace_id: str) -> list[str]:
+        """The tools whose actions the runtime gateway refused on the trace."""
+        rows = await self._all(
+            conn,
+            """SELECT tool FROM regression_runtime_denial WHERE project_id = %s AND trace_id = %s
+               ORDER BY created_at, decision_id""",
+            (project_id, trace_id),
+        )
+        return [str(r["tool"]) for r in rows]
+
     async def occurrence(self, conn: Conn, project_id: str, trace_id: str) -> Row | None:
         return await self._one(
             conn,

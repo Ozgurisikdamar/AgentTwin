@@ -55,6 +55,7 @@ __all__ = [
     "transition",
     "violation_kinds",
     "with_flag",
+    "with_runtime_denial",
 ]
 
 #: The failure taxonomy of spec §18. Organizations add custom tags on top.
@@ -263,6 +264,16 @@ def with_flag(obs: Observation, kind: str, reason: str) -> Observation:
     if flag in obs.flags:
         return obs
     return replace(obs, flags=(*obs.flags, flag))
+
+
+def with_runtime_denial(obs: Observation, tool: str) -> Observation:
+    """The runtime gateway refused one of the trace's actions on ``tool``
+    (``policy.violation_detected.v1``): the violation the trace service
+    records when the agent records the decision itself."""
+    violation = f"policy_denied:{tool.strip() or 'unknown'}"
+    if violation in obs.violations:
+        return obs
+    return replace(obs, violations=(*obs.violations, violation))
 
 
 # ---------------------------------------------------------------- detection

@@ -3,6 +3,7 @@ package graph
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"slices"
@@ -71,19 +72,41 @@ type Step struct {
 	Sources    []Source `json:"sources"`
 }
 
+// MarshalJSON writes the seed step (no edge taken) with a null edge,
+// direction and confidence rather than empty values.
+func (s Step) MarshalJSON() ([]byte, error) {
+	type step struct {
+		Node       Ref       `json:"component"`
+		Label      string    `json:"label"`
+		Edge       *EdgeType `json:"edge"`
+		Direction  *string   `json:"direction"`
+		Confidence *float64  `json:"confidence"`
+		Sources    []Source  `json:"sources"`
+	}
+	out := step{Node: s.Node, Label: s.Label, Sources: s.Sources}
+	if out.Sources == nil {
+		out.Sources = []Source{}
+	}
+	if s.Edge != "" {
+		out.Edge, out.Direction, out.Confidence = &s.Edge, &s.Direction, &s.Confidence
+	}
+	return json.Marshal(out)
+}
+
 // Affected is a component the change can influence and why.
 type Affected struct {
-	Node     Node     `json:"-"`
-	Ref      Ref      `json:"component"`
-	Label    string   `json:"label"`
-	Seed     bool     `json:"seed"`
-	Direct   bool     `json:"direct"`
-	Depth    int      `json:"depth"`
-	Score    float64  `json:"score"`
-	Severity string   `json:"severity"`
-	Certain  bool     `json:"certain"`
-	Factors  []string `json:"factors"`
-	// Path starts at the seed (Path[0], with an empty edge) and ends here.
+	Node       Node           `json:"-"`
+	Ref        Ref            `json:"component"`
+	Label      string         `json:"label"`
+	Attributes map[string]any `json:"attributes"`
+	Seed       bool           `json:"seed"`
+	Direct     bool           `json:"direct"`
+	Depth      int            `json:"depth"`
+	Score      float64        `json:"score"`
+	Severity   string         `json:"severity"`
+	Certain    bool           `json:"certain"`
+	Factors    []string       `json:"factors"`
+	// Path starts at the seed (Path[0], with no edge) and ends here.
 	Path []Step `json:"path"`
 }
 
@@ -181,7 +204,7 @@ func BlastRadius(ctx context.Context, r Reader, changes []Change, opts Options) 
 	if opts.MaxNodes <= 0 {
 		opts.MaxNodes = DefaultMaxNodes
 	}
-	res := Result{MaxDepth: opts.MaxDepth, Seeds: []Change{}, Unresolved: []Change{}}
+	res := Result{MaxDepth: opts.MaxDepth, Seeds: []Change{}, Unresolved: []Change{}, Affected: []Affected{}}
 	changes, err := mergeChanges(changes)
 	if err != nil {
 		return res, err
@@ -530,7 +553,11 @@ func round3(v float64) float64 { return math.Round(v*1000) / 1000 }
 func affected(s *state) Affected {
 	crit, why := criticality(s.node)
 	score := round3(s.strength * math.Pow(depthDecay, float64(s.depth)) * crit)
-	a := Affected{Node: s.node, Ref: s.node.Ref(), Label: s.node.Label, Seed: s.parent == nil, Direct: s.direct,
+	attrs := s.node.Attrs
+	if attrs == nil {
+		attrs = map[string]any{}
+	}
+	a := Affected{Node: s.node, Ref: s.node.Ref(), Label: s.node.Label, Attributes: attrs, Seed: s.parent == nil, Direct: s.direct,
 		Depth: s.depth, Score: score, Severity: Severity(score), Certain: s.certain, Path: pathOf(s), Factors: []string{}}
 	if a.Seed {
 		a.Factors = append(a.Factors, "changed: "+nonEmpty(s.seed.Summary, s.seed.Change))

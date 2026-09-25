@@ -156,6 +156,7 @@ services:
       AGENTTWIN_API_KEY_PEPPER: ${AGENTTWIN_API_KEY_PEPPER}
       AGENTTWIN_DEMO_API_KEY: ${AGENTTWIN_DEMO_API_KEY}
       TRACE_SERVICE_URL: http://trace-service:8081
+      GRAPH_SERVICE_URL: http://graph-service:8082
       SIMULATION_SERVICE_URL: http://simulation-service:8084
       EVALUATION_SERVICE_URL: http://evaluation-service:8083
     ports: ["127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}:8080"]
@@ -172,6 +173,20 @@ services:
     environment:
       <<: *service-env
       CONTROL_PLANE_URL: http://control-plane:8080
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    <<: *hardening
+
+  # The dependency graph: built from events, answers what a change can
+  # influence (spec §19-22).
+  graph-service:
+    build:
+      <<: *go-build
+      args: {SERVICE: graph-service, VERSION: "${AGENTTWIN_VERSION:-dev}"}
+    image: agenttwin/graph-service:${AGENTTWIN_VERSION:-dev}
+    environment:
+      <<: *service-env
     depends_on:
       postgres: {condition: service_healthy}
       rabbitmq: {condition: service_healthy}

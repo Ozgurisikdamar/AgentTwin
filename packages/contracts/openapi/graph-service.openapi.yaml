@@ -1,0 +1,1012 @@
+openapi: 3.1.0
+info:
+  title: AgentTwin dependency graph API
+  version: 1.0.0
+  summary: The dependency graph of a project's agents and what a change can influence.
+  description: |
+    The graph holds each project's agents, their versions, prompts, models,
+    tools, the systems those tools reach, and the scenarios and policies that
+    cover them. It is built from events (registered agent versions, imported
+    tool catalogs, production traces, scenarios, activated policies) and from
+    manual mappings; every relationship carries its evidence and a confidence
+    (spec §19). The blast radius of a change is computed by a bounded
+    traversal (spec §20-22).
+
+    **Where to call it.** The public API is served by the control plane (the
+    edge), which authenticates the caller, applies rate limits and
+    `Idempotency-Key`, and forwards the request to the graph service.
+
+    **Conventions.**
+    * Every response carries `X-Request-Id`; errors are
+      `{"error": {"code", "message", "request_id", "details"?}}` with a stable
+      machine-readable `code`.
+    * Request bodies are strict: unknown fields are rejected (`400
+      INVALID_JSON`). Responses may gain fields: clients ignore fields and
+      enum values they do not know.
+    * Projects and components outside the caller's access answer `404`,
+      never `403`, so their existence cannot be probed.
+    * A view of the graph is always bounded (spec §113): never the whole
+      graph at once.
+
+    Compatibility and the checks that keep this document true are described
+    in `packages/contracts/README.md`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: The control plane of a local stack (`make dev`).
+tags:
+  - name: Graph
+    description: Components, relationships and their evidence (spec §19).
+  - name: Mappings
+    description: What a person declares a tool depends on (spec §20.5).
+  - name: Blast radius
+    description: What a change can influence, and why (spec §20-22).
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  /api/v1/graph:
+    get:
+      operationId: getGraph
+      tags: [Graph]
+      summary: View part of the graph
+      description: |
+        The components within `depth` hops of the focus, in either direction,
+        at most `limit` of them (closest first), and the edges between them.
+        Without a focus, the latest version of every agent is the focus. With
+        `kinds`, other components are neither shown nor walked through. The
+        totals count the whole project's graph.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+        - name: focus
+          in: query
+          description: The component to centre on (a component id). Unknown ids answer `404`.
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 4
+            default: 2
+        - name: limit
+          in: query
+          description: The most components shown.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 150
+        - name: kinds
+          in: query
+          description: Comma-separated component kinds to show (e.g. `TOOL,SERVICE,DATABASE`).
+          schema:
+            type: string
+            pattern: ^[A-Z_]+(,[A-Z_]+)*$
+      responses:
+        '200':
+          description: The bounded view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/graph/components:
+    get:
+      operationId: listComponents
+      tags: [Graph]
+      summary: List components
+      description: The project's components ordered by kind, then key.
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/Project'
+        - name: kind
+          in: query
+          schema:
+            $ref: '#/components/schemas/ComponentKind'
+        - name: q
+          in: query
+          description: Matches the key or the label (substring, case-insensitive).
+          schema:
+            type: string
+            maxLength: 200
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of components.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/graph/components/{component_id}:
+    get:
+      operationId: getComponent
+      tags: [Graph]
+      summary: Get a component and its relationships
+      description: |
+        The component, when it was first and last seen, and its relationships
+        in both directions with the evidence for each (at most 200 per
+        direction, most recently seen first; `truncated` says more exist).
+      parameters:
+        - $ref: '#/components/parameters/Organization'
+        - $ref: '#/components/parameters/ComponentId'
+      responses:
+        '200':
+          description: The component.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/graph/mappings/{tool}:
+    put:
+      operationId: setToolMapping
+      tags: [Mappings]
+      summary: Declare what a tool depends on
+      description: |
+        Replaces the tool's manual mapping: the systems it depends on and how
+        (evidence `MANUAL`, confidence 1). An empty `depends_on` removes the
+        mapping; relationships other sources support are kept. Requires the
+        `graph.write` permission. Announced to the audit log.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+        - name: tool
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ToolName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MappingRequest'
+      responses:
+        '200':
+          description: The tool and the relationships the mapping now supports.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingResult'
+        '400':
+          $ref: '#/components/responses/MappingInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /api/v1/blast-radius:
+    post:
+      operationId: computeBlastRadius
+      tags: [Blast radius]
+      summary: Compute the blast radius of a change
+      description: |
+        Walks the graph from the changed components, up to who depends on
+        them and down to what they act upon, and returns every component the
+        change can influence with its path, score and severity, the
+        scenarios, policies and evaluators linked to them, and the affected
+        tools whose effects cannot be undone.
+
+        Only one agent version is entered: `scope`'s, or else each agent's
+        latest. A component the graph does not know is listed in
+        `unresolved`, never guessed. A prompt change with `mentions` makes
+        the named tools direct; the agent's other tools are reached as
+        indirect. Nothing is changed: the operation is a computation.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/Organization'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlastRadiusRequest'
+      responses:
+        '200':
+          description: The bounded blast radius.
+          headers:
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlastRadiusResponse'
+        '400':
+          $ref: '#/components/responses/BlastRadiusInvalid'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyInProgress'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/Internal'
+        '502':
+          $ref: '#/components/responses/UpstreamUnavailable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A session token (dev login), an OIDC access token or an API key.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-AgentTwin-Api-Key
+      description: A project API key.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        One key per user action (ADR-0019). A repeat of the same request
+        returns the stored response with `Idempotent-Replayed: true`; the same
+        key with a different request answers `422`; while the first request
+        runs, `409`. Keys expire after 24 hours.
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9._:-]{8,128}$
+    Organization:
+      name: X-AgentTwin-Org
+      in: header
+      required: false
+      description: The organization to act in, for credentials that belong to several.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Project:
+      name: project_id
+      in: query
+      required: true
+      description: The project whose graph to read. A project outside the caller's access answers `404`.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    Cursor:
+      name: cursor
+      in: query
+      description: The `next_cursor` of the previous page.
+      schema:
+        type: string
+        maxLength: 1024
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    ComponentId:
+      name: component_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+
+  headers:
+    IdempotentReplayed:
+      description: '`true` when the response is the stored answer to an earlier request with the same `Idempotency-Key`.'
+      schema:
+        type: string
+        enum: ['true']
+
+  responses:
+    BadRequest:
+      description: |
+        The request is invalid: `INVALID_PARAMETER` (`details.field`),
+        `INVALID_CURSOR` or `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    MappingInvalid:
+      description: |
+        `INVALID_MAPPING` (an unknown dependency kind, relation or
+        criticality, more than 50 dependencies, or no `depends_on`;
+        `details.field`), `INVALID_PARAMETER`, `INVALID_JSON` (including an
+        unknown field), `EMPTY_BODY` or `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BlastRadiusInvalid:
+      description: |
+        `INVALID_CHANGES` (none or more than 100 changes, an unknown kind, a
+        key that is not 1 to 300 printable characters, a change that is not
+        added, removed or modified, a mention that is not a tool name;
+        `details.field`), `INVALID_SCOPE`, `INVALID_PARAMETER` (`max_depth`,
+        `max_nodes`), `INVALID_JSON`, `EMPTY_BODY` or
+        `INVALID_IDEMPOTENCY_KEY`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthenticated:
+      description: No valid credential (`UNAUTHENTICATED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The credential lacks the permission (`FORBIDDEN`; `details.required_permission`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The project or component does not exist or is outside the caller's projects (`NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyInProgress:
+      description: The first request with this `Idempotency-Key` is still running (`IDEMPOTENCY_IN_PROGRESS`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    PayloadTooLarge:
+      description: The request body is too large (`PAYLOAD_TOO_LARGE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UnsupportedMediaType:
+      description: The body is not `application/json` (`UNSUPPORTED_MEDIA_TYPE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyKeyReused:
+      description: The `Idempotency-Key` was used for a different request (`IDEMPOTENCY_KEY_REUSED`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests (`RATE_LIMITED`).
+      headers:
+        Retry-After:
+          description: Seconds to wait.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Internal:
+      description: An unexpected error (`INTERNAL`); quote the `request_id`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    UpstreamUnavailable:
+      description: The graph service is not reachable from the control plane (`UPSTREAM_UNAVAILABLE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unavailable:
+      description: |
+        The graph service is not configured on this control plane
+        (`SERVICE_NOT_CONFIGURED`) or its database is unavailable
+        (`UNAVAILABLE`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    ToolName:
+      type: string
+      pattern: ^[a-z0-9][a-z0-9_-]{0,62}$
+    ComponentKey:
+      type: string
+      description: Unique per kind within a project (a tool name, `agent@version`, `provider/model`, a prompt's hash…).
+      minLength: 1
+      maxLength: 300
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable (e.g. `INVALID_CHANGES`).
+              pattern: ^[A-Z][A-Z0-9_]*$
+            message:
+              type: string
+              description: For people; may change.
+            request_id:
+              type: string
+              description: Equals the `X-Request-Id` response header.
+            details:
+              type: object
+              description: Code-specific context (the invalid field).
+
+    ComponentKind:
+      type: string
+      enum: [AGENT, AGENT_VERSION, PROMPT, MODEL, TOOL, MCP_SERVER, HTTP_API, SERVICE, DATABASE, QUEUE,
+             EXTERNAL_SYSTEM, RETRIEVAL_SOURCE, DATASET, POLICY, SCENARIO, EVALUATOR]
+    EdgeType:
+      type: string
+      description: |
+        Reads "from TYPE to": an agent version USES a tool, a tool WRITES a
+        database, a tool is TESTED_BY a scenario.
+      enum: [USES, CALLS, READS, WRITES, PUBLISHES, CONSUMES, GUARDED_BY, EVALUATED_BY, TESTED_BY,
+             DEPENDS_ON, RETRIEVES_FROM, CAN_MUTATE, VERSION_OF]
+    EvidenceSource:
+      type: string
+      description: |
+        Why a relationship exists. `MANIFEST`, `MANUAL`, `SCENARIO` and
+        `OBSERVED` (production traffic) are facts (confidence 1); `OPENAPI`
+        (0.9) and `MCP` (0.8) describe interfaces; `INFERRED` (0.5) is never
+        shown as certain.
+      enum: [MANIFEST, OPENAPI, MCP, OBSERVED, MANUAL, SCENARIO, INFERRED]
+    Confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+    Severity:
+      type: string
+      enum: [critical, high, medium, low]
+
+    ComponentRef:
+      type: object
+      required: [kind, key]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ComponentKind'
+        key:
+          $ref: '#/components/schemas/ComponentKey'
+    ComponentRefInput:
+      type: object
+      additionalProperties: false
+      required: [kind, key]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ComponentKind'
+        key:
+          type: string
+          minLength: 1
+          maxLength: 300
+          pattern: ^[^\x00-\x1f]+$
+
+    Component:
+      type: object
+      required: [id, kind, key, label, attributes]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          $ref: '#/components/schemas/ComponentKind'
+        key:
+          $ref: '#/components/schemas/ComponentKey'
+        label:
+          type: string
+        attributes:
+          type: object
+          description: |
+            What the evidence says about the component: a tool's `risk`
+            (manifest) or `imported_risk` (import), a system's `criticality`,
+            an agent version's `agent`, `version`, `registered_at` and
+            `latest`, a scenario's `severity` and `tags`.
+    GraphEdge:
+      type: object
+      required: [id, from, to, type, confidence, sources, certain]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        from:
+          $ref: '#/components/schemas/Uuid'
+        to:
+          $ref: '#/components/schemas/Uuid'
+        type:
+          $ref: '#/components/schemas/EdgeType'
+        confidence:
+          $ref: '#/components/schemas/Confidence'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceSource'
+        certain:
+          type: boolean
+          description: Whether any of its evidence is certain (not `INFERRED`).
+    GraphView:
+      type: object
+      required: [focus, nodes, edges, depth, truncated, totals]
+      properties:
+        focus:
+          type: array
+          items:
+            $ref: '#/components/schemas/Component'
+        nodes:
+          type: array
+          description: The shown components, closest to the focus first; the focus is included.
+          items:
+            $ref: '#/components/schemas/Component'
+        edges:
+          type: array
+          description: The edges between shown components.
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+        depth:
+          type: integer
+        truncated:
+          type: boolean
+          description: More components were within reach than `limit`.
+        totals:
+          type: object
+          required: [components, edges]
+          properties:
+            components:
+              type: object
+              description: The project's components per kind.
+              additionalProperties:
+                type: integer
+            edges:
+              type: integer
+    ComponentPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Component'
+        next_cursor:
+          type: [string, 'null']
+
+    Evidence:
+      type: object
+      required: [source, source_ref, confidence, observations, detail, first_seen_at, last_seen_at]
+      properties:
+        source:
+          $ref: '#/components/schemas/EvidenceSource'
+        source_ref:
+          type: string
+          description: |
+            What asserted it: `manifest:<agent>@<version>`, `openapi:<name>`,
+            `mcp:<server>`, `scenario:<name>`, `policy:<name>`,
+            `mapping:<tool>` or `traces`.
+        confidence:
+          $ref: '#/components/schemas/Confidence'
+        observations:
+          type: integer
+          minimum: 1
+          description: How many times production traces showed it (1 for declared evidence).
+        detail:
+          type: object
+          description: Source-specific (an operation's `method` and `path`, the last trace id…).
+        first_seen_at:
+          $ref: '#/components/schemas/Timestamp'
+        last_seen_at:
+          $ref: '#/components/schemas/Timestamp'
+    Relation:
+      type: object
+      required: [id, type, direction, component, component_id, label, confidence, sources, certain, evidence]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        type:
+          $ref: '#/components/schemas/EdgeType'
+        direction:
+          type: string
+          enum: [out, in]
+          description: '`out`: this component → the other; `in`: the other → this one.'
+        component:
+          $ref: '#/components/schemas/ComponentRef'
+        component_id:
+          $ref: '#/components/schemas/Uuid'
+        label:
+          type: string
+          description: The other component's label.
+        confidence:
+          $ref: '#/components/schemas/Confidence'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceSource'
+        certain:
+          type: boolean
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+    ComponentDetail:
+      type: object
+      required: [component, relations, truncated]
+      properties:
+        component:
+          type: object
+          required: [id, project_id, kind, key, label, attributes, first_seen_at, last_seen_at]
+          properties:
+            id:
+              $ref: '#/components/schemas/Uuid'
+            project_id:
+              $ref: '#/components/schemas/Uuid'
+            kind:
+              $ref: '#/components/schemas/ComponentKind'
+            key:
+              $ref: '#/components/schemas/ComponentKey'
+            label:
+              type: string
+            attributes:
+              type: object
+            first_seen_at:
+              $ref: '#/components/schemas/Timestamp'
+            last_seen_at:
+              $ref: '#/components/schemas/Timestamp'
+        relations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Relation'
+        truncated:
+          type: boolean
+
+    Dependency:
+      type: object
+      additionalProperties: false
+      required: [kind, name]
+      properties:
+        kind:
+          type: string
+          enum: [SERVICE, HTTP_API, DATABASE, QUEUE, EXTERNAL_SYSTEM, MCP_SERVER]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        relation:
+          type: string
+          enum: [CALLS, READS, WRITES, PUBLISHES, CONSUMES, DEPENDS_ON, CAN_MUTATE]
+          default: DEPENDS_ON
+        criticality:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+    MappingRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, depends_on]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        depends_on:
+          type: array
+          maxItems: 50
+          description: The tool's whole mapping; an empty list removes it.
+          items:
+            $ref: '#/components/schemas/Dependency'
+    MappingResult:
+      type: object
+      required: [tool, mapped]
+      properties:
+        tool:
+          $ref: '#/components/schemas/Component'
+        mapped:
+          type: array
+          description: The tool's relationships this mapping supports.
+          items:
+            $ref: '#/components/schemas/Relation'
+
+    ChangeInput:
+      type: object
+      additionalProperties: false
+      required: [component, change]
+      properties:
+        component:
+          $ref: '#/components/schemas/ComponentRefInput'
+        change:
+          type: string
+          enum: [added, removed, modified]
+        summary:
+          type: string
+          maxLength: 300
+          description: What changed, in words ("instructions changed").
+        mentions:
+          type: array
+          maxItems: 100
+          description: The tools a changed text names (the changed lines of a prompt).
+          items:
+            $ref: '#/components/schemas/ToolName'
+    ScopeInput:
+      type: object
+      additionalProperties: false
+      required: [agent, version]
+      description: The agent version to enter instead of each agent's latest.
+      properties:
+        agent:
+          type: string
+          minLength: 1
+          maxLength: 63
+        version:
+          type: string
+          minLength: 1
+          maxLength: 100
+    BlastRadiusRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, changes]
+      properties:
+        project_id:
+          $ref: '#/components/schemas/Uuid'
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: The changed components; two naming the same component are merged.
+          items:
+            $ref: '#/components/schemas/ChangeInput'
+        scope:
+          oneOf:
+            - $ref: '#/components/schemas/ScopeInput'
+            - type: 'null'
+        max_depth:
+          type: integer
+          minimum: 1
+          maximum: 8
+          default: 4
+        max_nodes:
+          type: integer
+          minimum: 1
+          maximum: 2000
+          default: 500
+
+    Change:
+      type: object
+      required: [component, change]
+      properties:
+        component:
+          $ref: '#/components/schemas/ComponentRef'
+        change:
+          type: string
+          enum: [added, removed, modified]
+        summary:
+          type: string
+        mentions:
+          type: array
+          items:
+            type: string
+    Step:
+      type: object
+      required: [component, label, edge, direction, confidence, sources]
+      description: One hop of a path. The first step is the seed, with no edge.
+      properties:
+        component:
+          $ref: '#/components/schemas/ComponentRef'
+        label:
+          type: string
+        edge:
+          oneOf:
+            - $ref: '#/components/schemas/EdgeType'
+            - type: 'null'
+        direction:
+          type: [string, 'null']
+          enum: [down, up, null]
+          description: '`down`: what the previous component acts on; `up`: who depends on it.'
+        confidence:
+          oneOf:
+            - $ref: '#/components/schemas/Confidence'
+            - type: 'null'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceSource'
+    Affected:
+      type: object
+      required: [component, label, attributes, seed, direct, depth, score, severity, certain, factors, path]
+      properties:
+        component:
+          $ref: '#/components/schemas/ComponentRef'
+        label:
+          type: string
+        attributes:
+          type: object
+        seed:
+          type: boolean
+          description: The component is one of the changes.
+        direct:
+          type: boolean
+          description: Not reached through an agent's tool that a prompt change does not mention.
+        depth:
+          type: integer
+          minimum: 0
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Influence × criticality, decaying with depth.
+        severity:
+          $ref: '#/components/schemas/Severity'
+        certain:
+          type: boolean
+          description: Every hop of its path has certain evidence.
+        factors:
+          type: array
+          description: Why it scored as it did, in words.
+          items:
+            type: string
+        path:
+          type: array
+          items:
+            $ref: '#/components/schemas/Step'
+    Reason:
+      type: object
+      required: [via, via_label, direct, score, path]
+      properties:
+        via:
+          $ref: '#/components/schemas/ComponentRef'
+        via_label:
+          type: string
+        direct:
+          type: boolean
+        score:
+          type: number
+        path:
+          type: array
+          items:
+            $ref: '#/components/schemas/Step'
+    Linked:
+      type: object
+      required: [component, label, weight, reasons]
+      properties:
+        component:
+          $ref: '#/components/schemas/ComponentRef'
+        label:
+          type: string
+        severity:
+          type: string
+          description: A scenario's own severity.
+        weight:
+          type: number
+          description: The strongest reason's score, scaled by the scenario's severity.
+        reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reason'
+    BlastRadius:
+      type: object
+      required: [seeds, unresolved, affected, scenarios, policies, evaluators, irreversible_actions, max_depth, truncated]
+      properties:
+        seeds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Change'
+        unresolved:
+          type: array
+          description: Changes naming components the graph does not know.
+          items:
+            $ref: '#/components/schemas/Change'
+        affected:
+          type: array
+          description: The seeds first, then by score (highest first), depth, kind and key.
+          items:
+            $ref: '#/components/schemas/Affected'
+        scenarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/Linked'
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Linked'
+        evaluators:
+          type: array
+          items:
+            $ref: '#/components/schemas/Linked'
+        irreversible_actions:
+          type: array
+          description: Affected tools whose effects cannot be undone (`WRITE_IRREVERSIBLE`) or that act with administrative rights.
+          items:
+            $ref: '#/components/schemas/Affected'
+        max_depth:
+          type: integer
+        truncated:
+          type: boolean
+          description: More components were within reach than `max_nodes`.
+    BlastRadiusResponse:
+      type: object
+      required: [blast_radius]
+      properties:
+        blast_radius:
+          $ref: '#/components/schemas/BlastRadius'

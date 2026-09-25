@@ -17,6 +17,7 @@ x-proxy-build: &proxy-build
 services:
   control-plane: {build: *proxy-build}
   trace-service: {build: *proxy-build}
+  graph-service: {build: *proxy-build}
   web: {build: *proxy-build}
   demo-tools: {build: *proxy-build}
   demo-agent: {build: *proxy-build}

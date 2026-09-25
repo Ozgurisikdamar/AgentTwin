@@ -166,8 +166,8 @@ export_errors=$($COMPOSE logs --no-color --since 15m otel-collector 2>/dev/null 
 # ------------------------------------------------------------------ migrations
 section "Migrations"
 # service -> its binary inside the image (Go services: /app/service)
-for entry in control-plane:/app/service trace-service:/app/service simulation-service:simulation-service \
-  evaluation-service:evaluation-service; do
+for entry in control-plane:/app/service trace-service:/app/service graph-service:/app/service \
+  simulation-service:simulation-service evaluation-service:evaluation-service; do
   svc=${entry%%:*}
   bin=${entry#*:}
   if ! is_running "$svc"; then
@@ -194,7 +194,9 @@ probe() { # name url expected
   [ "$code" = "$3" ] && ok "$1 ($2)" || fail "$1 returned '${code:-no response}' ($2)"
 }
 probe "control plane ready" "http://127.0.0.1:${CONTROL_PLANE_HOST_PORT:-8080}/health/ready" 200
-if $COMPOSE exec -T trace-service /app/service healthcheck >/dev/null 2>&1; then ok "trace service ready"; else fail "trace service is not ready"; fi
+for svc in trace-service graph-service; do
+  if $COMPOSE exec -T "$svc" /app/service healthcheck >/dev/null 2>&1; then ok "$svc ready"; else fail "$svc is not ready ($COMPOSE logs $svc)"; fi
+done
 for entry in simulation-service:simulation-service simulation-worker:simulation-service \
   evaluation-service:evaluation-service evaluation-worker:evaluation-service; do
   svc=${entry%%:*}

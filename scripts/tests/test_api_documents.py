@@ -89,6 +89,7 @@ def test_there_is_a_document_per_service_api() -> None:
     assert [service(p) for p in DOCUMENTS] == [
         "control-plane",
         "evaluation-service",
+        "graph-service",
         "simulation-service",
         "trace-service",
     ]

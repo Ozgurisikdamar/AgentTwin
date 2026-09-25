@@ -29,6 +29,7 @@ export const API_TYPES = [
   { document: "trace-service.openapi.yaml", output: "src/lib/api/traces.gen.ts" },
   { document: "simulation-service.openapi.yaml", output: "src/lib/api/simulation.gen.ts" },
   { document: "evaluation-service.openapi.yaml", output: "src/lib/api/evaluation.gen.ts" },
+  { document: "graph-service.openapi.yaml", output: "src/lib/api/graph.gen.ts" },
 ] as const;
 
 type Json = Record<string, unknown>;

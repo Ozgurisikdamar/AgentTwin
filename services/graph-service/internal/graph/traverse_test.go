@@ -272,6 +272,15 @@ func TestUnknownComponentsAreReportedNotGuessed(t *testing.T) {
 	if len(res.Unresolved) != 1 || len(res.Seeds) != 0 || len(res.Affected) != 0 {
 		t.Fatalf("%+v", res)
 	}
+	// Every list is a list, empty or not: clients never meet null.
+	b, _ := json.Marshal(res)
+	for _, field := range []string{"seeds", "unresolved", "affected", "scenarios", "policies", "evaluators", "irreversible_actions"} {
+		var out map[string]json.RawMessage
+		_ = json.Unmarshal(b, &out)
+		if string(out[field]) == "null" {
+			t.Errorf("%s is null", field)
+		}
+	}
 }
 
 func TestInvalidChangesAreRefused(t *testing.T) {

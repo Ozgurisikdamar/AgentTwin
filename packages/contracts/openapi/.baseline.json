@@ -12858,6 +12858,2253 @@
       }
     }
   },
+  "graph-service": {
+    "GET /api/v1/graph": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:depth": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:focus": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:kinds": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/edges/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/edges/[]/type": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ],
+            "/focus/[]/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/nodes/[]/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "depth",
+              "edges",
+              "focus",
+              "nodes",
+              "totals",
+              "truncated"
+            ],
+            "/edges/[]": [
+              "certain",
+              "confidence",
+              "from",
+              "id",
+              "sources",
+              "to",
+              "type"
+            ],
+            "/focus/[]": [
+              "attributes",
+              "id",
+              "key",
+              "kind",
+              "label"
+            ],
+            "/nodes/[]": [
+              "attributes",
+              "id",
+              "key",
+              "kind",
+              "label"
+            ],
+            "/totals": [
+              "components",
+              "edges"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/depth": [
+              "integer"
+            ],
+            "/edges": [
+              "array"
+            ],
+            "/edges/[]": [
+              "object"
+            ],
+            "/edges/[]/certain": [
+              "boolean"
+            ],
+            "/edges/[]/confidence": [
+              "number"
+            ],
+            "/edges/[]/from": [
+              "string"
+            ],
+            "/edges/[]/id": [
+              "string"
+            ],
+            "/edges/[]/sources": [
+              "array"
+            ],
+            "/edges/[]/sources/[]": [
+              "string"
+            ],
+            "/edges/[]/to": [
+              "string"
+            ],
+            "/edges/[]/type": [
+              "string"
+            ],
+            "/focus": [
+              "array"
+            ],
+            "/focus/[]": [
+              "object"
+            ],
+            "/focus/[]/attributes": [
+              "object"
+            ],
+            "/focus/[]/id": [
+              "string"
+            ],
+            "/focus/[]/key": [
+              "string"
+            ],
+            "/focus/[]/kind": [
+              "string"
+            ],
+            "/focus/[]/label": [
+              "string"
+            ],
+            "/nodes": [
+              "array"
+            ],
+            "/nodes/[]": [
+              "object"
+            ],
+            "/nodes/[]/attributes": [
+              "object"
+            ],
+            "/nodes/[]/id": [
+              "string"
+            ],
+            "/nodes/[]/key": [
+              "string"
+            ],
+            "/nodes/[]/kind": [
+              "string"
+            ],
+            "/nodes/[]/label": [
+              "string"
+            ],
+            "/totals": [
+              "object"
+            ],
+            "/totals/components": [
+              "object"
+            ],
+            "/totals/edges": [
+              "integer"
+            ],
+            "/truncated": [
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/graph/components": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:cursor": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:kind": {
+          "required": false,
+          "schema": {
+            "enums": {
+              "/": [
+                "\"AGENT\"",
+                "\"AGENT_VERSION\"",
+                "\"DATABASE\"",
+                "\"DATASET\"",
+                "\"EVALUATOR\"",
+                "\"EXTERNAL_SYSTEM\"",
+                "\"HTTP_API\"",
+                "\"MCP_SERVER\"",
+                "\"MODEL\"",
+                "\"POLICY\"",
+                "\"PROMPT\"",
+                "\"QUEUE\"",
+                "\"RETRIEVAL_SOURCE\"",
+                "\"SCENARIO\"",
+                "\"SERVICE\"",
+                "\"TOOL\""
+              ]
+            },
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:limit": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "integer"
+              ]
+            }
+          }
+        },
+        "query:project_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "query:q": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/items/[]/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "items",
+              "next_cursor"
+            ],
+            "/items/[]": [
+              "attributes",
+              "id",
+              "key",
+              "kind",
+              "label"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/items": [
+              "array"
+            ],
+            "/items/[]": [
+              "object"
+            ],
+            "/items/[]/attributes": [
+              "object"
+            ],
+            "/items/[]/id": [
+              "string"
+            ],
+            "/items/[]/key": [
+              "string"
+            ],
+            "/items/[]/kind": [
+              "string"
+            ],
+            "/items/[]/label": [
+              "string"
+            ],
+            "/next_cursor": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "GET /api/v1/graph/components/{component_id}": {
+      "parameters": {
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:component_id": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": null,
+      "responses": {
+        "200": {
+          "enums": {
+            "/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/relations/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/relations/[]/direction": [
+              "\"in\"",
+              "\"out\""
+            ],
+            "/relations/[]/evidence/[]/source": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/relations/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/relations/[]/type": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ]
+          },
+          "required": {
+            "/": [
+              "component",
+              "relations",
+              "truncated"
+            ],
+            "/component": [
+              "attributes",
+              "first_seen_at",
+              "id",
+              "key",
+              "kind",
+              "label",
+              "last_seen_at",
+              "project_id"
+            ],
+            "/relations/[]": [
+              "certain",
+              "component",
+              "component_id",
+              "confidence",
+              "direction",
+              "evidence",
+              "id",
+              "label",
+              "sources",
+              "type"
+            ],
+            "/relations/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/relations/[]/evidence/[]": [
+              "confidence",
+              "detail",
+              "first_seen_at",
+              "last_seen_at",
+              "observations",
+              "source",
+              "source_ref"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/component": [
+              "object"
+            ],
+            "/component/attributes": [
+              "object"
+            ],
+            "/component/first_seen_at": [
+              "string"
+            ],
+            "/component/id": [
+              "string"
+            ],
+            "/component/key": [
+              "string"
+            ],
+            "/component/kind": [
+              "string"
+            ],
+            "/component/label": [
+              "string"
+            ],
+            "/component/last_seen_at": [
+              "string"
+            ],
+            "/component/project_id": [
+              "string"
+            ],
+            "/relations": [
+              "array"
+            ],
+            "/relations/[]": [
+              "object"
+            ],
+            "/relations/[]/certain": [
+              "boolean"
+            ],
+            "/relations/[]/component": [
+              "object"
+            ],
+            "/relations/[]/component/key": [
+              "string"
+            ],
+            "/relations/[]/component/kind": [
+              "string"
+            ],
+            "/relations/[]/component_id": [
+              "string"
+            ],
+            "/relations/[]/confidence": [
+              "number"
+            ],
+            "/relations/[]/direction": [
+              "string"
+            ],
+            "/relations/[]/evidence": [
+              "array"
+            ],
+            "/relations/[]/evidence/[]": [
+              "object"
+            ],
+            "/relations/[]/evidence/[]/confidence": [
+              "number"
+            ],
+            "/relations/[]/evidence/[]/detail": [
+              "object"
+            ],
+            "/relations/[]/evidence/[]/first_seen_at": [
+              "string"
+            ],
+            "/relations/[]/evidence/[]/last_seen_at": [
+              "string"
+            ],
+            "/relations/[]/evidence/[]/observations": [
+              "integer"
+            ],
+            "/relations/[]/evidence/[]/source": [
+              "string"
+            ],
+            "/relations/[]/evidence/[]/source_ref": [
+              "string"
+            ],
+            "/relations/[]/id": [
+              "string"
+            ],
+            "/relations/[]/label": [
+              "string"
+            ],
+            "/relations/[]/sources": [
+              "array"
+            ],
+            "/relations/[]/sources/[]": [
+              "string"
+            ],
+            "/relations/[]/type": [
+              "string"
+            ],
+            "/truncated": [
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "POST /api/v1/blast-radius": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/changes/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/changes/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "changes",
+              "project_id"
+            ],
+            "/changes/[]": [
+              "change",
+              "component"
+            ],
+            "/changes/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/scope": [
+              "agent",
+              "version"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/changes": [
+              "array"
+            ],
+            "/changes/[]": [
+              "object"
+            ],
+            "/changes/[]/change": [
+              "string"
+            ],
+            "/changes/[]/component": [
+              "object"
+            ],
+            "/changes/[]/component/key": [
+              "string"
+            ],
+            "/changes/[]/component/kind": [
+              "string"
+            ],
+            "/changes/[]/mentions": [
+              "array"
+            ],
+            "/changes/[]/mentions/[]": [
+              "string"
+            ],
+            "/changes/[]/summary": [
+              "string"
+            ],
+            "/max_depth": [
+              "integer"
+            ],
+            "/max_nodes": [
+              "integer"
+            ],
+            "/project_id": [
+              "string"
+            ],
+            "/scope": [
+              "null",
+              "object"
+            ],
+            "/scope/agent": [
+              "string"
+            ],
+            "/scope/version": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/blast_radius/affected/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/affected/[]/path/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/affected/[]/path/[]/direction": [
+              "\"down\"",
+              "\"up\"",
+              "null"
+            ],
+            "/blast_radius/affected/[]/path/[]/edge": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ],
+            "/blast_radius/affected/[]/path/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/blast_radius/affected/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/blast_radius/evaluators/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/direction": [
+              "\"down\"",
+              "\"up\"",
+              "null"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/edge": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/via/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/irreversible_actions/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/direction": [
+              "\"down\"",
+              "\"up\"",
+              "null"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/edge": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/blast_radius/irreversible_actions/[]/severity": [
+              "\"critical\"",
+              "\"high\"",
+              "\"low\"",
+              "\"medium\""
+            ],
+            "/blast_radius/policies/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/direction": [
+              "\"down\"",
+              "\"up\"",
+              "null"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/edge": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/blast_radius/policies/[]/reasons/[]/via/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/scenarios/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/direction": [
+              "\"down\"",
+              "\"up\"",
+              "null"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/edge": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/via/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/seeds/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/blast_radius/seeds/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/blast_radius/unresolved/[]/change": [
+              "\"added\"",
+              "\"modified\"",
+              "\"removed\""
+            ],
+            "/blast_radius/unresolved/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "blast_radius"
+            ],
+            "/blast_radius": [
+              "affected",
+              "evaluators",
+              "irreversible_actions",
+              "max_depth",
+              "policies",
+              "scenarios",
+              "seeds",
+              "truncated",
+              "unresolved"
+            ],
+            "/blast_radius/affected/[]": [
+              "attributes",
+              "certain",
+              "component",
+              "depth",
+              "direct",
+              "factors",
+              "label",
+              "path",
+              "score",
+              "seed",
+              "severity"
+            ],
+            "/blast_radius/affected/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/affected/[]/path/[]": [
+              "component",
+              "confidence",
+              "direction",
+              "edge",
+              "label",
+              "sources"
+            ],
+            "/blast_radius/affected/[]/path/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/evaluators/[]": [
+              "component",
+              "label",
+              "reasons",
+              "weight"
+            ],
+            "/blast_radius/evaluators/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]": [
+              "direct",
+              "path",
+              "score",
+              "via",
+              "via_label"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]": [
+              "component",
+              "confidence",
+              "direction",
+              "edge",
+              "label",
+              "sources"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/via": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/irreversible_actions/[]": [
+              "attributes",
+              "certain",
+              "component",
+              "depth",
+              "direct",
+              "factors",
+              "label",
+              "path",
+              "score",
+              "seed",
+              "severity"
+            ],
+            "/blast_radius/irreversible_actions/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]": [
+              "component",
+              "confidence",
+              "direction",
+              "edge",
+              "label",
+              "sources"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/policies/[]": [
+              "component",
+              "label",
+              "reasons",
+              "weight"
+            ],
+            "/blast_radius/policies/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/policies/[]/reasons/[]": [
+              "direct",
+              "path",
+              "score",
+              "via",
+              "via_label"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]": [
+              "component",
+              "confidence",
+              "direction",
+              "edge",
+              "label",
+              "sources"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/via": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/scenarios/[]": [
+              "component",
+              "label",
+              "reasons",
+              "weight"
+            ],
+            "/blast_radius/scenarios/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]": [
+              "direct",
+              "path",
+              "score",
+              "via",
+              "via_label"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]": [
+              "component",
+              "confidence",
+              "direction",
+              "edge",
+              "label",
+              "sources"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/via": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/seeds/[]": [
+              "change",
+              "component"
+            ],
+            "/blast_radius/seeds/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/blast_radius/unresolved/[]": [
+              "change",
+              "component"
+            ],
+            "/blast_radius/unresolved/[]/component": [
+              "key",
+              "kind"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/blast_radius": [
+              "object"
+            ],
+            "/blast_radius/affected": [
+              "array"
+            ],
+            "/blast_radius/affected/[]": [
+              "object"
+            ],
+            "/blast_radius/affected/[]/attributes": [
+              "object"
+            ],
+            "/blast_radius/affected/[]/certain": [
+              "boolean"
+            ],
+            "/blast_radius/affected/[]/component": [
+              "object"
+            ],
+            "/blast_radius/affected/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/depth": [
+              "integer"
+            ],
+            "/blast_radius/affected/[]/direct": [
+              "boolean"
+            ],
+            "/blast_radius/affected/[]/factors": [
+              "array"
+            ],
+            "/blast_radius/affected/[]/factors/[]": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/label": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/path": [
+              "array"
+            ],
+            "/blast_radius/affected/[]/path/[]": [
+              "object"
+            ],
+            "/blast_radius/affected/[]/path/[]/component": [
+              "object"
+            ],
+            "/blast_radius/affected/[]/path/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/path/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/path/[]/confidence": [
+              "null",
+              "number"
+            ],
+            "/blast_radius/affected/[]/path/[]/direction": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/affected/[]/path/[]/edge": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/affected/[]/path/[]/label": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/path/[]/sources": [
+              "array"
+            ],
+            "/blast_radius/affected/[]/path/[]/sources/[]": [
+              "string"
+            ],
+            "/blast_radius/affected/[]/score": [
+              "number"
+            ],
+            "/blast_radius/affected/[]/seed": [
+              "boolean"
+            ],
+            "/blast_radius/affected/[]/severity": [
+              "string"
+            ],
+            "/blast_radius/evaluators": [
+              "array"
+            ],
+            "/blast_radius/evaluators/[]": [
+              "object"
+            ],
+            "/blast_radius/evaluators/[]/component": [
+              "object"
+            ],
+            "/blast_radius/evaluators/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/label": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons": [
+              "array"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]": [
+              "object"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/direct": [
+              "boolean"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path": [
+              "array"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]": [
+              "object"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/component": [
+              "object"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/confidence": [
+              "null",
+              "number"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/direction": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/edge": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/label": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/sources": [
+              "array"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/path/[]/sources/[]": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/score": [
+              "number"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/via": [
+              "object"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/via/key": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/via/kind": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/reasons/[]/via_label": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/severity": [
+              "string"
+            ],
+            "/blast_radius/evaluators/[]/weight": [
+              "number"
+            ],
+            "/blast_radius/irreversible_actions": [
+              "array"
+            ],
+            "/blast_radius/irreversible_actions/[]": [
+              "object"
+            ],
+            "/blast_radius/irreversible_actions/[]/attributes": [
+              "object"
+            ],
+            "/blast_radius/irreversible_actions/[]/certain": [
+              "boolean"
+            ],
+            "/blast_radius/irreversible_actions/[]/component": [
+              "object"
+            ],
+            "/blast_radius/irreversible_actions/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/depth": [
+              "integer"
+            ],
+            "/blast_radius/irreversible_actions/[]/direct": [
+              "boolean"
+            ],
+            "/blast_radius/irreversible_actions/[]/factors": [
+              "array"
+            ],
+            "/blast_radius/irreversible_actions/[]/factors/[]": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/label": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/path": [
+              "array"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]": [
+              "object"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/component": [
+              "object"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/confidence": [
+              "null",
+              "number"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/direction": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/edge": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/label": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/sources": [
+              "array"
+            ],
+            "/blast_radius/irreversible_actions/[]/path/[]/sources/[]": [
+              "string"
+            ],
+            "/blast_radius/irreversible_actions/[]/score": [
+              "number"
+            ],
+            "/blast_radius/irreversible_actions/[]/seed": [
+              "boolean"
+            ],
+            "/blast_radius/irreversible_actions/[]/severity": [
+              "string"
+            ],
+            "/blast_radius/max_depth": [
+              "integer"
+            ],
+            "/blast_radius/policies": [
+              "array"
+            ],
+            "/blast_radius/policies/[]": [
+              "object"
+            ],
+            "/blast_radius/policies/[]/component": [
+              "object"
+            ],
+            "/blast_radius/policies/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/label": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons": [
+              "array"
+            ],
+            "/blast_radius/policies/[]/reasons/[]": [
+              "object"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/direct": [
+              "boolean"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path": [
+              "array"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]": [
+              "object"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/component": [
+              "object"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/confidence": [
+              "null",
+              "number"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/direction": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/edge": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/label": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/sources": [
+              "array"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/path/[]/sources/[]": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/score": [
+              "number"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/via": [
+              "object"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/via/key": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/via/kind": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/reasons/[]/via_label": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/severity": [
+              "string"
+            ],
+            "/blast_radius/policies/[]/weight": [
+              "number"
+            ],
+            "/blast_radius/scenarios": [
+              "array"
+            ],
+            "/blast_radius/scenarios/[]": [
+              "object"
+            ],
+            "/blast_radius/scenarios/[]/component": [
+              "object"
+            ],
+            "/blast_radius/scenarios/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/label": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons": [
+              "array"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]": [
+              "object"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/direct": [
+              "boolean"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path": [
+              "array"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]": [
+              "object"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/component": [
+              "object"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/confidence": [
+              "null",
+              "number"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/direction": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/edge": [
+              "null",
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/label": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/sources": [
+              "array"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/path/[]/sources/[]": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/score": [
+              "number"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/via": [
+              "object"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/via/key": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/via/kind": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/reasons/[]/via_label": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/severity": [
+              "string"
+            ],
+            "/blast_radius/scenarios/[]/weight": [
+              "number"
+            ],
+            "/blast_radius/seeds": [
+              "array"
+            ],
+            "/blast_radius/seeds/[]": [
+              "object"
+            ],
+            "/blast_radius/seeds/[]/change": [
+              "string"
+            ],
+            "/blast_radius/seeds/[]/component": [
+              "object"
+            ],
+            "/blast_radius/seeds/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/seeds/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/seeds/[]/mentions": [
+              "array"
+            ],
+            "/blast_radius/seeds/[]/mentions/[]": [
+              "string"
+            ],
+            "/blast_radius/seeds/[]/summary": [
+              "string"
+            ],
+            "/blast_radius/truncated": [
+              "boolean"
+            ],
+            "/blast_radius/unresolved": [
+              "array"
+            ],
+            "/blast_radius/unresolved/[]": [
+              "object"
+            ],
+            "/blast_radius/unresolved/[]/change": [
+              "string"
+            ],
+            "/blast_radius/unresolved/[]/component": [
+              "object"
+            ],
+            "/blast_radius/unresolved/[]/component/key": [
+              "string"
+            ],
+            "/blast_radius/unresolved/[]/component/kind": [
+              "string"
+            ],
+            "/blast_radius/unresolved/[]/mentions": [
+              "array"
+            ],
+            "/blast_radius/unresolved/[]/mentions/[]": [
+              "string"
+            ],
+            "/blast_radius/unresolved/[]/summary": [
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "PUT /api/v1/graph/mappings/{tool}": {
+      "parameters": {
+        "header:idempotency-key": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "header:x-agenttwin-org": {
+          "required": false,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        },
+        "path:tool": {
+          "required": true,
+          "schema": {
+            "enums": {},
+            "required": {},
+            "types": {
+              "/": [
+                "string"
+              ]
+            }
+          }
+        }
+      },
+      "request": {
+        "required": true,
+        "schema": {
+          "enums": {
+            "/depends_on/[]/criticality": [
+              "\"CRITICAL\"",
+              "\"HIGH\"",
+              "\"LOW\"",
+              "\"MEDIUM\""
+            ],
+            "/depends_on/[]/kind": [
+              "\"DATABASE\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"QUEUE\"",
+              "\"SERVICE\""
+            ],
+            "/depends_on/[]/relation": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"WRITES\""
+            ]
+          },
+          "required": {
+            "/": [
+              "depends_on",
+              "project_id"
+            ],
+            "/depends_on/[]": [
+              "kind",
+              "name"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/depends_on": [
+              "array"
+            ],
+            "/depends_on/[]": [
+              "object"
+            ],
+            "/depends_on/[]/criticality": [
+              "string"
+            ],
+            "/depends_on/[]/kind": [
+              "string"
+            ],
+            "/depends_on/[]/name": [
+              "string"
+            ],
+            "/depends_on/[]/relation": [
+              "string"
+            ],
+            "/project_id": [
+              "string"
+            ]
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "enums": {
+            "/mapped/[]/component/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ],
+            "/mapped/[]/direction": [
+              "\"in\"",
+              "\"out\""
+            ],
+            "/mapped/[]/evidence/[]/source": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/mapped/[]/sources/[]": [
+              "\"INFERRED\"",
+              "\"MANIFEST\"",
+              "\"MANUAL\"",
+              "\"MCP\"",
+              "\"OBSERVED\"",
+              "\"OPENAPI\"",
+              "\"SCENARIO\""
+            ],
+            "/mapped/[]/type": [
+              "\"CALLS\"",
+              "\"CAN_MUTATE\"",
+              "\"CONSUMES\"",
+              "\"DEPENDS_ON\"",
+              "\"EVALUATED_BY\"",
+              "\"GUARDED_BY\"",
+              "\"PUBLISHES\"",
+              "\"READS\"",
+              "\"RETRIEVES_FROM\"",
+              "\"TESTED_BY\"",
+              "\"USES\"",
+              "\"VERSION_OF\"",
+              "\"WRITES\""
+            ],
+            "/tool/kind": [
+              "\"AGENT\"",
+              "\"AGENT_VERSION\"",
+              "\"DATABASE\"",
+              "\"DATASET\"",
+              "\"EVALUATOR\"",
+              "\"EXTERNAL_SYSTEM\"",
+              "\"HTTP_API\"",
+              "\"MCP_SERVER\"",
+              "\"MODEL\"",
+              "\"POLICY\"",
+              "\"PROMPT\"",
+              "\"QUEUE\"",
+              "\"RETRIEVAL_SOURCE\"",
+              "\"SCENARIO\"",
+              "\"SERVICE\"",
+              "\"TOOL\""
+            ]
+          },
+          "required": {
+            "/": [
+              "mapped",
+              "tool"
+            ],
+            "/mapped/[]": [
+              "certain",
+              "component",
+              "component_id",
+              "confidence",
+              "direction",
+              "evidence",
+              "id",
+              "label",
+              "sources",
+              "type"
+            ],
+            "/mapped/[]/component": [
+              "key",
+              "kind"
+            ],
+            "/mapped/[]/evidence/[]": [
+              "confidence",
+              "detail",
+              "first_seen_at",
+              "last_seen_at",
+              "observations",
+              "source",
+              "source_ref"
+            ],
+            "/tool": [
+              "attributes",
+              "id",
+              "key",
+              "kind",
+              "label"
+            ]
+          },
+          "types": {
+            "/": [
+              "object"
+            ],
+            "/mapped": [
+              "array"
+            ],
+            "/mapped/[]": [
+              "object"
+            ],
+            "/mapped/[]/certain": [
+              "boolean"
+            ],
+            "/mapped/[]/component": [
+              "object"
+            ],
+            "/mapped/[]/component/key": [
+              "string"
+            ],
+            "/mapped/[]/component/kind": [
+              "string"
+            ],
+            "/mapped/[]/component_id": [
+              "string"
+            ],
+            "/mapped/[]/confidence": [
+              "number"
+            ],
+            "/mapped/[]/direction": [
+              "string"
+            ],
+            "/mapped/[]/evidence": [
+              "array"
+            ],
+            "/mapped/[]/evidence/[]": [
+              "object"
+            ],
+            "/mapped/[]/evidence/[]/confidence": [
+              "number"
+            ],
+            "/mapped/[]/evidence/[]/detail": [
+              "object"
+            ],
+            "/mapped/[]/evidence/[]/first_seen_at": [
+              "string"
+            ],
+            "/mapped/[]/evidence/[]/last_seen_at": [
+              "string"
+            ],
+            "/mapped/[]/evidence/[]/observations": [
+              "integer"
+            ],
+            "/mapped/[]/evidence/[]/source": [
+              "string"
+            ],
+            "/mapped/[]/evidence/[]/source_ref": [
+              "string"
+            ],
+            "/mapped/[]/id": [
+              "string"
+            ],
+            "/mapped/[]/label": [
+              "string"
+            ],
+            "/mapped/[]/sources": [
+              "array"
+            ],
+            "/mapped/[]/sources/[]": [
+              "string"
+            ],
+            "/mapped/[]/type": [
+              "string"
+            ],
+            "/tool": [
+              "object"
+            ],
+            "/tool/attributes": [
+              "object"
+            ],
+            "/tool/id": [
+              "string"
+            ],
+            "/tool/key": [
+              "string"
+            ],
+            "/tool/kind": [
+              "string"
+            ],
+            "/tool/label": [
+              "string"
+            ]
+          }
+        }
+      }
+    }
+  },
   "simulation-service": {
     "GET /api/v1/scenarios": {
       "parameters": {

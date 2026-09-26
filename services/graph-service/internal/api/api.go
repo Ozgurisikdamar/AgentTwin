@@ -452,7 +452,13 @@ func (s *Server) Handlers() map[string]events.Handler {
 			if len(f.Nodes) == 0 && len(f.Edges) == 0 {
 				return nil
 			}
-			return s.Store.ApplyEvent(ctx, env.ID, store.Scope{OrgID: env.OrganizationID, ProjectID: *env.ProjectID}, f, env.OccurredAt)
+			err = s.Store.ApplyEvent(ctx, env.ID, store.Scope{OrgID: env.OrganizationID, ProjectID: *env.ProjectID}, f, env.OccurredAt)
+			if errors.Is(err, store.ErrStaleDeclaration) {
+				s.Log.InfoContext(ctx, "an older declaration arrived after a newer one; ignored",
+					"type", env.Type, "event_id", env.ID, "occurred_at", env.OccurredAt)
+				return nil
+			}
+			return err
 		}
 	}
 	return map[string]events.Handler{

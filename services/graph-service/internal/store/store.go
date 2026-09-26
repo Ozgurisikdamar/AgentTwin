@@ -23,6 +23,11 @@ import (
 // ErrNotFound is returned for a component outside the caller's scope.
 var ErrNotFound = errors.New("not found")
 
+// ErrStaleDeclaration is returned by ApplyEvent for a declaration older than
+// the one of the same source and reference already applied: it arrived late
+// and was ignored.
+var ErrStaleDeclaration = errors.New("an older declaration arrived after a newer one")
+
 // Store wraps the pool.
 type Store struct{ Pool *pgxpool.Pool }
 
@@ -42,13 +47,8 @@ func (s *Store) Apply(ctx context.Context, tx pgx.Tx, sc Scope, f ingest.Facts, 
 	if err := f.Validate(); err != nil {
 		return err
 	}
-	// Writes to one project's graph are serialized: concurrent consumers
-	// would otherwise lock the same components in different orders
-	// (deadlocks) and could each see the other's agent version as absent
-	// when recomputing the latest one. Graph writes are small and rare next
-	// to reads, which take no lock.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('graph:' || $1::text || ':' || $2::text, 0))`, sc.OrgID, sc.ProjectID); err != nil {
-		return fmt.Errorf("lock project graph: %w", err)
+	if err := lockProject(ctx, tx, sc); err != nil {
+		return err
 	}
 	nodes := map[graph.Ref]ingest.NodeFact{}
 	var order []graph.Ref
@@ -203,15 +203,64 @@ func markLatest(ctx context.Context, tx pgx.Tx, sc Scope, agent string) error {
 	return nil
 }
 
-// ApplyEvent applies facts for one event exactly once.
+// lockProject serializes writes to one project's graph: concurrent consumers
+// would otherwise lock the same components in different orders (deadlocks)
+// and could each see the other's agent version as absent when recomputing
+// the latest one. Graph writes are small and rare next to reads, which take
+// no lock. The lock is held to the end of the transaction (taking it again
+// in the same transaction is allowed).
+func lockProject(ctx context.Context, tx pgx.Tx, sc Scope) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('graph:' || $1::text || ':' || $2::text, 0))`, sc.OrgID, sc.ProjectID); err != nil {
+		return fmt.Errorf("lock project graph: %w", err)
+	}
+	return nil
+}
+
+// ApplyEvent applies facts for one event exactly once. A declaration older
+// than the one of the same source and reference already applied changes
+// nothing (ErrStaleDeclaration): events are delivered at least once and not
+// in order, and replacing a newer declaration with an older one would bring
+// back edges that no longer exist and drop ones that do.
 func (s *Store) ApplyEvent(ctx context.Context, eventID string, sc Scope, f ingest.Facts, at time.Time) error {
 	return pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		fresh, err := db.MarkProcessed(ctx, tx, "graph", "graph-service", eventID)
 		if err != nil || !fresh {
 			return err
 		}
+		if err := declare(ctx, tx, sc, f.Replaces, at); err != nil {
+			return err
+		}
 		return s.Apply(ctx, tx, sc, f, at)
 	})
+}
+
+// declare records when each replaced declaration was made, or returns
+// ErrStaleDeclaration when a newer one was already applied (the transaction
+// is then rolled back whole).
+func declare(ctx context.Context, tx pgx.Tx, sc Scope, replaces []ingest.Replace, at time.Time) error {
+	if len(replaces) == 0 {
+		return nil
+	}
+	if err := lockProject(ctx, tx, sc); err != nil {
+		return err
+	}
+	for _, rep := range replaces {
+		var current bool
+		err := tx.QueryRow(ctx, `
+			INSERT INTO graph.declaration (organization_id, project_id, source, source_ref, declared_at)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (organization_id, project_id, source, source_ref) DO UPDATE SET declared_at = EXCLUDED.declared_at
+			WHERE graph.declaration.declared_at <= EXCLUDED.declared_at
+			RETURNING true`,
+			sc.OrgID, sc.ProjectID, string(rep.Source), truncate(rep.SourceRef, 300), at).Scan(&current)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrStaleDeclaration
+		}
+		if err != nil {
+			return fmt.Errorf("declaration %s %s: %w", rep.Source, rep.SourceRef, err)
+		}
+	}
+	return nil
 }
 
 func maps(m map[string]any) map[string]any {

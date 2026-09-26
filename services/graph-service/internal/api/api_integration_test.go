@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -453,6 +454,112 @@ func TestNewerDeclarationsReplaceOlderOnes(t *testing.T) {
 	relation(t, pol, "GUARDED_BY", "in", "TOOL", "send_email")
 	if v := pol["component"].(map[string]any)["attributes"].(map[string]any)["version"]; v != 2.0 {
 		t.Errorf("policy version = %v", v)
+	}
+}
+
+func TestAnOlderDeclarationArrivingLateChangesNothing(t *testing.T) {
+	h := newHarness(t)
+	h.demo()
+	policy := func(version int, target string) map[string]any {
+		return map[string]any{
+			"policy_id": ids.New(), "policy_version_id": ids.New(), "name": "refund-limit", "version": version,
+			"target_tool": target, "spec_hash": strings.Repeat(fmt.Sprint(version), 64),
+		}
+	}
+	// Version 3 is activated after version 2, but its event is handled first
+	// (a retried delivery, another consumer): version 2 must not win.
+	newer := h.event("policy.activated.v1", t0.Add(2*time.Hour), policy(3, "send_email"))
+	older := h.event("policy.activated.v1", t0.Add(time.Hour), policy(2, "get_refund"))
+	h.apply(newer)
+	h.apply(older)
+	pol := h.detail("POLICY", "refund-limit")
+	relation(t, pol, "GUARDED_BY", "in", "TOOL", "send_email")
+	if findRelation(pol, "GUARDED_BY", "in", "TOOL", "get_refund") != nil {
+		t.Error("a late, older activation retargeted the policy")
+	}
+	if v := pol["component"].(map[string]any)["attributes"].(map[string]any)["version"]; v != 3.0 {
+		t.Errorf("policy version = %v, want the newer 3", v)
+	}
+	// Redelivered, it is still ignored; the newer one redelivered changes nothing either.
+	h.apply(older)
+	h.apply(newer)
+	pol = h.detail("POLICY", "refund-limit")
+	if findRelation(pol, "GUARDED_BY", "in", "TOOL", "get_refund") != nil || findRelation(pol, "GUARDED_BY", "in", "TOOL", "send_email") == nil {
+		t.Error("redelivery changed the policy's target")
+	}
+
+	// A scenario: the late, older version covered send_email; the newer does not.
+	h.apply(h.event("scenario.upserted.v1", t0.Add(2*time.Hour), scenarioPayload("refund-happy-path", "high", "tool:lookup_order")))
+	h.apply(h.event("scenario.upserted.v1", t0.Add(time.Hour), scenarioPayload("refund-happy-path", "high", "tool:send_email")))
+	sc := h.detail("SCENARIO", "refund-happy-path")
+	relation(t, sc, "TESTED_BY", "in", "TOOL", "lookup_order")
+	if findRelation(sc, "TESTED_BY", "in", "TOOL", "send_email") != nil {
+		t.Error("a late, older scenario version brought back a dropped cover")
+	}
+
+	// An imported catalog: the late, older import still had refund_payment.
+	h.apply(h.event("tool.catalog_imported.v1", t0.Add(2*time.Hour), map[string]any{
+		"source": "OPENAPI", "source_name": "payments-openapi", "service": "payments-api",
+		"tools": []map[string]any{{"name": "get_refund", "risk": "READ", "method": "GET", "path": "/refunds/{id}", "mutating": false}},
+	}))
+	h.apply(h.event("tool.catalog_imported.v1", t0.Add(time.Hour), map[string]any{
+		"source": "OPENAPI", "source_name": "payments-openapi", "service": "payments-api",
+		"tools": []map[string]any{{"name": "refund_payment", "risk": "READ", "method": "POST", "path": "/refunds", "mutating": true}},
+	}))
+	refund := h.detail("TOOL", "refund_payment")
+	if findRelation(refund, "CAN_MUTATE", "out", "HTTP_API", "payments-openapi") != nil {
+		t.Error("a late, older import brought back an operation")
+	}
+	if risk := refund["component"].(map[string]any)["attributes"].(map[string]any)["imported_risk"]; risk != "WRITE_IRREVERSIBLE" {
+		t.Errorf("imported_risk = %v: the late import's attributes were applied", risk)
+	}
+
+	// A declaration made at the same time as the applied one is re-asserted,
+	// not refused (a redelivery under a new event id).
+	h.apply(h.event("scenario.upserted.v1", t0.Add(2*time.Hour), scenarioPayload("refund-happy-path", "high", "tool:lookup_order", "tool:refund_payment")))
+	relation(t, h.detail("SCENARIO", "refund-happy-path"), "TESTED_BY", "in", "TOOL", "refund_payment")
+}
+
+func TestDeclarationsMadeBeforeTheGuardExistedAreRemembered(t *testing.T) {
+	ctx := context.Background()
+	pool, err := db.Connect(ctx, nil, db.PoolConfig{URL: testutil.NewDatabase(t), Schema: migrations.Schema, MaxConns: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	migs, _ := db.LoadMigrations(migrations.FS, ".")
+	up := func(m []db.Migration) {
+		if _, err := (&db.Migrator{Pool: pool, Schema: migrations.Schema, Migrations: m}).Up(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	activation := func(version int, target string) ingest.Facts {
+		raw, _ := json.Marshal(map[string]any{
+			"policy_id": ids.New(), "policy_version_id": ids.New(), "name": "refund-limit", "version": version,
+			"target_tool": target, "spec_hash": strings.Repeat("e", 64),
+		})
+		f, err := ingest.FromPolicy(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	st := store.New(pool)
+	sc := store.Scope{OrgID: ids.New(), ProjectID: ids.New()}
+	// A graph built before the declaration table existed: version 2 applied.
+	up(migs[:1])
+	if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		return st.Apply(ctx, tx, sc, activation(2, "send_email"), t0.Add(time.Hour))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	up(migs)
+	// The upgrade remembers it: a late version 1 is refused, a version 3 applies.
+	if err := st.ApplyEvent(ctx, ids.New(), sc, activation(1, "refund_payment"), t0); !errors.Is(err, store.ErrStaleDeclaration) {
+		t.Errorf("an older activation after the upgrade: %v, want ErrStaleDeclaration", err)
+	}
+	if err := st.ApplyEvent(ctx, ids.New(), sc, activation(3, "get_refund"), t0.Add(2*time.Hour)); err != nil {
+		t.Errorf("a newer activation after the upgrade: %v", err)
 	}
 }
 

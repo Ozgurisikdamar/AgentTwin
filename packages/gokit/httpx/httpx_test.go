@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +32,43 @@ func TestWriteErrorEnvelopeHidesInternals(t *testing.T) {
 	}
 	if body.Error.Code != "INTERNAL" || body.Error.RequestID == "" || body.Error.RequestID != rec.Header().Get(RequestIDHeader) {
 		t.Fatalf("bad envelope: %+v", body)
+	}
+}
+
+func TestAnUnreachableDatabaseIsA503WithRetryAfter(t *testing.T) {
+	for name, err := range map[string]error{
+		"dropped mid-query": fmt.Errorf("list projects: %w", io.ErrUnexpectedEOF),
+		"refused":           fmt.Errorf("begin tx: %w", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}),
+	} {
+		h := Chain(Handle(func(w http.ResponseWriter, r *http.Request) error { return err }), RequestID())
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+		var body errorBody
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		if rec.Code != 503 || body.Error.Code != "UNAVAILABLE" || rec.Header().Get("Retry-After") != RetryAfterUnavailable {
+			t.Errorf("%s: %d %s, Retry-After %q", name, rec.Code, rec.Body.String(), rec.Header().Get("Retry-After"))
+		}
+		if strings.Contains(rec.Body.String(), "refused") || strings.Contains(rec.Body.String(), "EOF") {
+			t.Errorf("%s: the cause leaked: %s", name, rec.Body.String())
+		}
+	}
+	// A 503 says when to retry unless its handler already did.
+	rec := httptest.NewRecorder()
+	WriteError(rec, httptest.NewRequest(http.MethodGet, "/x", nil), ErrUnavailable)
+	if rec.Header().Get("Retry-After") != RetryAfterUnavailable {
+		t.Errorf("ErrUnavailable: Retry-After %q", rec.Header().Get("Retry-After"))
+	}
+	rec = httptest.NewRecorder()
+	rec.Header().Set("Retry-After", "30")
+	WriteError(rec, httptest.NewRequest(http.MethodGet, "/x", nil), ErrUnavailable)
+	if rec.Header().Get("Retry-After") != "30" {
+		t.Errorf("a handler's Retry-After was replaced: %q", rec.Header().Get("Retry-After"))
+	}
+	// Other errors are not marked retryable.
+	rec = httptest.NewRecorder()
+	WriteError(rec, httptest.NewRequest(http.MethodGet, "/x", nil), errors.New("a bug"))
+	if rec.Code != 500 || rec.Header().Get("Retry-After") != "" {
+		t.Errorf("a bug: %d, Retry-After %q", rec.Code, rec.Header().Get("Retry-After"))
 	}
 }
 

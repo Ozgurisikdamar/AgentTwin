@@ -639,7 +639,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Consumed events per second: ok, retry, requeued, dead_lettered or poison.",
+      "description": "Consumed events per second: ok, retry, deferred (waiting for the database), requeued, dead_lettered or poison.",
       "fieldConfig": {
         "defaults": {
           "color": {

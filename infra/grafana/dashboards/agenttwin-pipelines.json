@@ -1278,7 +1278,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Events a consumer could not handle: retried, requeued, dead-lettered or poison.",
+      "description": "Events a consumer could not handle: retried, deferred (waiting for the database, attempts not counted), requeued, dead-lettered or poison.",
       "fieldConfig": {
         "defaults": {
           "color": {

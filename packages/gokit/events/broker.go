@@ -14,6 +14,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/contracts"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/db"
 )
 
 // Topology mirrors packages/contracts/topology.json.
@@ -38,6 +39,16 @@ func LoadTopology() (Topology, error) {
 
 // attemptHeader counts deliveries of a message to its consumer queue.
 const attemptHeader = "x-agenttwin-attempt"
+
+// deferredHeader counts the retries of a message whose handler could not
+// reach the database. They do not use up attempts: an outage is not the
+// event's fault, and parking it would leave it unprocessed once the database
+// is back. They are bounded all the same: after deferWindow of retries the
+// message is parked like any other that cannot be handled.
+const deferredHeader = "x-agenttwin-deferred"
+
+// deferWindow is how long a message waits for the database before it is parked.
+const deferWindow = time.Hour
 
 // dialTimeout bounds one connection attempt, handshake included. amqp091's
 // default is 30 s: during a network partition a readiness probe or a publish
@@ -396,7 +407,15 @@ func (b *Broker) consumeOnce(ctx context.Context, cfg ConsumerConfig, handler Ha
 }
 
 func attemptOf(d amqp.Delivery) int {
-	switch v := d.Headers[attemptHeader].(type) {
+	if n := headerInt(d, attemptHeader); n > 0 {
+		return n
+	}
+	return 1
+}
+
+// headerInt reads an integer header, 0 when absent or not an integer.
+func headerInt(d amqp.Delivery, name string) int {
+	switch v := d.Headers[name].(type) {
 	case int32:
 		return int(v)
 	case int64:
@@ -404,7 +423,7 @@ func attemptOf(d amqp.Delivery) int {
 	case int:
 		return v
 	}
-	return 1
+	return 0
 }
 
 func (b *Broker) handleDelivery(ctx context.Context, cfg ConsumerConfig, handler Handler, d amqp.Delivery) {
@@ -430,8 +449,15 @@ func (b *Broker) handleDelivery(ctx context.Context, cfg ConsumerConfig, handler
 		return
 	}
 	attempt := attemptOf(d)
-	if IsPermanent(err) || attempt >= b.topology.MaxAttempts {
-		b.park(ctx, cfg.Queue, d, err.Error())
+	deferred := headerInt(d, deferredHeader)
+	unavailable := !IsPermanent(err) && db.IsUnavailable(err)
+	waiting := unavailable && deferred < b.maxDeferrals()
+	if !waiting && (IsPermanent(err) || unavailable || attempt >= b.topology.MaxAttempts) {
+		reason := err.Error()
+		if unavailable {
+			reason = "the database stayed unavailable for " + deferWindow.String() + ": " + reason
+		}
+		b.park(ctx, cfg.Queue, d, reason)
 		observe("dead_lettered")
 		return
 	}
@@ -439,7 +465,13 @@ func (b *Broker) handleDelivery(ctx context.Context, cfg ConsumerConfig, handler
 	for k, v := range d.Headers {
 		headers[k] = v
 	}
-	headers[attemptHeader] = clampInt32(attempt + 1)
+	outcome := "retry"
+	if waiting {
+		headers[deferredHeader] = clampInt32(deferred + 1)
+		outcome = "deferred"
+	} else {
+		headers[attemptHeader] = clampInt32(attempt + 1)
+	}
 	headers["x-agenttwin-last-error"] = truncate(err.Error(), 500)
 	if perr := b.publishRaw(ctx, "", cfg.Queue+".retry", d.MessageId, d.Body, headers); perr != nil {
 		// Could not schedule a retry: requeue so the message is not lost.
@@ -449,9 +481,16 @@ func (b *Broker) handleDelivery(ctx context.Context, cfg ConsumerConfig, handler
 	}
 	_ = d.Ack(false)
 	if b.log != nil {
-		b.log.Warn("event handling failed; retry scheduled", "type", env.Type, "event_id", env.ID, "attempt", attempt, "error", err.Error())
+		b.log.Warn("event handling failed; retry scheduled", "type", env.Type, "event_id", env.ID,
+			"attempt", attempt, "waiting_for_database", waiting, "error", err.Error())
 	}
-	observe("retry")
+	observe(outcome)
+}
+
+// maxDeferrals is how many retry-queue round trips fit in deferWindow.
+func (b *Broker) maxDeferrals() int {
+	ttl := time.Duration(max(b.topology.RetryTTLMS, 1)) * time.Millisecond
+	return int(deferWindow / ttl)
 }
 
 func (b *Broker) park(ctx context.Context, queue string, d amqp.Delivery, reason string) {

@@ -6,7 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -128,6 +131,36 @@ func IsUniqueViolation(err error) bool {
 func IsForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23503"
+}
+
+// IsUnavailable reports an error that means PostgreSQL could not be reached
+// or dropped the connection — the request may well succeed when retried —
+// as opposed to an error in the request or the data. The HTTP edge answers
+// these 503 UNAVAILABLE instead of 500 INTERNAL (spec §64: status visible).
+func IsUnavailable(err error) bool {
+	// A caller that stopped waiting is not a database outage (and a context
+	// error would otherwise pass for a net.Error below).
+	if err == nil || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	var connectErr *pgconn.ConnectError
+	if errors.As(err, &connectErr) {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch {
+		case strings.HasPrefix(pgErr.Code, "08"): // connection exception
+			return true
+		case pgErr.Code == "57P01", pgErr.Code == "57P02", pgErr.Code == "57P03": // shutdown, crash, starting up
+			return true
+		case pgErr.Code == "53300": // too many connections
+			return true
+		}
+		return false
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 // IsNoRows reports pgx.ErrNoRows.

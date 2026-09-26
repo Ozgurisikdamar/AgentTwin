@@ -2,14 +2,19 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/db"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/ids"
@@ -360,4 +365,159 @@ func TestAConsumerKeepsTryingThroughAPartition(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, 30*time.Second, "the event published after the partition", func() bool { return got.count(env.ID) == 1 })
+}
+
+// An event whose handler cannot reach the database is not the event's fault:
+// it waits for the database instead of using up its attempts and being parked.
+func TestADatabaseOutageDefersEventsInsteadOfParkingThem(t *testing.T) {
+	amqpURL := testutil.AMQPURL(t)
+	raw := testutil.NewDatabase(t)
+	dbProxy := testutil.NewCutProxy(t, hostPort(t, raw))
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	pool, err := db.Connect(ctx, nil, db.PoolConfig{URL: dbProxy.URL(t, raw)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if _, err := pool.Exec(ctx, "CREATE TABLE handled (event_id uuid PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	const q = "simulation-service.events"
+	purge(t, amqpURL, q, q+".retry", q+".dlq")
+	b, err := Dial(ctx, amqpURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = b.Close() }()
+
+	var mu sync.Mutex
+	outcomes := map[string]int{}
+	cctx, stop := context.WithCancel(ctx)
+	consumed := make(chan struct{})
+	go func() {
+		defer close(consumed)
+		_ = b.Consume(cctx, ConsumerConfig{
+			Queue: q, Concurrency: 2, Timeout: 5 * time.Second,
+			Observe: func(_, outcome string, _ time.Duration) {
+				mu.Lock()
+				outcomes[outcome]++
+				mu.Unlock()
+			},
+		}, func(ctx context.Context, env Envelope) error {
+			_, err := pool.Exec(ctx, "INSERT INTO handled VALUES ($1) ON CONFLICT DO NOTHING", env.ID)
+			return err
+		})
+	}()
+	defer func() { stop(); <-consumed }()
+	count := func(outcome string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return outcomes[outcome]
+	}
+
+	dbProxy.Cut()
+	// An event already on its last attempt, so that a single counted
+	// failure would park it.
+	env, _ := New("simulation.run_requested.v1", "chaos", orgID, "", "c", "", map[string]any{"run_id": ids.New()})
+	body, _ := json.Marshal(env)
+	if err := b.publishRaw(ctx, "", q, env.ID, body, amqp.Table{attemptHeader: clampInt32(b.topology.MaxAttempts)}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 20*time.Second, "the event to be deferred twice", func() bool { return count("deferred") >= 2 })
+	if d := dlqDepth(t, amqpURL, q+".dlq"); d != 0 || count("dead_lettered") != 0 {
+		t.Fatalf("an event was parked because the database was down (dlq %d)", d)
+	}
+
+	// Waiting is bounded too: an event that has waited the whole window is
+	// parked, saying why.
+	late, _ := New("simulation.run_requested.v1", "chaos", orgID, "", "c", "", map[string]any{"run_id": ids.New()})
+	body, _ = json.Marshal(late)
+	if err := b.publishRaw(ctx, "", q, late.ID, body, amqp.Table{deferredHeader: clampInt32(b.maxDeferrals())}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 10*time.Second, "the event that waited too long to be parked", func() bool { return dlqDepth(t, amqpURL, q+".dlq") == 1 })
+	parked := getOne(t, amqpURL, q+".dlq")
+	if parked.MessageId != late.ID || !strings.Contains(fmt.Sprint(parked.Headers["x-agenttwin-dead-reason"]), "database stayed unavailable") {
+		t.Fatalf("parked %s with reason %v", parked.MessageId, parked.Headers["x-agenttwin-dead-reason"])
+	}
+	if b.maxDeferrals() != int(time.Hour/(time.Duration(b.topology.RetryTTLMS)*time.Millisecond)) {
+		t.Fatalf("an event waits %d round trips of %d ms, want an hour", b.maxDeferrals(), b.topology.RetryTTLMS)
+	}
+
+	dbProxy.Restore()
+	var handled int
+	eventually(t, 30*time.Second, "the event to be handled once the database is back", func() bool {
+		return pool.QueryRow(ctx, "SELECT count(*) FROM handled WHERE event_id = $1", env.ID).Scan(&handled) == nil && handled == 1
+	})
+	if d := dlqDepth(t, amqpURL, q+".dlq"); d != 0 {
+		t.Fatalf("dlq depth = %d", d)
+	}
+}
+
+func getOne(t *testing.T, url, queue string) amqp.Delivery {
+	t.Helper()
+	conn, err := amqp.Dial(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, ok, err := ch.Get(queue, true)
+	if err != nil || !ok {
+		t.Fatalf("get from %s: ok=%v err=%v", queue, ok, err)
+	}
+	return d
+}
+
+type recordingAck struct{ acked, nacked int }
+
+func (a *recordingAck) Ack(uint64, bool) error        { a.acked++; return nil }
+func (a *recordingAck) Nack(uint64, bool, bool) error { a.nacked++; return nil }
+func (a *recordingAck) Reject(uint64, bool) error     { a.nacked++; return nil }
+
+// A retry counts an attempt; waiting for the database counts a deferral and
+// leaves the attempts alone.
+func TestRetriesCountAttemptsAndDeferralsApart(t *testing.T) {
+	amqpURL := testutil.AMQPURL(t)
+	ctx := context.Background()
+	b, err := Dial(ctx, amqpURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = b.Close() }()
+	const q = "simulation-service.events"
+	purge(t, amqpURL, q, q+".retry", q+".dlq")
+	cfg := ConsumerConfig{Queue: q, Timeout: 5 * time.Second}
+
+	for _, c := range []struct {
+		name                       string
+		err                        error
+		wantAttempt, wantDeferrals int
+	}{
+		{"a failing handler", errors.New("a bug"), 4, 2},
+		{"the database is down", fmt.Errorf("insert: %w", io.ErrUnexpectedEOF), 3, 3},
+	} {
+		env, _ := New("simulation.run_requested.v1", "chaos", orgID, "", "c", "", map[string]any{"run_id": ids.New()})
+		body, _ := json.Marshal(env)
+		ack := &recordingAck{}
+		d := amqp.Delivery{Acknowledger: ack, DeliveryTag: 1, MessageId: env.ID, Body: body,
+			Headers: amqp.Table{attemptHeader: int32(3), deferredHeader: int32(2)}}
+		b.handleDelivery(ctx, cfg, func(context.Context, Envelope) error { return c.err }, d)
+		if ack.acked != 1 || ack.nacked != 0 {
+			t.Fatalf("%s: acked %d, nacked %d", c.name, ack.acked, ack.nacked)
+		}
+		var retry amqp.Delivery
+		eventually(t, 5*time.Second, c.name+" in the retry queue", func() bool {
+			return dlqDepth(t, amqpURL, q+".retry") == 1
+		})
+		retry = getOne(t, amqpURL, q+".retry")
+		if retry.MessageId != env.ID || headerInt(retry, attemptHeader) != c.wantAttempt || headerInt(retry, deferredHeader) != c.wantDeferrals {
+			t.Fatalf("%s: retried with attempt %v, deferrals %v; want %d, %d", c.name,
+				retry.Headers[attemptHeader], retry.Headers[deferredHeader], c.wantAttempt, c.wantDeferrals)
+		}
+	}
 }

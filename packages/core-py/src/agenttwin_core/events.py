@@ -22,7 +22,7 @@ import aio_pika
 from aio_pika.abc import AbstractChannel, AbstractIncomingMessage, AbstractRobustConnection
 from psycopg import sql
 
-from agenttwin_core.db import Conn, Pool, jsonb
+from agenttwin_core.db import Conn, Pool, is_unavailable, jsonb
 from agenttwin_core.ids import new_id
 from agenttwin_core.logx import Log, get_logger
 from agenttwin_core.schemas import event_payload_validator, load_topology
@@ -46,6 +46,12 @@ ATTEMPT_HEADER = "x-agenttwin-attempt"
 # reconnecting during a network partition waits forever on a connection that
 # was accepted but is never answered (gokit's dialTimeout).
 CONNECT_TIMEOUT_S = 5.0
+# Counts the retries of a message whose handler could not reach the database.
+# They do not use up attempts (an outage is not the event's fault, and parking
+# the event would leave it unprocessed once the database is back), but they
+# are bounded: after DEFER_WINDOW_S the message is parked. gokit's twin.
+DEFERRED_HEADER = "x-agenttwin-deferred"
+DEFER_WINDOW_S = 3600
 _log = get_logger("agenttwin.events")
 
 
@@ -262,6 +268,7 @@ class Broker:
         self.url = url
         self.connection_name = connection_name
         self.topology = load_topology()
+        self.max_deferrals = int(DEFER_WINDOW_S * 1000 // max(int(self.topology["retry_ttl_ms"]), 1))
         self._conn: AbstractRobustConnection | None = None
         self._channel: AbstractChannel | None = None
         self._lock = asyncio.Lock()
@@ -432,14 +439,25 @@ class Broker:
             return
         try:
             await asyncio.wait_for(handler(env), timeout=timeout_s)
-        except Exception as err:  # noqa: BLE001 - classified below: retry or park
+        except Exception as err:  # noqa: BLE001 - classified below: retry, wait or park
             attempt = _attempt(msg)
-            if isinstance(err, Permanent) or attempt >= int(self.topology["max_attempts"]):
-                await self._park(msg, queue, f"{type(err).__name__}: {err}")
+            deferred = _header_int(msg, DEFERRED_HEADER)
+            unavailable = not isinstance(err, Permanent) and is_unavailable(err)
+            waiting = unavailable and deferred < self.max_deferrals
+            if not waiting and (
+                isinstance(err, Permanent) or unavailable or attempt >= int(self.topology["max_attempts"])
+            ):
+                reason = f"{type(err).__name__}: {err}"
+                if unavailable:
+                    reason = f"the database stayed unavailable for {DEFER_WINDOW_S}s: {reason}"
+                await self._park(msg, queue, reason)
                 observe("dead_lettered")
                 return
             headers = dict(msg.headers or {})
-            headers[ATTEMPT_HEADER] = attempt + 1
+            if waiting:
+                headers[DEFERRED_HEADER] = deferred + 1
+            else:
+                headers[ATTEMPT_HEADER] = attempt + 1
             headers["x-agenttwin-last-error"] = f"{type(err).__name__}: {err}"[:500]
             try:
                 await self._publish_raw("", queue + ".retry", msg.message_id or "", msg.body, headers)
@@ -453,9 +471,10 @@ class Broker:
                 type=env.type,
                 event_id=env.id,
                 attempt=attempt,
+                waiting_for_database=waiting,
                 error=str(err)[:300],
             )
-            observe("retry")
+            observe("deferred" if waiting else "retry")
             return
         await msg.ack()
         observe("ok")
@@ -473,8 +492,12 @@ class Broker:
 
 
 def _attempt(msg: AbstractIncomingMessage) -> int:
-    value = (msg.headers or {}).get(ATTEMPT_HEADER)
-    return value if isinstance(value, int) and value > 0 else 1
+    return _header_int(msg, ATTEMPT_HEADER) or 1
+
+
+def _header_int(msg: AbstractIncomingMessage, name: str) -> int:
+    value = (msg.headers or {}).get(name)
+    return value if isinstance(value, int) and value > 0 else 0
 
 
 async def declare_topology(channel: AbstractChannel, topology: Mapping[str, Any]) -> None:

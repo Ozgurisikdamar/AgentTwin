@@ -15,11 +15,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from psycopg import AsyncConnection, AsyncCursor, sql
+from psycopg import AsyncConnection, AsyncCursor, OperationalError, sql
 from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 from psycopg.types.string import TextLoader
 from psycopg_pool import AsyncConnectionPool, PoolTimeout
+from psycopg_pool.base import AttemptWithBackoff
 
 from agenttwin_core.logx import Log
 from agenttwin_core.telemetry import metrics
@@ -30,6 +31,7 @@ __all__ = [
     "Migrator",
     "Pool",
     "connect",
+    "is_unavailable",
     "jsonb",
     "load_migrations",
     "transaction",
@@ -44,6 +46,26 @@ _SCHEMA_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 
 def _dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+
+
+# SQLSTATEs that mean the server is going away, starting or full, besides the
+# connection-exception class 08 (gokit's db.IsUnavailable).
+_UNAVAILABLE_STATES = frozenset({"57P01", "57P02", "57P03", "53300"})
+
+
+def is_unavailable(exc: BaseException) -> bool:
+    """Whether ``exc`` means PostgreSQL could not be reached or dropped the
+    connection — the request may well succeed when retried — as opposed to an
+    error in the request or the data. The HTTP edge answers these 503
+    UNAVAILABLE, and consumers wait for the database instead of spending the
+    event's attempts (spec §64). The twin of gokit's db.IsUnavailable."""
+    if isinstance(exc, PoolTimeout):
+        return True  # no connection could be had
+    if not isinstance(exc, OperationalError):
+        return False
+    state = exc.sqlstate
+    # No SQLSTATE: the client lost or never had the connection.
+    return state is None or state.startswith("08") or state in _UNAVAILABLE_STATES
 
 
 def jsonb(value: Any) -> Jsonb:
@@ -69,6 +91,57 @@ class _TimedCursor(AsyncCursor[DictRow]):
                 m.observe_db(outcome, time.perf_counter() - start)
 
 
+# How the pool behaves when PostgreSQL goes away (spec §64). psycopg_pool's
+# defaults suit a database that is up: a request waits up to the pool timeout
+# (10 s) for a connection, and reconnect attempts back off without bound. So
+# during an outage every request hung 10 s before failing, and after a minute
+# of outage the pool waited about another minute before trying again.
+CONNECT_TIMEOUT_S = 5  # one connection attempt, handshake included (a partition never answers)
+UNREACHABLE_WAIT_S = 1.0  # a request's wait while connecting is failing
+RECONNECT_DELAY_MAX_S = 2.0  # between reconnect attempts
+
+
+class _CappedBackoff(AttemptWithBackoff):
+    def update_delay(self, now: float) -> None:
+        super().update_delay(now)
+        self.delay = min(self.delay, RECONNECT_DELAY_MAX_S)
+
+
+class _Pool(AsyncConnectionPool[Conn]):
+    """A pool that says quickly that PostgreSQL is unreachable, and notices
+    quickly that it is back. While connection attempts fail, requests waiting
+    for a connection are failed at once and new ones wait UNREACHABLE_WAIT_S;
+    reconnect attempts are at most RECONNECT_DELAY_MAX_S apart. The failure is
+    a PoolTimeout, which is_unavailable reports (503, deferred events)."""
+
+    _unreachable = False
+
+    async def _connect(self, timeout: float | None = None) -> Conn:
+        try:
+            conn = await super()._connect(timeout)
+        except Exception as err:
+            self._unreachable = True
+            await self._fail_waiting(err)
+            raise
+        self._unreachable = False
+        return conn
+
+    async def _fail_waiting(self, err: Exception) -> None:
+        async with self._lock:
+            waiting = list(self._waiting)
+            self._waiting.clear()
+        for client in waiting:
+            await client.fail(PoolTimeout(f"the database is unreachable: {type(err).__name__}"))
+
+    async def _add_connection(self, attempt: AttemptWithBackoff | None, growing: bool = False) -> None:
+        await super()._add_connection(attempt or _CappedBackoff(timeout=self.reconnect_timeout), growing)
+
+    async def getconn(self, timeout: float | None = None) -> Conn:
+        if timeout is None and self._unreachable:
+            timeout = UNREACHABLE_WAIT_S
+        return await super().getconn(timeout)
+
+
 async def _configure(conn: AsyncConnection[Any]) -> None:
     # UUID columns come back as canonical strings (the API speaks strings).
     conn.adapters.register_loader("uuid", TextLoader)
@@ -87,7 +160,7 @@ async def connect(
     autocommit (transactions are explicit) and dict rows."""
     if not _SCHEMA_NAME.match(schema):
         raise ValueError(f"invalid schema name {schema!r}")
-    pool: Pool = AsyncConnectionPool(
+    pool: Pool = _Pool(
         url,
         min_size=min_size,
         max_size=max(min_size, max_size),
@@ -97,6 +170,7 @@ async def connect(
             "cursor_factory": _TimedCursor,
             "application_name": "agenttwin",
             "options": f"-c search_path={schema},public",
+            "connect_timeout": CONNECT_TIMEOUT_S,
         },
         configure=_configure,
         open=False,

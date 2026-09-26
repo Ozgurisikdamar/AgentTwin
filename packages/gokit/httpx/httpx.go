@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/db"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/logx"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/textx"
 )
@@ -61,6 +62,9 @@ var (
 		"Text in a request must be valid UTF-8 and cannot contain a NUL character.")
 )
 
+// RetryAfterUnavailable is the Retry-After (seconds) of a 503 that sets none.
+const RetryAfterUnavailable = "2"
+
 // Invalid returns a 400 validation error with per-field details.
 func Invalid(code, message string, details map[string]any) *Error {
 	return &Error{Status: http.StatusBadRequest, Code: code, Message: message, Details: details}
@@ -87,6 +91,11 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 			apiErr = NewError(http.StatusGatewayTimeout, "TIMEOUT", "The operation timed out.")
 		case errors.Is(err, context.Canceled):
 			apiErr = NewError(499, "CANCELLED", "The request was cancelled.")
+		case db.IsUnavailable(err):
+			// The database is down or dropped the connection: say so and
+			// when to retry, rather than report a fault in this service.
+			slog.WarnContext(r.Context(), "database unavailable", "error", err.Error(), "path", r.URL.Path)
+			apiErr = ErrUnavailable
 		default:
 			slog.ErrorContext(r.Context(), "unhandled error", "error", err.Error(), "path", r.URL.Path)
 			apiErr = ErrInternal
@@ -100,6 +109,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	status := apiErr.Status
 	if status == 0 {
 		status = http.StatusInternalServerError
+	}
+	if status == http.StatusServiceUnavailable && w.Header().Get("Retry-After") == "" {
+		w.Header().Set("Retry-After", RetryAfterUnavailable)
 	}
 	WriteJSON(w, status, body)
 }

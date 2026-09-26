@@ -32,6 +32,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from agenttwin_core import errors
 from agenttwin_core.auth import InvalidToken, Permission, Principal, TokenService
+from agenttwin_core.db import is_unavailable
 from agenttwin_core.errors import APIError, DeliberateAbort
 from agenttwin_core.ids import new_id
 from agenttwin_core.logx import get_logger, request_id_var
@@ -86,8 +87,25 @@ class Health:
         return ok, results
 
 
+# The Retry-After (seconds) of a 503 (gokit's httpx.RetryAfterUnavailable).
+RETRY_AFTER_UNAVAILABLE = "2"
+
+
 def _error_response(err: APIError) -> JSONResponse:
-    return JSONResponse(err.body(request_id_var.get()), status_code=err.status)
+    headers = {"Retry-After": RETRY_AFTER_UNAVAILABLE} if err.status == 503 else None
+    return JSONResponse(err.body(request_id_var.get()), status_code=err.status, headers=headers)
+
+
+def _unexpected(exc: Exception, path: str) -> APIError:
+    """The answer to an exception no handler turned into an APIError: 503 when
+    the database is unreachable (retry later), otherwise 500 without internals."""
+    if is_unavailable(exc):
+        _log.warn("database unavailable", path=path, error=type(exc).__name__)
+        return errors.unavailable()
+    _log.exception("unhandled error", path=path, error=type(exc).__name__)
+    return APIError(
+        500, "INTERNAL", "An internal error occurred. Use the request id when contacting support."
+    )
 
 
 INVALID_TEXT_MESSAGE = "Text in a request must be valid UTF-8 and cannot contain a NUL character."
@@ -209,12 +227,7 @@ class _Middleware:
             # request id is gone and the response lacks its headers.
             if started:
                 raise
-            _log.exception("unhandled error", path=scope.get("path", ""), error=type(exc).__name__)
-            await _error_response(
-                APIError(
-                    500, "INTERNAL", "An internal error occurred. Use the request id when contacting support."
-                )
-            )(scope, receive, send_wrapper)
+            await _error_response(_unexpected(exc, scope.get("path", "")))(scope, receive, send_wrapper)
         finally:
             elapsed = time.perf_counter() - start
             path = scope.get("path", "")
@@ -309,13 +322,13 @@ def build_app(
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
-        if not isinstance(exc, DeliberateAbort):
-            _log.exception("unhandled error", path=request.url.path, error=type(exc).__name__)
-        return _error_response(
-            APIError(
-                500, "INTERNAL", "An internal error occurred. Use the request id when contacting support."
+        if isinstance(exc, DeliberateAbort):
+            return _error_response(
+                APIError(
+                    500, "INTERNAL", "An internal error occurred. Use the request id when contacting support."
+                )
             )
-        )
+        return _error_response(_unexpected(exc, request.url.path))
 
     @app.get("/health/live", include_in_schema=False)
     async def _live() -> dict[str, str]:

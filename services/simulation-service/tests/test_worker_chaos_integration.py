@@ -5,7 +5,8 @@ recovered by another (test_run_lifecycle_integration covers the lease); an
 agent that hangs or answers something that is not a run result fails its
 case, bounded by the case timeout, and never passes; a tool twin that crashes
 answers 500, keeps its state, and errors the case instead of letting it be
-judged."""
+judged; an evaluator that crashes errors its expectation and the case, and
+the others are still judged."""
 
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from typing import Any
 import pytest
 from psycopg import OperationalError
 
+from agenttwin_core.evaluators import default_registry
 from agenttwin_simulation import twin_http
 from agenttwin_simulation.clients import AgentClient
 from agenttwin_simulation.config import AgentEndpoint
@@ -432,3 +434,40 @@ async def test_a_twin_failure_is_recorded_through_a_database_blip_or_logged(
             "reason": "the tool twin failed (KeyError)",
             "error": "OperationalError",
         }
+
+
+async def test_an_evaluator_that_crashes_errors_the_case_and_judges_the_rest() -> None:
+    async with simulation_stack() as s:
+        await s.register_demo(HAPPY)
+        run_id = await s.start_run("1.2.4", HAPPY)
+        registry = default_registry()
+        name, version, _ = registry._checks["toolCalled"]
+
+        def broken(*_: Any) -> Any:
+            raise ZeroDivisionError("a bug in the evaluator")
+
+        registry._checks["toolCalled"] = (name, version, broken)
+        s.worker.registry = registry
+        assert await s.worker.process_next() == run_id
+        detail = await s.ok("GET", f"/api/v1/simulations/{run_id}")
+        [case] = detail["cases"]
+        assert (detail["run"]["status"], case["status"]) == ("COMPLETED", "ERRORED")
+        assert (detail["run"]["passed"], detail["run"]["errored"]) == (0, 1)
+        full = await s.ok("GET", f"/api/v1/simulations/{run_id}/cases/{case['id']}")
+        results = full["case"]["results"]
+        crashed = [r for r in results if r["label"] == "EVALUATOR_ERROR"]
+        assert crashed and {(r["status"], r["reason"]) for r in crashed} == {
+            ("ERROR", "The evaluator crashed (ZeroDivisionError).")
+        }
+        # The other expectations were still judged: the crash hides nothing
+        # (the semantic one is the evaluation service's, not the simulation's).
+        others = {(r["evaluator"], r["status"]) for r in results if r["label"] != "EVALUATOR_ERROR"}
+        assert others == {
+            ("expectation.noDuplicateSideEffect", "PASS"),
+            ("expectation.noPolicyViolation", "PASS"),
+            ("expectation.order", "PASS"),
+            ("expectation.outcomeVerified", "PASS"),
+            ("expectation.state", "PASS"),
+            ("expectation.semantic", "SKIPPED"),
+        }
+        assert full["case"]["reason"].startswith("An expectation could not be evaluated")

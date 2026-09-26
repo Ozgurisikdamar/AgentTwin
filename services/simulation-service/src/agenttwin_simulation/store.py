@@ -769,19 +769,30 @@ class Store:
         async with self.pool.connection() as conn:
             await conn.execute(
                 """UPDATE simulation_case SET status = 'RUNNING', token_hash = %s, twin_state = %s,
-                       call_count = 0, started_at = now(), updated_at = now()
+                       call_count = 0, error = NULL, started_at = now(), updated_at = now()
                    WHERE id = %s""",
                 (token_hash, jsonb(twin_state), case_id),
             )
             await conn.execute("DELETE FROM simulation_step WHERE case_id = %s", (case_id,))
 
     async def close_case(self, case_id: str) -> Row | None:
-        """Revokes the case's twin credential and returns its final twin state."""
+        """Revokes the case's twin credential and returns its final twin state
+        and the twin failure recorded on it, if any."""
         return await self.one(
             """UPDATE simulation_case SET token_hash = NULL, updated_at = now() WHERE id = %s
-               RETURNING twin_state, call_count""",
+               RETURNING twin_state, call_count, error""",
             (case_id,),
         )
+
+    async def record_twin_failure(self, token_hash: bytes, reason: str) -> bool:
+        """Marks the running case whose twin could not answer a call (the first
+        failure is kept). False when the case is closed or unknown."""
+        row = await self.one(
+            """UPDATE simulation_case SET error = COALESCE(error, %s), updated_at = now()
+               WHERE token_hash = %s AND status = 'RUNNING' RETURNING id""",
+            (reason, token_hash),
+        )
+        return row is not None
 
     async def finish_case(self, conn: Conn, case_id: str, fields: Mapping[str, Any]) -> None:
         allowed = {

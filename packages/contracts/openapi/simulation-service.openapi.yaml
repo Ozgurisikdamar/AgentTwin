@@ -815,6 +815,10 @@ paths:
         envelope: `401 TWIN_CREDENTIAL_REQUIRED` / `TWIN_CREDENTIAL_INVALID`,
         `400 INVALID_TOOL_NAME` / `INVALID_JSON` / `INVALID_ARGUMENTS`,
         `409 RUN_CANCELLED` / `CASE_CLOSED` / `CALL_LIMIT_EXCEEDED`, `413`.
+        A call the twin itself cannot answer is `500 INTERNAL` (or `503
+        UNAVAILABLE` with `Retry-After` when its database is unreachable); the
+        call changes nothing, and the case is recorded as errored
+        (`TWIN_ERROR`) instead of judged.
       security:
         - caseToken: []
       parameters:

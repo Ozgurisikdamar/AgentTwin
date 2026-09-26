@@ -9,16 +9,22 @@ random per case, stored only as a SHA-256 hash and revoked when the case
 closes, so a late or replayed call cannot touch any state. The case row is
 locked while a call executes: the calls of one case are applied serially,
 exactly in the order the twin records them.
+
+A call the twin cannot answer (a bug in the twin, or its database gone) is
+recorded on the case before the agent gets the error, and the worker errors
+the case instead of judging it: the agent reacted to a failure no scenario
+asked for, so its behaviour proves nothing either way (spec §64).
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import re
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -26,8 +32,9 @@ from fastapi.responses import JSONResponse, Response
 from starlette.types import Receive, Scope, Send
 
 from agenttwin_core import errors
-from agenttwin_core.db import Conn, transaction
+from agenttwin_core.db import Conn, is_unavailable, transaction
 from agenttwin_core.errors import APIError, DeliberateAbort
+from agenttwin_core.logx import Log, get_logger
 from agenttwin_simulation.cases import ScenarioRuntime, scenario_runtime
 from agenttwin_simulation.config import SimulationConfig
 from agenttwin_simulation.metrics import SimulationMetrics
@@ -52,6 +59,10 @@ MAX_QUERY = 1000
 # Headers a twin may read (idempotency headers and the like); credentials
 # and hop-by-hop headers never reach the engine or its records.
 _HIDDEN_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization", "connection", "host"})
+# Recording a twin failure while the database is unreachable: a few tries
+# (each bounded by the pool's own wait) before the agent gets its answer.
+RECORD_ATTEMPTS = 3
+RECORD_RETRY_S = 0.5
 
 
 def token_hash(token: str) -> bytes:
@@ -179,11 +190,13 @@ class TwinEndpoint:
         *,
         adapters: AdapterRegistry | None = None,
         metrics: SimulationMetrics | None = None,
+        log: Log | None = None,
     ) -> None:
         self.store = store
         self.cfg = cfg
         self.adapters = adapters or AdapterRegistry()
         self.metrics = metrics
+        self.log = log or get_logger("twin")
         # Twin definitions and scenario versions are immutable rows.
         self._definitions: _LRU[str, TwinDefinition] = _LRU(128)
         self._scenarios: _LRU[str, ScenarioRuntime] = _LRU(512)
@@ -228,6 +241,36 @@ class TwinEndpoint:
             )
         return case, state
 
+    @contextlib.asynccontextmanager
+    async def _failures_recorded(self, digest: bytes) -> AsyncIterator[None]:
+        try:
+            yield
+        except APIError:
+            raise  # an answer about the request, not a failure of the twin
+        except Exception as err:
+            await self._record_failure(digest, err)
+            raise
+
+    async def _record_failure(self, digest: bytes, err: Exception) -> None:
+        reason = (
+            "the tool twin's database was unavailable"
+            if is_unavailable(err)
+            else f"the tool twin failed ({type(err).__name__})"
+        )
+        for attempt in range(1, RECORD_ATTEMPTS + 1):
+            try:
+                await self.store.record_twin_failure(digest, reason)
+                return
+            except Exception as failed:  # noqa: BLE001 - logged; the agent still gets its answer
+                if not is_unavailable(failed) or attempt == RECORD_ATTEMPTS:
+                    self.log.error(
+                        "could not record a twin failure on its case",
+                        reason=reason,
+                        error=type(failed).__name__,
+                    )
+                    return
+                await asyncio.sleep(RECORD_RETRY_S)
+
     def routes(self, app: FastAPI) -> None:
         @app.post("/twin/v1/tools/{tool}", include_in_schema=False)
         async def call_tool(tool: str, request: Request) -> Response:
@@ -236,7 +279,7 @@ class TwinEndpoint:
                 raise errors.invalid("INVALID_TOOL_NAME", "Tool names use letters, digits, '_', '.' and '-'.")
             args = await _read_arguments(request)
             headers = {k.lower(): v for k, v in request.headers.items() if k.lower() not in _HIDDEN_HEADERS}
-            async with transaction(self.store.pool) as conn:
+            async with self._failures_recorded(digest), transaction(self.store.pool) as conn:
                 case, state = await self._open_case(conn, digest)
                 definition = await self.definition(case["twin_definition_id"])
                 runtime = await self.scenario(case["scenario_version_id"])
@@ -269,7 +312,7 @@ class TwinEndpoint:
             if not raw_limit.isdigit() or not 1 <= int(raw_limit) <= MAX_RESULTS:
                 raise errors.invalid("INVALID_PARAMETER", f"limit must be between 1 and {MAX_RESULTS}.")
             limit = int(raw_limit)
-            async with transaction(self.store.pool) as conn:
+            async with self._failures_recorded(digest), transaction(self.store.pool) as conn:
                 case, state = await self._open_case(conn, digest)
                 definition = await self.definition(case["twin_definition_id"])
                 runtime = await self.scenario(case["scenario_version_id"])

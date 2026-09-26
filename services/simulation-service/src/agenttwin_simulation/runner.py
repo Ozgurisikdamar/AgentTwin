@@ -442,7 +442,15 @@ class Worker:
         task = asyncio.create_task(
             self.agents.run(endpoint.url, self.cfg.agent_tokens.get(run["agent_name"]), body, timeout)
         )
-        interrupted = await self._watch(task, run_id, lost)
+        try:
+            interrupted = await self._watch(task, run_id, lost)
+        except BaseException:
+            # The watch could not ask the database (it is gone, or the worker
+            # is stopping): the case is abandoned to the lease, and the agent
+            # call with it; it is not left running against a case nobody
+            # will judge.
+            task.cancel()
+            raise
         # Revoke the case's twin credential first: nothing may change the
         # twin state after this point (late or replayed agent calls included).
         closed = await self.store.close_case(case_id)
@@ -480,8 +488,23 @@ class Worker:
             latency_ms=call.elapsed_ms,
         )
         findings = run_findings(call, twin, self.cfg.max_calls_per_case)
+        twin_failure = (closed or {}).get("error")
+        if twin_failure:
+            findings.insert(
+                0,
+                synthetic_result(
+                    "ERROR",
+                    "TWIN_ERROR",
+                    f"The tool twin could not answer a call of the agent ({twin_failure}); "
+                    "the agent reacted to a failure no scenario asked for.",
+                ),
+            )
         blocked = next((f for f in findings if f.status == "ERROR"), None)
-        if blocked is not None:
+        if twin_failure:
+            expectations = skip_all(
+                spec["expectations"], "The tool twin failed during the case, so this was not evaluated."
+            )
+        elif blocked is not None:
             # The agent never ran the scenario (unreachable, misconfigured,
             # rejected the request): judging the untouched twin state would
             # turn an infrastructure problem into a pass or a regression.
@@ -505,7 +528,7 @@ class Worker:
                     "results": [r.to_json() for r in results],
                     "state_diff": diff_state(before, after),
                     "reason": verdict.reason[:2000],
-                    "error": call.error,
+                    "error": call.error or twin_failure,
                     "latency_ms": call.elapsed_ms,
                     "outcome_status": "pending" if trace_id else "none",
                 },

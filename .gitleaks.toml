@@ -1,0 +1,47 @@
+# Secret scanning (make secret-scan; CI runs it over the whole history).
+#
+# gitleaks' default rules, with two narrow exceptions, each checked by hand
+# when it was added (docs/security/supply-chain.md lists what they matched):
+#
+# * files that are captured API responses or deliberate test inputs, where
+#   every "key"/"token" is a hash, an id or a fake value;
+# * value shapes that are never credentials: idempotency keys
+#   (refund-ORD-1001-40.00), API key *ids* used as actors (apikey:<uuid>),
+#   environment references (${GRAFANA_ADMIN_PASSWORD}) and the fake secrets
+#   the tests use, which contain 0123456789.
+#
+# Two older test values that fit neither are listed by fingerprint in
+# .gitleaksignore.
+#
+# Anything else that looks like a secret fails the scan.
+
+title = "AgentTwin"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Captured API responses and deliberate test inputs"
+paths = [
+  '''(^|/)testdata/''',
+  '''(^|/)apps/web/tests/unit/[a-z-]+-fixtures\.ts$''',
+  '''(^|/)services/evaluation-service/tests/data/''',
+  '''(^|/)packages/contracts/fixtures/redaction\.json$''',
+]
+
+[[allowlists]]
+description = "Values that are never credentials"
+regexTarget = "secret"
+regexes = [
+  '''refund-ORD-\d+''',
+  '''\$\{[A-Z0-9_]+''',
+  '''0123456789''',
+]
+
+[[allowlists]]
+description = "Idempotency keys and API key ids, by where they appear"
+regexTarget = "match"
+regexes = [
+  '''idempotency_key["']?\s*[:=]''',
+  '''apikey:[0-9a-f-]{36}''',
+]

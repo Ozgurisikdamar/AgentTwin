@@ -66,6 +66,10 @@ logs: ## Tail service logs
 doctor: env ## Verify Docker, ports, env, DB, RabbitMQ, OTel, migrations, services
 	./scripts/doctor.sh
 
+.PHONY: db-upgrade
+db-upgrade: env ## Bring a data volume from an older PostgreSQL image up to date (collation, pgvector)
+	./scripts/postgres-upgrade.sh
+
 # ---------------------------------------------------------------- quality
 .PHONY: fmt
 fmt: ## Format all code
@@ -118,6 +122,28 @@ test-security: ## Security tests of spec §63, item by item (real PostgreSQL + R
 .PHONY: test-security-live
 test-security-live: env ## test-security plus the browser checks against the running stack (make dev first)
 	$(LOAD_ENV); ./scripts/with-test-infra.sh $(UV) run python scripts/spec_tests.py security --live
+
+# ---------------------------------------------------------------- supply chain
+# docs/security/supply-chain.md. Reports in dist/scan, SBOMs in dist/sbom.
+.PHONY: secret-scan
+secret-scan: ## Committed secrets anywhere in the git history (gitleaks)
+	$(UV) run python scripts/supply_chain.py secrets
+
+.PHONY: vuln-scan
+vuln-scan: ## Known vulnerabilities in the Go, Python and JS dependencies (govulncheck, pip-audit, pnpm audit)
+	$(UV) run python scripts/supply_chain.py deps
+
+.PHONY: image-scan
+image-scan: env ## Every image of the stack against the image policy (trivy; make build first)
+	$(LOAD_ENV); $(UV) run python scripts/supply_chain.py images
+
+.PHONY: sbom
+sbom: env ## CycloneDX SBOMs of our images and of the source tree (make build first)
+	$(LOAD_ENV); $(UV) run python scripts/supply_chain.py sbom
+
+.PHONY: supply-chain
+supply-chain: env ## All four supply-chain checks (make build first)
+	$(LOAD_ENV); $(UV) run python scripts/supply_chain.py all
 
 .PHONY: test-sdk-ts-live
 test-sdk-ts-live: env ## TS SDK end to end: a run through the collector, read back from the API, outcome reported (make dev first)

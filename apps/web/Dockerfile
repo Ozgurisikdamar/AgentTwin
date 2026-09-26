@@ -26,6 +26,12 @@ LABEL org.opencontainers.image.source="https://github.com/Ozgurisikdamar/AgentTw
       org.opencontainers.image.title="agenttwin-web" \
       org.opencontainers.image.licenses="Apache-2.0"
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+# The server only needs node. npm, npx, corepack and yarn ship with the base
+# image, are never run here and carry their own dependency trees, which the
+# image scan reports (docs/security/supply-chain.md).
+RUN rm -rf /usr/local/lib/node_modules /opt/yarn-v* \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
 COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static

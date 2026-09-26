@@ -501,6 +501,8 @@ make test-chaos     # every failure of spec §64 injected, item by item (scripts
 make chaos-drill    # breaks the running stack (RabbitMQ, PostgreSQL, the worker) and checks it recovers
 make load-test      # the k6 load test of spec §65, with end-to-end checks (docs/benchmarks/load-baseline.md)
 make lint       # formatters, linters and type checkers for Go, Python and TypeScript
+make supply-chain   # secrets in the history, vulnerable dependencies, image scan, SBOMs (docs/security/supply-chain.md)
+make db-upgrade     # after upgrading the images over existing data: reindex for the new collation, update pgvector
 make down       # stop (keeps data) · make reset: wipe data and start again
 ```
 

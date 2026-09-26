@@ -1,0 +1,51 @@
+# Dependency updates (docs/security/supply-chain.md). Minor and patch
+# updates arrive grouped, one pull request per ecosystem; majors one by one.
+# A release must be a few days old before it is proposed: most malicious
+# versions are found and pulled within that window.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule: {interval: weekly, day: monday}
+    cooldown: {default-days: 5}
+    groups:
+      go:
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule: {interval: weekly, day: monday}
+    cooldown: {default-days: 5}
+    groups:
+      python:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm # the pnpm workspace
+    directory: /
+    schedule: {interval: weekly, day: monday}
+    cooldown: {default-days: 5}
+    groups:
+      javascript:
+        update-types: [minor, patch]
+
+  # Base images written out in a FROM line (infra/docker/postgres.Dockerfile).
+  # The Go, Python and Node bases are pinned to a line through a build
+  # argument and take their patch releases at every build.
+  - package-ecosystem: docker
+    directories: [/infra/docker, /apps/web]
+    schedule: {interval: weekly, day: monday}
+    cooldown: {default-days: 5}
+
+  # The third-party images of the stack.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: {interval: weekly, day: monday}
+    cooldown: {default-days: 5}
+
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/setup]
+    schedule: {interval: weekly, day: monday}
+    cooldown: {default-days: 5}
+    groups:
+      actions:
+        update-types: [minor, patch]

@@ -15,6 +15,7 @@ x-proxy-build: &proxy-build
   secrets: [ca_bundle]
 
 services:
+  postgres: {build: *proxy-build}
   control-plane: {build: *proxy-build}
   trace-service: {build: *proxy-build}
   graph-service: {build: *proxy-build}

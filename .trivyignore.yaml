@@ -1,0 +1,15 @@
+# Documented exceptions to the image policy (make image-scan,
+# docs/security/supply-chain.md). Each one says why the finding does not
+# apply and expires: after the date the finding fails the scan again, so the
+# exception is looked at again instead of being forgotten.
+vulnerabilities:
+  - id: CVE-2026-6653
+    purls:
+      - pkg:deb/debian/libxml2
+    statement: >-
+      libxml2 in the PostgreSQL image; Debian has no fixed package yet (the
+      image applies Debian's updates at build time and will pick it up).
+      PostgreSQL only parses XML in the xml type and XML functions, which no
+      AgentTwin service uses, and the database is not reachable from outside
+      the compose network.
+    expired_at: 2026-12-31

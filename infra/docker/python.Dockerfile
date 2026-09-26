@@ -36,8 +36,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:${PYTHON_VERSION}-slim AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Ozgurisikdamar/AgentTwin" \
       org.opencontainers.image.licenses="Apache-2.0"
+# pip ships with the base image but nothing installs packages at run time
+# (the venv is copied in whole), so it goes (docs/security/supply-chain.md).
 RUN groupadd --system --gid 10001 app \
- && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
+ && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
+ && PIP_ROOT_USER_ACTION=ignore python -m pip uninstall --yes --quiet pip
 COPY --from=build /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app

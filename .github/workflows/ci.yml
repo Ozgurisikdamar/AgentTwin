@@ -1,0 +1,195 @@
+# The pipeline of spec §70. Every step is a make target, so the whole
+# pipeline also runs locally without GitHub (Makefile). No cloud
+# credentials: models, tools and embeddings are the deterministic fakes of
+# .env.example.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Nightly: the drills against a running stack (see the job "nightly").
+    - cron: "23 2 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CI: "true"
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.5.0
+          install-only: true
+      - run: make lint
+
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make test-unit
+
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      # Breaking changes against the recorded baselines (packages/contracts).
+      - run: make contracts-check
+
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      # Real PostgreSQL and RabbitMQ (docker-compose.test.yml).
+      - run: make test-integration
+      - run: make test-chaos
+
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make test-web
+
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The secret scan reads every commit.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make secret-scan
+      - run: make vuln-scan
+      - run: make test-security
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: security-reports
+          path: dist/scan/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make env
+      - run: make build
+      - run: make cli
+      # Trivy's vulnerability database, refreshed by trivy when it is stale.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy
+          key: trivy-db-${{ github.run_id }}
+          restore-keys: trivy-db-
+      - run: make image-scan
+        env:
+          AGENTTWIN_TRIVY_CACHE: ${{ runner.temp }}/trivy
+      - run: make sbom
+        if: always()
+        env:
+          AGENTTWIN_TRIVY_CACHE: ${{ runner.temp }}/trivy
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: images-scan-and-sbom
+          path: |
+            dist/scan/
+            dist/sbom/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make dev
+      - run: pnpm --filter @agenttwin/web exec playwright install --with-deps chromium
+      # Every spec, the golden path of §137 included.
+      - run: make e2e
+      - run: make doctor
+        if: always()
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color --timestamps > compose-logs.txt || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-failure
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+            compose-logs.txt
+          retention-days: 14
+
+  # The drills that need a running stack and take long: nightly and on demand.
+  nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: make dev
+      - run: pnpm --filter @agenttwin/web exec playwright install --with-deps chromium
+      - run: make test-security-live
+      - run: make test-sdk-ts-live
+      - run: make chaos-drill
+      - run: make load-test
+      - run: make doctor
+        if: always()
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color --timestamps > compose-logs.txt || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: nightly-failure
+          path: |
+            apps/web/playwright-report/
+            compose-logs.txt
+          retention-days: 14

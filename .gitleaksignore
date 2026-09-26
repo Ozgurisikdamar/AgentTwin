@@ -1,0 +1,5 @@
+# Test values, not credentials (checked by hand; docs/security/supply-chain.md).
+# A canary string the redaction tests expect to be removed:
+5c5913b253e85c9d6df21fcdabe3b20b00df465b:packages/core-py/tests/test_evaluators.py:generic-api-key:351
+# A made-up value the config loader must accept as a well-formed secret:
+abd84cf6f20dcd96d9eece0a52b54f8187a0cff9:packages/gokit/config/config_test.go:generic-api-key:84

@@ -2,14 +2,14 @@
 name: agenttwin-test
 services:
   postgres:
-    image: pgvector/pgvector:0.8.0-pg16
+    image: pgvector/pgvector:0.8.6-pg16-trixie
     environment: {POSTGRES_USER: agenttwin, POSTGRES_PASSWORD: agenttwin-test, POSTGRES_DB: agenttwin}
     ports: ["127.0.0.1:55433:5432"]
     tmpfs: ["/var/lib/postgresql/data"]
     command: ["postgres", "-c", "max_connections=300", "-c", "fsync=off"]
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U agenttwin"], interval: 2s, retries: 30}
   rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: rabbitmq:4.3.6-management-alpine
     environment: {RABBITMQ_DEFAULT_USER: agenttwin, RABBITMQ_DEFAULT_PASS: agenttwin-test}
     ports: ["127.0.0.1:5673:5672"]
     # Each check starts an Erlang VM (about 1 CPU second): often while the

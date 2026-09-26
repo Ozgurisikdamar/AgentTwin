@@ -129,6 +129,17 @@ if is_running postgres && $COMPOSE exec -T postgres pg_isready -q -U "${POSTGRES
   vec=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
     "SELECT default_version FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | tr -d '[:space:]')
   [ -n "$vec" ] && ok "pgvector $vec available" || fail "pgvector extension is not available (use the pgvector/pgvector image)"
+  # A volume created by an older image: text indexes need a rebuild after a
+  # glibc change, and pgvector's SQL objects lag its library.
+  stale=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
+    "SELECT count(*) FROM pg_database WHERE datallowconn AND datcollversion IS DISTINCT FROM pg_database_collation_actual_version(oid)" 2>/dev/null | tr -d '[:space:]')
+  old_vec=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
+    "SELECT installed_version FROM pg_available_extensions WHERE name = 'vector' AND installed_version IS DISTINCT FROM default_version AND installed_version IS NOT NULL" 2>/dev/null | tr -d '[:space:]')
+  if [ "${stale:-0}" = "0" ] && [ -z "$old_vec" ]; then
+    ok "data volume matches the image (collation, pgvector)"
+  else
+    warn "data volume is from an older image (collation or pgvector ${old_vec:-current}) - run 'make db-upgrade'"
+  fi
   schemas=$($COMPOSE exec -T postgres psql -U "${POSTGRES_USER:-agenttwin}" -d "${POSTGRES_DB:-agenttwin}" -tAc \
     "SELECT string_agg(nspname, ',' ORDER BY nspname) FROM pg_namespace WHERE nspname IN ('control','evaluation','graph','runtime','simulation','trace')" 2>/dev/null | tr -d '[:space:]')
   [ "$schemas" = "control,evaluation,graph,runtime,simulation,trace" ] && ok "service schemas: control, evaluation, graph, runtime, simulation, trace" ||

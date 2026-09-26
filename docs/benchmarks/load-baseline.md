@@ -10,7 +10,8 @@ keeping up.
 
 `make load-test` (after `make dev`) runs `scripts/load_test.py`, which starts
 the k6 suite `tests/load/agenttwin.js` on the compose network (the `load`
-service, `grafana/k6:1.3.0`) and then checks what k6 cannot see from outside.
+service, `grafana/k6:2.3.0`; the runs below up to the image upgrades used
+1.3.0) and then checks what k6 cannot see from outside.
 
 The five paths of §65 run at the same time, each at a constant arrival rate
 (requests start on schedule whether or not earlier ones have finished), for
@@ -182,6 +183,25 @@ Ingestion is not the bottleneck at this rate: the collector answers in
 milliseconds and every trace is visible within about 1.5 s. Nothing here
 calls for optimizing further (§65: no speculative optimization); the next
 limit on this machine is CPU shared by everything on it.
+
+### After the image upgrades (2026-09-26, supply chain)
+
+The same default run on the upgraded stack: k6 2.3.0, PostgreSQL 16.15 with
+pgvector 0.8.6 (our image, Debian 13, the server not running as root),
+RabbitMQ 4.3.6, OTel collector 0.161.0, Prometheus v3.15.0, gRPC v1.83.2,
+the data volumes of the earlier runs upgraded in place (`make db-upgrade`).
+The integration-test containers were running but idle.
+
+p50 / p95 / p99 ms: trace list 5.6 / 12 / 19, next page 5.1 / 11 / 17, OTLP
+export 0.9 / 2.8 / 6.2, release 3.3 / 9.3 / 17, gate 9.3 / 20 / 29, graph
+page 9.9 / 20 / 26, tool neighbourhood 11 / 25 / 32, change impact
+29 / 54 / 72, simulation submission 38 / 54 / 60. 2,646 requests, none
+failed or rate limited; 601 of 601 traces stored (visible p95 1,022 ms);
+61 of 61 simulations completed, the last as the load stopped; queues and
+outboxes empty 2 s after the checks began, nothing dead-lettered. Server
+side p95: control-plane 24 ms, trace-service 15 ms (ingestion 46 ms),
+simulation-service 42 ms; database queries at most 4.9 ms. Nothing moved
+by more than noise.
 
 ## Reproducing and comparing
 

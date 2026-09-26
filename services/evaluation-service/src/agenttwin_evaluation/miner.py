@@ -100,6 +100,10 @@ class _Vector:
     literal: str | None  # None: nothing to compare
 
 
+class _NeedsCurrent(Exception):
+    """A snapshot of a trace cannot decide this mining: read the trace again."""
+
+
 @dataclass
 class Miner:
     store: RegressionStore
@@ -142,6 +146,46 @@ class Miner:
                 )
         if obs is None or not obs.production:
             return Mined(trace_id, "ignored")
+        # An ingestion event carries a snapshot of the trace. Events arrive out
+        # of order: an outcome recorded later (or a flag, a denial) may already
+        # have mined the trace as it is now, and the older snapshot must not
+        # undo that. So a snapshot is only trusted to say "nothing to do"; a
+        # mining that would create or change an occurrence reads the trace
+        # again (it is finalized once its ingestion is announced, and every
+        # other event mines only a finalized trace, so what is read is never
+        # older than the snapshot).
+        try:
+            mined = await self._apply(
+                env, org, project, trace_id, obs, flag, finalized, snapshot=env.type == "trace.ingested.v1"
+            )
+        except _NeedsCurrent:
+            current = await self.traces.trace(org, project, trace_id)
+            if current is not None:  # else the trace is gone: the snapshot is all there is
+                obs = observation_from_detail(current)
+            mined = await self._apply(env, org, project, trace_id, obs, flag, finalized, snapshot=False)
+        if mined.outcome in ("duplicate", "waiting"):
+            return mined
+        self.log.info(
+            "trace mined",
+            trace_id=trace_id,
+            outcome=mined.outcome,
+            regression_group_id=mined.group_id,
+            event=env.type,
+        )
+        return mined
+
+    async def _apply(
+        self,
+        env: Envelope,
+        org: str,
+        project: str,
+        trace_id: str,
+        obs: Observation,
+        flag: tuple[str, str, str | None] | None,
+        finalized: bool,
+        *,
+        snapshot: bool,
+    ) -> Mined:
         async with transaction(self.pool) as conn:
             if not await claim_event(conn, CONSUMER, env.id):
                 return Mined(trace_id, "duplicate")
@@ -158,15 +202,7 @@ class Miner:
             if not finalized:
                 return Mined(trace_id, "waiting", reason="the trace is not finalized yet")
             obs = await self._known(conn, project, obs)
-            mined = await self.mine(conn, org, project, obs, occurred_at=env.occurred_at)
-        self.log.info(
-            "trace mined",
-            trace_id=trace_id,
-            outcome=mined.outcome,
-            regression_group_id=mined.group_id,
-            event=env.type,
-        )
-        return mined
+            return await self.mine(conn, org, project, obs, occurred_at=env.occurred_at, snapshot=snapshot)
 
     async def _known(self, conn: Conn, project: str, obs: Observation) -> Observation:
         """The observation with what was received about the trace before:
@@ -245,11 +281,25 @@ class Miner:
             return _Vector(self.embedder.model, self.embedder.dims, None)
         return _Vector(self.embedder.model, self.embedder.dims, None if is_zero(vec) else vector_literal(vec))
 
-    async def mine(self, conn: Conn, org: str, project: str, obs: Observation, *, occurred_at: str) -> Mined:
-        """Stores (or withdraws) the trace's occurrence and groups it."""
+    async def mine(
+        self,
+        conn: Conn,
+        org: str,
+        project: str,
+        obs: Observation,
+        *,
+        occurred_at: str,
+        snapshot: bool = False,
+    ) -> Mined:
+        """Stores (or withdraws) the trace's occurrence and groups it. From a
+        ``snapshot``, only "nothing to do" is decided; anything else raises
+        _NeedsCurrent (the transaction is rolled back and the caller reads
+        the trace again)."""
         reasons = detect(obs)
         await self.store.lock_agent(conn, project, obs.agent)
         existing = await self.store.occurrence(conn, project, obs.trace_id)
+        if snapshot and (reasons or existing is not None):
+            raise _NeedsCurrent
         if not reasons:
             if existing is None:
                 return Mined(obs.trace_id, "not_candidate")

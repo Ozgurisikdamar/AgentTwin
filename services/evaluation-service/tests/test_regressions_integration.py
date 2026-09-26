@@ -356,6 +356,48 @@ async def test_an_outcome_recorded_later_makes_or_unmakes_a_candidate() -> None:
         assert await ev.store.all("SELECT * FROM regression_occurrence") == []
 
 
+async def test_an_ingestion_arriving_after_a_later_outcome_does_not_undo_it() -> None:
+    """Events arrive out of order (spec §64): the ingestion event carries the
+    trace as it was when it was finalized; an outcome recorded afterwards may
+    be mined first. The late snapshot must neither withdraw a failure the
+    outcome revealed nor bring back one the outcome corrected."""
+    async with evaluation_stack() as ev:
+        ok = clean(load("duplicate-refund"))
+        failed = copy.deepcopy(ok)
+        failed["trace"].update(outcome_status="FAILURE", signals=["contradiction", "outcome_failure"])
+        failed["trace"]["summary"].update(outcome="FAILURE")
+
+        # Finalized clean, then the verified outcome says the refund went
+        # wrong; the outcome event is mined first.
+        tid = ok["trace"]["trace_id"]
+        ev.traces.details[tid] = failed
+        assert (await mine(ev, outcome_recorded(failed))).outcome == "created"
+        [g] = await groups(ev)
+        late = await mine(ev, ingested(ok))
+        assert late.outcome != "withdrawn" and late.group_id == str(g["id"])
+        [kept] = await groups(ev)
+        assert (kept["occurrence_count"], (await occurrence(ev, tid))["group_id"]) == (1, g["id"])
+
+        # Finalized as a failure, then corrected to a success; the correction
+        # is mined first, and the late snapshot of the failure changes nothing.
+        other = variant(failed)
+        oid = other["trace"]["trace_id"]
+        corrected = clean(other) | {"trace": clean(other)["trace"] | {"trace_id": oid}}
+        ev.traces.details[oid] = corrected
+        assert (await mine(ev, outcome_recorded(corrected))).outcome == "not_candidate"
+        calls = len(ev.traces.calls)
+        assert (await mine(ev, ingested(other))).outcome == "not_candidate"
+        assert len(ev.traces.calls) == calls + 1  # the trace was read again
+        assert await ev.store.all("SELECT * FROM regression_occurrence WHERE trace_id = %s", (oid,)) == []
+        assert [x["id"] for x in await groups(ev)] == [g["id"]]
+
+        # A trace with nothing to mine is decided from its snapshot alone.
+        quiet = variant(ok)
+        calls = len(ev.traces.calls)
+        assert (await mine(ev, ingested(quiet))).outcome == "not_candidate"
+        assert len(ev.traces.calls) == calls
+
+
 async def test_a_failure_that_changes_kind_moves_to_its_new_group() -> None:
     async with evaluation_stack() as ev:
 

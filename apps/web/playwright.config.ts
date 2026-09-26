@@ -19,6 +19,17 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 } } },
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 1000 },
+        // The specs also refresh docs/screenshots: render them at 2x, and
+        // unhinted, because hinting on Linux snaps glyph advances to whole
+        // pixels and spaces letters unevenly.
+        deviceScaleFactor: 2,
+        launchOptions: { args: ["--font-render-hinting=none"] },
+      },
+    },
   ],
 });

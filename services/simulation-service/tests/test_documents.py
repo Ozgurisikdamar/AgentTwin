@@ -145,7 +145,7 @@ def test_check_scenario_schema_errors_and_twin_requirement() -> None:
     del no_agent["spec"]["agent"]
     assert any("every agent of the project" in w for w in check_scenario(no_agent, REGISTRY).warnings)
     semantic = scenario(expectations=[{"type": "semantic", "rubric": "polite"}])
-    assert any("LLM judge" in w for w in check_scenario(semantic, REGISTRY).warnings)
+    assert any("evaluation run's judge" in w for w in check_scenario(semantic, REGISTRY).warnings)
 
 
 def test_scenario_twin_cross_checks() -> None:

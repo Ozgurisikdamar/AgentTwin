@@ -553,7 +553,7 @@ def check_output_json_path(spec: Mapping[str, Any], ctx: EvaluationContext) -> V
 
 
 def check_semantic(spec: Mapping[str, Any], ctx: EvaluationContext) -> Verdict:
-    return _skip("Semantic expectations need an LLM judge; none is attached to this evaluation.")
+    return _skip("Not graded in a simulation run: an evaluation run's judge grades semantic expectations.")
 
 
 # ---------------------------------------------------------------- wiring

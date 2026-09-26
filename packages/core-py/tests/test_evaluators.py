@@ -494,6 +494,8 @@ def test_json_schema_pattern_is_redos_safe_and_pattern_properties_refused() -> N
 def test_semantic_is_skipped_without_a_judge() -> None:
     r = run({"type": "semantic", "rubric": "polite"}, EvaluationContext(output="hi"))
     assert r.status == "SKIPPED" and r.score is None
+    # The simulation never grades it; the reason says where it is graded (ADR-0022).
+    assert "simulation run" in r.reason and "evaluation run's judge" in r.reason
 
 
 # ------------------------------------------------------------- verdict

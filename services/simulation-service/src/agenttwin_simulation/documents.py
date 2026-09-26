@@ -166,7 +166,8 @@ def check_scenario(doc: Any, registry: Registry) -> ScenarioCheck:
     semantic = [e for e in spec["expectations"] if e.get("type") == "semantic"]
     if semantic:
         check.warnings.append(
-            f"{len(semantic)} semantic expectation(s) need an LLM judge; without one they are SKIPPED"
+            f"{len(semantic)} semantic expectation(s) are graded by an evaluation run's judge; "
+            "a simulation run alone leaves them SKIPPED"
         )
     return check
 

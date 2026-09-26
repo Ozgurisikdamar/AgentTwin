@@ -108,4 +108,5 @@ def test_rabbitmq_queue_panels_have_their_scrape_job() -> None:
     jobs = {j["job_name"]: j for j in yaml.safe_load(PROMETHEUS.read_text())["scrape_configs"]}
     assert uses_detailed
     job = jobs["rabbitmq-queues"]
-    assert job["metrics_path"] == "/metrics/detailed" and job["params"]["family"] == ["queue_coarse_metrics"]
+    # The panels read queue depth; the alerts also read consumers (test_alerts.py).
+    assert job["metrics_path"] == "/metrics/detailed" and "queue_coarse_metrics" in job["params"]["family"]

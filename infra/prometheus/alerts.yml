@@ -1,0 +1,177 @@
+# What should wake someone up, or at least be looked at the same day.
+# Every alert names the runbook that says what to check and what to do
+# (docs/runbooks/). Thresholds are for the single-host compose deployment;
+# they are tested with promtool (infra/prometheus/alerts.test.yml,
+# `make alerts-check`) and every metric they read is checked against the
+# code (scripts/tests/test_alerts.py).
+#
+# Prometheus only evaluates these rules; nothing is routed to a pager until
+# an Alertmanager is configured (docs/production-deployment.md).
+groups:
+  - name: agenttwin-availability
+    rules:
+      - alert: AgentTwinServiceDown
+        expr: up{job="agenttwin-services"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is not answering /metrics"
+          description: >-
+            Prometheus cannot scrape {{ $labels.instance }} for 2 minutes: the
+            process is down, restarting, or its host port is unreachable.
+          runbook: docs/runbooks/README.md#a-service-is-down
+
+      - alert: AgentTwinRabbitMQDown
+        expr: up{job="rabbitmq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: RabbitMQ is not answering
+          description: >-
+            Events wait in each service's outbox until the broker is back;
+            nothing is lost, but graph, evaluation, simulation and release
+            updates stop.
+          runbook: docs/runbooks/rabbitmq-down.md
+
+      - alert: AgentTwinHighErrorRate
+        expr: |
+          sum by (service) (rate(agenttwin_http_requests_total{status=~"5.."}[5m]))
+            / sum by (service) (rate(agenttwin_http_requests_total[5m])) > 0.05
+          and sum by (service) (rate(agenttwin_http_requests_total{status=~"5.."}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }}: {{ $value | humanizePercentage }} of requests fail with 5xx"
+          description: >-
+            More than 5% of the requests to {{ $labels.service }} answered
+            5xx for 5 minutes. 503 with Retry-After is what every service
+            answers while PostgreSQL is unreachable.
+          runbook: docs/runbooks/db-down.md
+
+  - name: agenttwin-events
+    rules:
+      - alert: AgentTwinDeadLetters
+        expr: sum by (queue) (rabbitmq_detailed_queue_messages{queue=~".+\\.dlq"}) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} event(s) parked in {{ $labels.queue }}"
+          description: >-
+            A consumer gave up on these events (failed every attempt, invalid,
+            or the database stayed down past the deferral window). Nothing
+            consumes a DLQ: `make dlq` shows each event and its reason; fix
+            the cause, then `make dlq-replay QUEUE=...`.
+          runbook: docs/runbooks/rabbitmq-down.md#dead-letters
+
+      - alert: AgentTwinQueueWithoutConsumer
+        expr: sum by (queue) (rabbitmq_detailed_queue_consumers{queue=~".+\\.events"}) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nobody consumes {{ $labels.queue }}"
+          description: >-
+            The service that owns {{ $labels.queue }} is down or lost its
+            broker connection; its events accumulate in the queue.
+          runbook: docs/runbooks/rabbitmq-down.md#a-queue-has-no-consumer
+
+      - alert: AgentTwinEventBacklog
+        expr: sum by (queue) (rabbitmq_detailed_queue_messages_ready{queue=~".+\\.events"}) > 500
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} events waiting in {{ $labels.queue }}"
+          description: >-
+            The consumer is slower than the producers for 10 minutes, or it
+            is stuck on a slow dependency (usually the database).
+          runbook: docs/runbooks/rabbitmq-down.md#a-queue-grows
+
+      - alert: AgentTwinOutboxBacklog
+        expr: max by (service) (agenttwin_outbox_backlog) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }}: {{ $value }} events not yet published"
+          description: >-
+            Events are committed in {{ $labels.service }}'s outbox but not
+            reaching RabbitMQ. They are published in order once the broker
+            answers again.
+          runbook: docs/runbooks/rabbitmq-down.md#the-outbox-grows
+
+  - name: agenttwin-simulation
+    rules:
+      - alert: AgentTwinSimulationQueueStuck
+        expr: |
+          max(agenttwin_simulation_queue_depth) > 0
+          and (sum(increase(agenttwin_simulation_cases_total[15m])) or vector(0)) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value }} simulation run(s) waiting, no case finished in 20 minutes"
+          description: >-
+            Runs are queued but no worker finishes a case: the worker is down,
+            stuck on the agent under test or the tool twin, or cannot reach the
+            database.
+          runbook: docs/runbooks/simulation-stuck.md
+
+  - name: agenttwin-ingestion
+    rules:
+      - alert: AgentTwinTraceIngestRejected
+        expr: sum by (outcome) (rate(agenttwin_trace_ingest_requests_total{outcome=~"overloaded|store_error|auth_unavailable"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trace-service rejects exports: {{ $labels.outcome }}"
+          description: >-
+            The collector retries these (503 with Retry-After), so spans are
+            delayed rather than lost, until its queue is full.
+          runbook: docs/runbooks/ingestion-backlog.md
+
+      - alert: AgentTwinCollectorExportFailing
+        expr: sum by (exporter) (rate(otelcol_exporter_send_failed_spans_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The collector drops spans on exporter {{ $labels.exporter }}"
+          description: >-
+            Spans that exhausted the collector's retries are dropped: those
+            traces are incomplete in AgentTwin.
+          runbook: docs/runbooks/ingestion-backlog.md
+
+      - alert: AgentTwinCollectorQueueFilling
+        expr: max by (exporter) (otelcol_exporter_queue_size / otelcol_exporter_queue_capacity) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The collector's export queue for {{ $labels.exporter }} is {{ $value | humanizePercentage }} full"
+          description: >-
+            trace-service is slower than the agents produce spans; once the
+            queue is full the collector refuses new spans.
+          runbook: docs/runbooks/ingestion-backlog.md
+
+  - name: agenttwin-providers
+    rules:
+      - alert: AgentTwinJudgeFailing
+        expr: |
+          sum by (provider) (rate(agenttwin_judge_calls_total{outcome=~"error_.+|timeout"}[10m]))
+            / sum by (provider) (rate(agenttwin_judge_calls_total{outcome!="cached"}[10m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of judge calls to {{ $labels.provider }} fail"
+          description: >-
+            A semantic expectation the judge cannot grade is recorded as ERROR
+            (EVALUATION_ERROR), never as a pass; the release gate then warns
+            "An evaluator could not decide", which needs a person.
+          runbook: docs/runbooks/provider-outage.md

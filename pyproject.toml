@@ -63,6 +63,7 @@ files = [
   "scripts/chaos_drill.py",
   "scripts/load_test.py",
   "scripts/supply_chain.py",
+  "scripts/dlq.py",
 ]
 
 [[tool.mypy.overrides]]

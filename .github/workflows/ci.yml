@@ -59,6 +59,8 @@ jobs:
       - uses: ./.github/actions/setup
       # Breaking changes against the recorded baselines (packages/contracts).
       - run: make contracts-check
+      # The alert rules and their promtool tests (infra/prometheus).
+      - run: make alerts-check
 
   integration:
     runs-on: ubuntu-24.04

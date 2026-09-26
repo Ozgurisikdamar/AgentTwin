@@ -10,6 +10,8 @@ PNPM           ?= pnpm
 GO_PACKAGES    := ./packages/... ./services/...
 # Loads .env into a recipe's shell (for targets that talk to the running stack).
 LOAD_ENV       := set -a; . ./.env; set +a
+# The Prometheus of docker-compose.yml, for promtool (make alerts-check).
+PROMETHEUS_IMAGE := $(shell sed -n 's/^ *image: \(prom\/prometheus:.*\)$$/\1/p' docker-compose.yml)
 DEMO_INPUT     ?= Hi! One item in {order} arrived broken. Can I get a refund of $$40?
 # The version Demo Co runs in production (1.3.x are release candidates).
 DEMO_VERSION   ?= 1.2.4
@@ -69,6 +71,25 @@ doctor: env ## Verify Docker, ports, env, DB, RabbitMQ, OTel, migrations, servic
 .PHONY: db-upgrade
 db-upgrade: env ## Bring a data volume from an older PostgreSQL image up to date (collation, pgvector)
 	./scripts/postgres-upgrade.sh
+
+.PHONY: alerts-check
+alerts-check: ## Validate the Prometheus config and alert rules, and run their promtool tests
+	docker run --rm --entrypoint promtool -v "$(CURDIR)/infra/prometheus:/p:ro" -w /p $(PROMETHEUS_IMAGE) check config prometheus.yml
+	docker run --rm --entrypoint promtool -v "$(CURDIR)/infra/prometheus:/p:ro" -w /p $(PROMETHEUS_IMAGE) test rules alerts.test.yml
+
+.PHONY: dlq
+dlq: env ## Dead-letter queues: depth, and per message its event and why it was parked
+	$(LOAD_ENV); $(UV) run python scripts/dlq.py list
+
+.PHONY: dlq-replay
+dlq-replay: env ## Send QUEUE's dead letters back to it (LIMIT=n, DRY_RUN=1); fix the cause first
+	@test -n "$(QUEUE)" || { echo "usage: make dlq-replay QUEUE=<queue> [LIMIT=n] [DRY_RUN=1]; 'make dlq' lists them" >&2; exit 2; }
+	$(LOAD_ENV); $(UV) run python scripts/dlq.py replay $(QUEUE) --limit $(or $(LIMIT),0) $(if $(DRY_RUN),--dry-run)
+
+.PHONY: dlq-drop
+dlq-drop: env ## Archive QUEUE's dead letters to dist/dlq/ (JSON Lines), then remove them (LIMIT=n)
+	@test -n "$(QUEUE)" || { echo "usage: make dlq-drop QUEUE=<queue> [LIMIT=n]; 'make dlq' lists them" >&2; exit 2; }
+	$(LOAD_ENV); $(UV) run python scripts/dlq.py drop $(QUEUE) --limit $(or $(LIMIT),0)
 
 # ---------------------------------------------------------------- quality
 .PHONY: fmt

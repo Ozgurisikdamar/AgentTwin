@@ -538,6 +538,23 @@ pip-audit, trivy). Policy, results, exceptions and the upgrade notes:
 | Tests on the new infra | `make test-integration` on PostgreSQL 16.15 / pgvector 0.8.6 / RabbitMQ 4.3.6: Go packages ok, 1047 Python tests passed (6.9 min); `make lint` clean. On the stack upgraded in place: `make e2e` **39 of 39 in 7.3 min** (golden path 42.6 s); `make chaos-drill` passed (RabbitMQ stopped: the run completes, the outbox drains, 40 s; PostgreSQL stopped: 503 with Retry-After, 200 again 1 s after it returns, 26 s; worker killed: the lease brings the run back, 69 s); `make load-test` with k6 2.3.0 passed, every p95 within noise of the baseline (docs/benchmarks/load-baseline.md) |
 | CI | `.github/workflows/ci.yml`: lint, unit, contract, integration (+ chaos tests), frontend, security, build (image scan, SBOM artifacts), e2e; nightly: live security, TS SDK live, chaos drill, load test. Every step a make target; actions pinned by SHA; checked with actionlint 1.7.7 and the workflow/action JSON schemas. Dependabot for Go, uv, npm, Dockerfiles, compose images and actions, with a 5-day cooldown |
 
+### Operations: dead letters and alerts
+
+Until now nothing could take an event out of a DLQ: a parked event waited
+for someone with the RabbitMQ console. `make dlq` (list: each parked event,
+its attempts and why), `make dlq-replay QUEUE=...` (with `DRY_RUN=1`,
+`LIMIT=n`) and `make dlq-drop QUEUE=...` (scripts/dlq.py). Prometheus now
+evaluates 12 alert rules (infra/prometheus/alerts.yml), each with a severity
+and a runbook, tested with promtool (`make alerts-check`, in CI).
+
+| What | Evidence (2026-09-26) |
+|---|---|
+| Replay loses nothing | publish with a publisher confirm, *then* remove from the DLQ; bounded by the DLQ depth at the start, so a message that fails again waits for the next replay. Tests against RabbitMQ (scripts/tests/test_dlq.py, 14): order and message ids kept, attempt counters reset, `x-agenttwin-replayed` counted; a queue that refuses the publish (`reject-publish`) leaves every message parked, in order. Mutations caught: remove before the confirm, ignore the limit, keep the attempt header, publish without confirms, the `drop` command wired after `--dry-run` (a real bug the CLI test found) |
+| Drop leaves a record | each dropped message is appended to `dist/dlq/<queue>-<time>.jsonl` (body, headers, reason) and fsynced before it leaves the DLQ; a failing write (disk full, simulated) removes nothing. Mutation "acknowledge before writing" caught |
+| On the live stack | a real `agent.version_registered.v1` parked in `graph-service.events.dlq` with a "database stayed unavailable" reason: listed, dry run, replayed, processed by graph-service (its `processed_event` row), DLQ empty. A malformed message replayed is parked again by the consumer as invalid ("replayed 1x"): a replay cannot loop. It then fired `AgentTwinDeadLetters` (pending after 9 s, firing after 67 s) and `make dlq-drop` archived it; the alert resolved 19 s later |
+| Alert rules | service down, RabbitMQ down, 5xx share (with an absolute floor), dead letters, queue without consumer, event backlog, outbox backlog, simulation queue stuck (queued runs, no case finished in 15 min, also when the worker never finished one), trace ingestion refused, collector dropping spans, collector queue filling, judge failing. promtool: config valid, 13 test groups pass; mutations of the 5xx floor, the DLQ filter, the cached-verdict exclusion, the `or vector(0)` fallback and the ingest outcome filter are caught. scripts/tests/test_alerts.py: every metric a rule reads is exported by the code or scraped (RabbitMQ consumer counts: scrape family added), every rule has a severity, a runbook and a promtool test. Live: all 12 rules healthy |
+| Not yet | no Alertmanager: the rules are evaluated and shown in Prometheus, nothing is routed to a person (docs/production-deployment.md). The runbooks the alerts point to are the next item |
+
 ## Definition of Done tracking
 
 See the final delivery report in `docs/delivery-report.md` (written at the end;

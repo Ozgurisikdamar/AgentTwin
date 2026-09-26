@@ -503,6 +503,8 @@ make load-test      # the k6 load test of spec §65, with end-to-end checks (doc
 make lint       # formatters, linters and type checkers for Go, Python and TypeScript
 make supply-chain   # secrets in the history, vulnerable dependencies, image scan, SBOMs (docs/security/supply-chain.md)
 make db-upgrade     # after upgrading the images over existing data: reindex for the new collation, update pgvector
+make dlq            # dead-letter queues: each parked event and why · make dlq-replay QUEUE=... (DRY_RUN=1) · make dlq-drop QUEUE=...
+make alerts-check   # the Prometheus alert rules (infra/prometheus/alerts.yml) and their promtool tests
 make down       # stop (keeps data) · make reset: wipe data and start again
 ```
 

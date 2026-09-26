@@ -1,18 +1,20 @@
-"""Runs the security tests of spec §63, item by item.
+"""Runs a spec's test manifest, item by item: the security tests of §63
+(scripts/security-tests.yaml) or the chaos tests of §64
+(scripts/chaos-tests.yaml).
 
-The manifest (scripts/security-tests.yaml) names, for every item of §63, the
-automated tests that cover it, across Go, Python and the web. This script
-checks that every named test exists (a renamed or deleted test must not
-silently leave an item uncovered), then runs them:
+A manifest names, for every item of its spec section, the automated tests
+that cover it, across Go, Python and the web. This script checks that every
+named test exists (a renamed or deleted test must not silently leave an item
+uncovered), then runs them:
 
-    uv run python scripts/security_tests.py            # Go, Python, web unit
-    uv run python scripts/security_tests.py --live     # + browser checks (running stack)
-    uv run python scripts/security_tests.py --list     # the items and their tests
+    uv run python scripts/spec_tests.py security            # Go, Python, web unit
+    uv run python scripts/spec_tests.py security --live     # + browser checks (running stack)
+    uv run python scripts/spec_tests.py chaos --list        # the items and their tests
 
 Go and Python integration tests need AGENTTWIN_TEST_DATABASE_URL and
-AGENTTWIN_TEST_AMQP_URL (``make test-security`` runs this inside
-scripts/with-test-infra.sh); without them they skip, so the run fails when
-it would otherwise skip one.
+AGENTTWIN_TEST_AMQP_URL (``make test-security`` and ``make test-chaos`` run
+this inside scripts/with-test-infra.sh); without them they skip, so the run
+fails when it would otherwise skip one.
 """
 
 from __future__ import annotations
@@ -30,7 +32,10 @@ from typing import Any
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "scripts" / "security-tests.yaml"
+MANIFESTS = {
+    "security": ROOT / "scripts" / "security-tests.yaml",
+    "chaos": ROOT / "scripts" / "chaos-tests.yaml",
+}
 WEB = ROOT / "apps" / "web"
 
 
@@ -45,9 +50,15 @@ class Item:
     note: str = ""
 
 
-def load(path: Path = MANIFEST) -> list[Item]:
+def load(path: Path) -> list[Item]:
     doc: dict[str, Any] = yaml.safe_load(path.read_text())
     return [Item(**raw) for raw in doc["items"]]
+
+
+def spec_of(path: Path) -> str:
+    """The spec section a manifest covers (its ``spec`` field)."""
+    doc: dict[str, Any] = yaml.safe_load(path.read_text())
+    return str(doc["spec"])
 
 
 def missing(items: list[Item], root: Path = ROOT) -> list[str]:
@@ -85,13 +96,15 @@ def run(cmd: list[str], cwd: Path = ROOT) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("suite", choices=sorted(MANIFESTS), help="which manifest to run")
     parser.add_argument(
         "--live", action="store_true", help="also run the browser checks (needs a running stack)"
     )
     parser.add_argument("--list", action="store_true", help="print the items and their tests")
     args = parser.parse_args(argv)
 
-    items = load()
+    manifest = MANIFESTS[args.suite]
+    items, spec = load(manifest), spec_of(manifest)
     if args.list:
         for item in items:
             print(f"{item.id}: {item.title}")
@@ -113,7 +126,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for var in ("AGENTTWIN_TEST_DATABASE_URL", "AGENTTWIN_TEST_AMQP_URL"):
         if not os.environ.get(var):
-            print(f"{var} is not set: integration tests would skip (use make test-security)", file=sys.stderr)
+            print(
+                f"{var} is not set: integration tests would skip (use make test-{args.suite})",
+                file=sys.stderr,
+            )
             return 2
 
     go: dict[str, set[str]] = defaultdict(set)
@@ -124,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         for pkg, names in item.go.items():
             go[pkg].update(names)
         for file, names in item.python.items():
-            python.extend(f"{file}::{name}" for name in names)
+            python.extend(f"{file}::{name}" for name in names if f"{file}::{name}" not in python)
         web.update(item.web)
         e2e.update(item.e2e)
 
@@ -143,11 +159,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.live and e2e and run(["pnpm", "exec", "playwright", "test", *sorted(e2e)], cwd=WEB) != 0:
         failed.append("e2e")
     if failed:
-        print("security tests failed:", ", ".join(failed), file=sys.stderr)
+        print(f"{args.suite} tests failed:", ", ".join(failed), file=sys.stderr)
         return 1
     print(
-        f"security tests passed: {len(items)} items of spec §63"
-        + ("" if args.live else " (browser checks: --live)")
+        f"{args.suite} tests passed: {len(items)} items of spec {spec}"
+        + ("" if args.live or not e2e else " (browser checks: --live)")
     )
     return 0
 

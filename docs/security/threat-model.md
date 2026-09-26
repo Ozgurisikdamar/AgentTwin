@@ -26,7 +26,7 @@ insider with DB access.
 ## Attack paths → mitigations
 
 The last column names the item of [`scripts/security-tests.yaml`](../../scripts/security-tests.yaml)
-that lists the tests (`uv run python scripts/security_tests.py --list`).
+that lists the tests (`uv run python scripts/spec_tests.py security --list`).
 
 | Attack | Mitigation | Tests (manifest item) |
 |---|---|---|
@@ -89,13 +89,13 @@ stack (Playwright).
 
 Every item of §63 is covered by named, automated tests. The mapping is
 machine-readable, [`scripts/security-tests.yaml`](../../scripts/security-tests.yaml),
-and cannot rot silently: `scripts/tests/test_security_manifest.py` (part of
+and cannot rot silently: `scripts/tests/test_spec_manifests.py` (part of
 `make test`) fails when an item is missing or a named test no longer exists.
 
 ```bash
 make test-security        # every §63 test, against real PostgreSQL + RabbitMQ
 make test-security-live   # the same plus the browser checks on a running stack (make dev)
-uv run python scripts/security_tests.py --list   # the items and their tests
+uv run python scripts/spec_tests.py security --list   # the items and their tests
 ```
 
 Integration tests cannot skip there (`AGENTTWIN_REQUIRE_INTEGRATION=1`): an

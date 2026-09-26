@@ -8,8 +8,9 @@
 # python: test file -> test functions
 # web:    vitest files (apps/web) · e2e: Playwright specs (apps/web, --live)
 #
-# scripts/tests/test_security_manifest.py fails when an item is missing or a
+# scripts/tests/test_spec_manifests.py fails when an item is missing or a
 # named test no longer exists.
+spec: "§63"
 items:
   - id: bola
     title: Broken object-level authorization (another tenant's object by id)

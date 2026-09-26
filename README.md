@@ -483,6 +483,7 @@ make doctor     # checks Docker, env, ports, PostgreSQL, RabbitMQ, OTel, migrati
 make e2e        # Playwright tests against the running stack
 make test       # unit + integration (real PostgreSQL + RabbitMQ) + frontend tests
 make test-security  # every security test of spec §63, item by item (scripts/security-tests.yaml)
+make test-chaos     # every failure of spec §64 injected, item by item (scripts/chaos-tests.yaml)
 make lint       # formatters, linters and type checkers for Go, Python and TypeScript
 make down       # stop (keeps data) · make reset: wipe data and start again
 ```

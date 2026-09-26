@@ -1,0 +1,107 @@
+# Spec §64: every failure mode and the automated tests that inject it.
+#
+#   make test-chaos          run them all (real PostgreSQL + RabbitMQ; outages
+#                            are cut proxies in front of them, not mocks)
+#   scripts/chaos-drill.sh   the same failures against a running stack
+#
+# Required everywhere: no silent corruption, bounded retries, a visible
+# status, recovered or clearly failed, never a false PASS.
+#
+# go:     package directory -> test functions · python: test file -> test
+# functions. scripts/tests/test_spec_manifests.py fails when an item is
+# missing or a named test no longer exists.
+spec: "§64"
+items:
+  - id: rabbitmq-unavailable
+    title: RabbitMQ unavailable (stopped, partitioned, not up yet)
+    go:
+      packages/gokit/events: [TestARabbitMQOutageDelaysEventsAndLosesNone, TestDialWaitsForABrokerThatIsNotUpYetAndGivesUpWhenTold, TestReadinessDuringAPartitionIsBoundedAndReconnectsOnce, TestAConsumerKeepsTryingThroughAPartition, TestAClosedBrokerStaysClosed, TestReconnectDelayIsBoundedAndStartsOverAfterConsuming]
+      packages/gokit/testutil: [TestCutProxyDropsAndRefusesUntilRestored]
+    python:
+      packages/core-py/tests/test_events_chaos_integration.py: [test_a_rabbitmq_outage_delays_events_and_loses_none, test_a_consumer_keeps_trying_through_a_partition]
+      packages/core-py/tests/test_cut_proxy.py: [test_cut_silence_and_restore]
+    note: >-
+      Events wait in the transactional outbox and are all delivered once the broker is back; readiness
+      says so within its timeout; consumers reconnect with a bounded backoff.
+
+  - id: duplicate-message
+    title: Duplicate message (redelivery, racing deliveries)
+    go:
+      packages/gokit/db: [TestMarkProcessedOncePerConsumer]
+      services/graph-service/internal/api: [TestAnEventIsAppliedOnce, TestConcurrentEventsOfOneProject]
+      services/control-plane/internal/server: [TestAuditEventsFromOtherServicesAreRecordedOnceWhateverTheDelivery, TestABadCandidateIsBlocked]
+    python:
+      packages/core-py/tests/test_events_integration.py: [test_outbox_publishes_only_committed_events]
+      services/evaluation-service/tests/test_regressions_integration.py: [test_a_production_failure_becomes_a_group_and_a_repeat_joins_it, test_a_flag_is_kept_until_its_trace_is_finalized]
+      services/evaluation-service/tests/test_release_runs_integration.py: [test_a_release_evaluation_gets_its_run_once]
+
+  - id: delayed-message
+    title: Delayed and out-of-order message (retry queue, a late event overtaken by a newer one)
+    go:
+      packages/gokit/events: [TestBrokerPublishConsumeRetryAndDLQ, TestRetriesCountAttemptsAndDeferralsApart]
+      services/graph-service/internal/api: [TestAnOlderDeclarationArrivingLateChangesNothing, TestDeclarationsMadeBeforeTheGuardExistedAreRemembered, TestEventsBuildTheGraphWithItsEvidence]
+      services/control-plane/internal/server: [TestAuditEventsFromOtherServicesAreRecordedOnceWhateverTheDelivery, TestABadCandidateIsBlocked]
+    python:
+      services/evaluation-service/tests/test_regressions_integration.py: [test_an_ingestion_arriving_after_a_later_outcome_does_not_undo_it, test_a_runtime_denial_before_its_trace_waits_for_the_ingestion]
+    note: >-
+      Declarations and trace snapshots carry their time; an older one arriving after a newer one changes
+      nothing. The audit log keeps arrival order with the time each event happened.
+
+  - id: db-connection-loss
+    title: Database connection loss
+    go:
+      packages/gokit/db: [TestIsUnavailable]
+      packages/gokit/httpx: [TestAnUnreachableDatabaseIsA503WithRetryAfter]
+      packages/gokit/service: [TestADatabaseOutageAnswers503AndRecovers]
+      packages/gokit/events: [TestADatabaseOutageDefersEventsInsteadOfParkingThem]
+    python:
+      packages/core-py/tests/test_db_chaos_integration.py: [test_is_unavailable, test_a_database_outage_answers_503_and_recovers, test_retries_count_attempts_and_waiting_for_the_database_apart, test_a_database_outage_defers_events_instead_of_parking_them]
+      services/simulation-service/tests/test_worker_chaos_integration.py: [test_the_database_going_away_mid_run_leaves_the_run_to_be_retried, test_the_database_going_away_during_a_case_abandons_it_and_the_agent_call]
+      services/evaluation-service/tests/test_worker_chaos_integration.py: [test_the_database_going_away_while_evaluating_leaves_the_run_to_be_evaluated_again]
+    note: >-
+      Requests answer 503 UNAVAILABLE with Retry-After within seconds and recover on their own; events wait
+      (deferred up to an hour) instead of being parked; runs are left to their lease, never failed by an outage.
+
+  - id: worker-crash
+    title: Worker crash mid-run (killed, or a bug)
+    python:
+      services/simulation-service/tests/test_run_lifecycle_integration.py: [test_expired_leases_are_recovered_or_failed, test_a_cancelled_run_whose_worker_died_is_cancelled_not_retried]
+      services/simulation-service/tests/test_worker_chaos_integration.py: [test_a_bug_in_the_middle_of_a_run_fails_it_and_says_so]
+      services/evaluation-service/tests/test_eval_runs_integration.py: [test_runs_whose_worker_is_lost_are_retried_then_failed, test_a_worker_that_lost_the_run_cannot_end_it]
+      services/evaluation-service/tests/test_worker_chaos_integration.py: [test_a_bug_while_evaluating_fails_the_run_at_once_and_says_so]
+    note: A killed worker's run is recovered by its lease (bounded attempts); a bug fails the run at once, naming the error.
+
+  - id: llm-429
+    title: LLM provider rate limit (429 with Retry-After)
+    python:
+      packages/core-py/tests/test_retry.py: [test_retry_after_seconds]
+      services/evaluation-service/tests/test_judges.py: [test_retries_then_an_error_the_caller_records, test_the_openai_compatible_judge_waits_out_rate_limits_and_timeouts]
+      packages/core-py/tests/test_embedding_providers.py: [test_a_busy_provider_is_retried_with_its_retry_after, test_an_unreadable_retry_after_falls_back_to_backoff]
+      services/evaluation-service/tests/test_eval_runs_integration.py: [test_a_spent_judge_budget_leaves_expectations_unjudged_and_says_so]
+
+  - id: llm-timeout
+    title: LLM provider or agent timeout
+    python:
+      services/evaluation-service/tests/test_judges.py: [test_timeouts_and_unreachable_providers, test_the_openai_compatible_judge_waits_out_rate_limits_and_timeouts]
+      packages/core-py/tests/test_embedding_providers.py: [test_an_unreachable_or_slow_provider_is_retried]
+      services/simulation-service/tests/test_worker_chaos_integration.py: [test_an_agent_that_hangs_or_answers_garbage_fails_its_case]
+
+  - id: malformed-provider-json
+    title: Malformed provider JSON (not JSON, truncated, the wrong shape)
+    python:
+      services/evaluation-service/tests/test_judges.py: [test_anthropic_answers_that_are_not_verdicts, test_openai_answers_that_are_not_verdicts, test_an_invalid_verdict_is_an_error_not_a_score, test_the_openai_compatible_judge_waits_out_rate_limits_and_timeouts]
+      packages/core-py/tests/test_embedding_providers.py: [test_an_answer_of_the_wrong_shape_is_refused, test_an_answer_too_large_is_refused]
+      services/simulation-service/tests/test_worker_chaos_integration.py: [test_an_agent_that_hangs_or_answers_garbage_fails_its_case]
+
+  - id: tool-twin-crash
+    title: Tool twin crash
+    python:
+      services/simulation-service/tests/test_worker_chaos_integration.py: [test_a_twin_crash_answers_500_and_leaves_the_case_state_alone, test_a_twin_crash_errors_the_case_instead_of_judging_it, test_a_twin_crash_during_a_retrieval_is_a_twin_failure_too, test_refusals_are_answers_not_twin_failures, test_a_twin_failure_is_recorded_through_a_database_blip_or_logged]
+    note: The call changes nothing, the agent gets a 500 with a request id, and the case is ERRORED (TWIN_ERROR), not judged.
+
+  - id: evaluator-exception
+    title: Evaluator exception
+    python:
+      packages/core-py/tests/test_evaluators.py: [test_crashing_evaluator_becomes_error_without_hiding_others]
+      services/simulation-service/tests/test_worker_chaos_integration.py: [test_an_evaluator_that_crashes_errors_the_case_and_judges_the_rest]
+      services/evaluation-service/tests/test_worker_chaos_integration.py: [test_a_bug_while_evaluating_fails_the_run_at_once_and_says_so]

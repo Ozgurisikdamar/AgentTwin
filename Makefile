@@ -113,11 +113,19 @@ test-web: ## Frontend + TS SDK unit tests
 
 .PHONY: test-security
 test-security: ## Security tests of spec §63, item by item (real PostgreSQL + RabbitMQ)
-	./scripts/with-test-infra.sh $(UV) run python scripts/security_tests.py
+	./scripts/with-test-infra.sh $(UV) run python scripts/spec_tests.py security
 
 .PHONY: test-security-live
 test-security-live: env ## test-security plus the browser checks against the running stack (make dev first)
-	$(LOAD_ENV); ./scripts/with-test-infra.sh $(UV) run python scripts/security_tests.py --live
+	$(LOAD_ENV); ./scripts/with-test-infra.sh $(UV) run python scripts/spec_tests.py security --live
+
+.PHONY: test-chaos
+test-chaos: ## Chaos tests of spec §64, item by item (outages injected in front of real PostgreSQL + RabbitMQ)
+	./scripts/with-test-infra.sh $(UV) run python scripts/spec_tests.py chaos
+
+.PHONY: chaos-drill
+chaos-drill: env ## Break the running stack (RabbitMQ, PostgreSQL, the simulation worker) and check it fails safe and recovers (make dev first)
+	$(LOAD_ENV); $(UV) run python scripts/chaos_drill.py
 
 .PHONY: fuzz
 fuzz: ## Run Go fuzz targets for 20s each

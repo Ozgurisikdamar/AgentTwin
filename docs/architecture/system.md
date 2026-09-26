@@ -438,7 +438,7 @@ through REST (synchronous, owner-validated) or events (asynchronous).
 |---|---|---|
 | `control` | control-plane | organization, app_user, membership, project, environment, api_key, agent, agent_version, prompt_version, tool, tool_version, tool_catalog, change_set, release, release_evaluation, gate_decision, gate_override, audit_event, idempotency_record, outbox, processed_event (the gate policy is a column of `project`) |
 | `trace` | trace-service | trace, span, outcome, trace_flag, outbox |
-| `graph` | graph-service | component, dependency_edge, edge_evidence, outbox, processed_event |
+| `graph` | graph-service | component, dependency_edge, edge_evidence, declaration (when each declaration was made, so a late older one is ignored — ADR-0034), outbox, processed_event |
 | `evaluation` | evaluation-service | dataset, dataset_version, eval_run, eval_run_transition, eval_case_result, judgment (verdict cache), human_review, judge_calibration, outbox, processed_event; regression mining (ADR-0032): regression_group, regression_fingerprint, regression_occurrence (features + pgvector embedding, no content), regression_flag, regression_runtime_denial (the runtime gateway's denials on a trace, ADR-0033), regression_event |
 | `simulation` | simulation-service | twin_definition, scenario, scenario_version, scenario_embedding (pgvector), simulation_run, simulation_run_transition, simulation_case, simulation_step, outbox, processed_event |
 | `runtime` | runtime-gateway | policy, policy_version, policy_decision, approval_request, approval_token, idempotency_record, tool_endpoint, trace_tool_counter, outbox |
@@ -480,6 +480,20 @@ compatibility baseline ([ADR-0021](../adr/0021-http-contracts-checked-openapi.md
   (enforced by a database trigger). Re-evaluation creates a new revision.
 * **Fail-safe.** Missing/erroring mandatory evaluation → BLOCK (INCOMPLETE).
   Irreversible runtime actions fail closed when policy evaluation fails.
+* **Failures of infrastructure (spec §64, ADR-0034).** An outage is waited
+  out, visibly and boundedly: an unreachable database answers `503
+  UNAVAILABLE` with `Retry-After` within seconds and serves again on its own;
+  events wait in the outbox while the broker is down, and a consumer whose
+  database is gone defers the event (up to an hour) instead of spending its
+  attempts; a worker that loses its database leaves the run to its lease. A
+  defect fails at once and says so (`internal error (<Type>)`); a tool twin
+  or an evaluator that crashes errors the case (`TWIN_ERROR`,
+  `EVALUATOR_ERROR`) instead of letting it be judged. Providers' 429s and
+  timeouts get bounded retries honouring `Retry-After`; a malformed answer
+  never becomes a score. Delivery is at least once and in any order: every
+  consumer is idempotent, declarations and trace snapshots carry their time
+  so a late older one changes nothing. `make test-chaos` runs the tests that
+  inject each failure; `make chaos-drill` breaks the running stack.
 * **Deterministic fakes are labeled.** The demo agent's scripted planner and the
   fake judge are marked `deterministic-fake` in every run record and in the UI.
 * **Internal observability (spec §54).** Every service exposes Prometheus

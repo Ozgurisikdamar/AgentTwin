@@ -14,9 +14,11 @@ rabbitmq   the broker stops while a simulation runs: the run completes (it
            needs the database, not the broker), its events wait in the
            outbox (agenttwin_outbox_backlog) and are all delivered once the
            broker is back; no event reaches a dead-letter queue.
-postgres   the database stops: the API answers 503 UNAVAILABLE with
-           Retry-After within seconds instead of hanging or answering 500,
-           and serves again once the database is back, without a restart.
+postgres   the database stops for a while: every request meanwhile is
+           answered 503 UNAVAILABLE with Retry-After within seconds instead
+           of hanging or answering 500; once the database is back the Go
+           and Python services serve again within seconds, and no container
+           was restarted to get there.
 worker     the simulation worker is killed in the middle of a run: the run
            is not left RUNNING; its lease brings it back and it completes
            (or fails, saying why) — never a silent pass.
@@ -166,25 +168,64 @@ def drill_rabbitmq(client: Client, project_id: str) -> None:
     step("no event reached a dead-letter queue")
 
 
+def started_at(services: list[str]) -> dict[str, str]:
+    """When each service's container last started (a restart changes it)."""
+    out = {}
+    for service in services:
+        cid = compose("ps", "-q", service).strip()
+        out[service] = subprocess.run(  # noqa: S603 - fixed arguments
+            ["docker", "inspect", "-f", "{{.State.StartedAt}}", cid],  # noqa: S607 - as compose()
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    return out
+
+
+def serves(path: str, api_key: str) -> Callable[[], bool]:
+    return lambda: raw_get(path, api_key)[0] == 200
+
+
+# Long enough for every service to meet the outage (pools notice it, idle
+# connections break), short enough to stay well inside the consumers' hour of
+# deferrals (ADR-0034).
+POSTGRES_OUTAGE_S = 20
+
+
 def drill_postgres(client: Client, project_id: str, api_key: str) -> None:
-    del project_id
+    before = started_at(APP_SERVICES)
+    # Served by the control plane itself, and by the Python simulation and
+    # evaluation services through it.
+    q = "?" + urllib.parse.urlencode({"project_id": project_id})
+    paths = ["/api/v1/projects", f"/api/v1/scenarios{q}", f"/api/v1/datasets{q}"]
     compose("stop", "postgres")
+    stopped = time.monotonic()
     try:
-        step("postgres stopped")
-        status, headers, took = until(
-            "the API answers 503", lambda: (r := raw_get("/api/v1/projects", api_key))[0] == 503 and r, 30, 1
-        )
-        if took > 8:
-            raise DrillFailed(f"the 503 took {took:.1f}s: callers must not hang on an outage")
-        if headers.get("Retry-After") is None:
-            raise DrillFailed("the 503 carries no Retry-After")
-        step(f"GET /api/v1/projects -> {status} in {took:.1f}s, Retry-After: {headers['Retry-After']}")
+        step(f"postgres stopped; calling the API for {POSTGRES_OUTAGE_S}s")
+        answers, slowest = 0, 0.0
+        while time.monotonic() - stopped < POSTGRES_OUTAGE_S:
+            status, headers, took = raw_get("/api/v1/projects", api_key)
+            if status != 503:
+                raise DrillFailed(f"GET /api/v1/projects -> {status} during the outage, not 503")
+            if headers.get("Retry-After") is None:
+                raise DrillFailed("a 503 carries no Retry-After")
+            answers, slowest = answers + 1, max(slowest, took)
+            time.sleep(1)
+        if slowest > 8:
+            raise DrillFailed(f"a 503 took {slowest:.1f}s: callers must not hang on an outage")
+        step(f"{answers} calls, all 503 with Retry-After, the slowest in {slowest:.1f}s")
     finally:
         compose("start", "postgres")
+    back = time.monotonic()
     step("postgres started")
-    until("the API serves again", lambda: raw_get("/api/v1/projects", api_key)[0] == 200, 90, 2)
-    step("GET /api/v1/projects -> 200 again, no service restarted")
+    for path in paths:
+        until(f"GET {path} serves again", serves(path, api_key), 60, 0.5)
+    step(f"{', '.join(p.split('?')[0] for p in paths)} -> 200 again {time.monotonic() - back:.0f}s later")
     until("every service is healthy again", lambda: healthy(APP_SERVICES), 180, 3)
+    restarted = [s for s, t in started_at(APP_SERVICES).items() if t != before[s]]
+    if restarted:
+        raise DrillFailed(f"recovered only by restarting: {', '.join(restarted)}")
+    step("no service was restarted")
     client.projects()
 
 

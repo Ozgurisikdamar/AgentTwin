@@ -119,6 +119,14 @@ test-security: ## Security tests of spec §63, item by item (real PostgreSQL + R
 test-security-live: env ## test-security plus the browser checks against the running stack (make dev first)
 	$(LOAD_ENV); ./scripts/with-test-infra.sh $(UV) run python scripts/spec_tests.py security --live
 
+.PHONY: test-sdk-ts-live
+test-sdk-ts-live: env ## TS SDK end to end: a run through the collector, read back from the API, outcome reported (make dev first)
+	$(LOAD_ENV); AGENTTWIN_LIVE=1 \
+	  AGENTTWIN_API_URL=http://127.0.0.1:$${CONTROL_PLANE_HOST_PORT:-8080} \
+	  AGENTTWIN_OTLP_ENDPOINT=http://127.0.0.1:$${OTEL_HTTP_HOST_PORT:-4318} \
+	  AGENTTWIN_API_KEY=$$AGENTTWIN_DEMO_API_KEY \
+	  $(PNPM) --filter @agenttwin/sdk exec vitest run test/live.test.ts
+
 .PHONY: test-chaos
 test-chaos: ## Chaos tests of spec §64, item by item (outages injected in front of real PostgreSQL + RabbitMQ)
 	./scripts/with-test-infra.sh $(UV) run python scripts/spec_tests.py chaos

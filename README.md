@@ -339,6 +339,12 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   redaction, content capture off by default and measured overhead
   ([benchmarks](docs/benchmarks/sdk-overhead.md)); it also starts simulations,
   builds datasets and runs evaluations.
+* **TypeScript SDK** ([`packages/sdk-typescript`](packages/sdk-typescript)),
+  the same spans, attributes, content policy and redaction for Node.js 20+
+  agents, with no runtime dependencies: a wrapper and an explicit API,
+  batched OTLP export that never blocks the agent, delayed outcome reporting
+  and a manifest helper. Canonical JSON and redaction are checked byte for
+  byte against the Go services on shared fixtures and random inputs.
 * **Control plane**: dev and OIDC authentication, organizations, projects,
   RBAC, API keys, immutable agent manifests and versions, hash-chained audit log.
 * **Simulation**: versioned scenarios run against declarative, stateful tool
@@ -483,6 +489,7 @@ make doctor     # checks Docker, env, ports, PostgreSQL, RabbitMQ, OTel, migrati
 make e2e        # Playwright tests against the running stack
 make test       # unit + integration (real PostgreSQL + RabbitMQ) + frontend tests
 make test-security  # every security test of spec §63, item by item (scripts/security-tests.yaml)
+make test-sdk-ts-live  # TS SDK end to end against the running stack: trace, prompt hash, redaction, outcome
 make test-chaos     # every failure of spec §64 injected, item by item (scripts/chaos-tests.yaml)
 make chaos-drill    # breaks the running stack (RabbitMQ, PostgreSQL, the worker) and checks it recovers
 make load-test      # the k6 load test of spec §65, with end-to-end checks (docs/benchmarks/load-baseline.md)
@@ -504,8 +511,10 @@ echo $?         # 3: blocked, with the rules and evidence printed above
 See [`packages/cli/README.md`](packages/cli/README.md) for the flags, the
 reports and a GitHub Actions step.
 
-Instrument your own agent with the Python SDK: see
-[`packages/sdk-python/README.md`](packages/sdk-python/README.md). Point
+Instrument your own agent with the Python SDK
+([`packages/sdk-python/README.md`](packages/sdk-python/README.md)) or the
+TypeScript SDK
+([`packages/sdk-typescript/README.md`](packages/sdk-typescript/README.md)). Point
 `AGENTTWIN_OTLP_ENDPOINT` at `http://localhost:4318` and use the demo project
 key from `.env` (`AGENTTWIN_DEMO_API_KEY`).
 
@@ -529,6 +538,7 @@ packages/
   gokit/              shared Go infrastructure primitives
   core-py/            shared Python kit (service runtime, jobs, evaluators, contract checks)
   sdk-python/         Python SDK
+  sdk-typescript/     TypeScript SDK (Node.js)
   cli/                the agenttwin CLI (release check for CI, agents, doctor)
   scenario-schema/    versioned scenario, twin, manifest and policy schemas
 
@@ -546,8 +556,6 @@ infra/
   prometheus/         metrics collection
   grafana/            local observability provisioning
 ```
-
-The runtime gateway and the TypeScript SDK join as their phases land.
 
 ---
 

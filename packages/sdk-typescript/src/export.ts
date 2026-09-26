@@ -51,14 +51,14 @@ export class InMemorySpanExporter implements SpanExporter {
 export interface OTLPHttpExporterOptions {
   /** OTLP/HTTP base URL or full `/v1/traces` URL. */
   readonly endpoint: string;
-  readonly headers?: Readonly<Record<string, string>>;
+  readonly headers?: Readonly<Record<string, string>> | undefined;
   readonly timeoutMs: number;
   readonly resource: Resource;
   readonly scope: Scope;
   /** Delays before the retries of a retryable failure (429, 502-504, network). */
-  readonly retryDelaysMs?: readonly number[];
+  readonly retryDelaysMs?: readonly number[] | undefined;
   /** For tests: the fetch implementation. */
-  readonly fetch?: typeof fetch;
+  readonly fetch?: typeof fetch | undefined;
 }
 
 const RETRYABLE = new Set([429, 502, 503, 504]);
@@ -123,6 +123,7 @@ export interface BatchOptions {
 export class BatchSpanProcessor {
   private queue: ReadableSpan[] = [];
   private timer: NodeJS.Timeout | undefined;
+  private immediate: NodeJS.Immediate | undefined;
   private running: Promise<void> | undefined;
   private stopped = false;
   private readonly batchSize: number;
@@ -142,7 +143,7 @@ export class BatchSpanProcessor {
       return;
     }
     this.queue.push(span);
-    if (this.queue.length >= this.batchSize) this.kick();
+    if (this.queue.length >= this.batchSize) this.kickSoon();
     else this.schedule();
   }
 
@@ -171,8 +172,9 @@ export class BatchSpanProcessor {
   async shutdown(timeoutMs: number): Promise<boolean> {
     if (this.stopped) return true;
     const flushed = await this.flush(timeoutMs);
+    // No timer can be pending here: a flush kicks (which clears it) and an
+    // export ending after the stop schedules nothing.
     this.stopped = true;
-    clearTimeout(this.timer);
     try {
       await this.exporter.shutdown?.();
     } catch {}
@@ -187,6 +189,20 @@ export class BatchSpanProcessor {
     }, this.options.scheduleDelayMs);
     // Waiting spans never keep the process alive; exit hooks flush them.
     this.timer.unref();
+  }
+
+  /**
+   * Starts an export on the next turn of the event loop, never inside the
+   * caller's `end()`: encoding a batch is work the application should not
+   * wait for.
+   */
+  private kickSoon(): void {
+    if (this.immediate !== undefined || this.running !== undefined) return;
+    this.immediate = setImmediate(() => {
+      this.immediate = undefined;
+      this.kick();
+    });
+    this.immediate.unref();
   }
 
   private kick(): void {

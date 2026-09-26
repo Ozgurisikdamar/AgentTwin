@@ -63,7 +63,7 @@ const lookupOrder = toolSpan({ risk: "READ" }, async function lookupOrder(args: 
   return { order_id: args.order_id, status: "delivered", total: 140 };
 });
 
-// The idempotency key argument is recorded as a hash only.
+// The idempotency key is recorded as a hash (see "Idempotency keys" below).
 const refundPayment = toolSpan(
   { name: "refund_payment", risk: "WRITE_IRREVERSIBLE" },
   async (args: { order_id: string; amount: number; idempotency_key: string }) => ({
@@ -143,6 +143,18 @@ try {
   call.end();
   run.end();
 }
+```
+
+### Idempotency keys
+
+A tool call records its idempotency key as a short hash
+(`agenttwin.tool.idempotency_key_hash`), enough to see that two attempts were
+the same action. With content capture on (`redacted` or `full`) the
+arguments are recorded too, and a key that is one of them travels with
+them; mask it there with a JSON path:
+
+```ts
+configure({ contentMode: "redacted", redaction: { jsonPaths: ["$.idempotency_key"] } });
 ```
 
 ### Correlation
@@ -237,4 +249,8 @@ exporter.getFinishedSpans();
   output of the Go services and the Python SDK: the tests run the shared
   fixtures and thousands of random inputs through the Go reference.
 
-Run the SDK tests with `pnpm --filter @agenttwin/sdk test`.
+Run the SDK tests with `pnpm --filter @agenttwin/sdk test`. With the local
+stack running (`make dev`), `make test-sdk-ts-live` sends a run through the
+collector, reads the trace back from the API (spans, hierarchy, redaction,
+the prompt hash the control plane registered for the version) and reports a
+delayed outcome that contradicts the agent's claim.

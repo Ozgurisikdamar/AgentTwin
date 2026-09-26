@@ -47,21 +47,21 @@ export class OutcomeReportError extends APIError {
 
 export interface ReportOutcomeOptions {
   /** API URL and key; from `AGENTTWIN_API_URL` / `AGENTTWIN_API_KEY` by default. */
-  readonly config?: Config;
-  readonly businessOutcome?: string;
-  readonly verified?: boolean;
+  readonly config?: Config | undefined;
+  readonly businessOutcome?: string | undefined;
+  readonly verified?: boolean | undefined;
   /** `external_callback` by default: the caller checked the outcome itself. */
-  readonly verificationSource?: VerificationSource;
+  readonly verificationSource?: VerificationSource | undefined;
   /** What the agent claimed; a contradicting verification is flagged. */
-  readonly claimedStatus?: OutcomeStatus;
-  readonly expectedState?: Readonly<Record<string, unknown>>;
-  readonly actualState?: Readonly<Record<string, unknown>>;
-  readonly notes?: string;
+  readonly claimedStatus?: OutcomeStatus | undefined;
+  readonly expectedState?: Readonly<Record<string, unknown>> | undefined;
+  readonly actualState?: Readonly<Record<string, unknown>> | undefined;
+  readonly notes?: string | undefined;
   /** Makes a retried report safe: the API replays the first answer. */
-  readonly idempotencyKey?: string;
-  readonly timeoutMs?: number;
+  readonly idempotencyKey?: string | undefined;
+  readonly timeoutMs?: number | undefined;
   /** For tests: the fetch implementation. */
-  readonly fetch?: typeof fetch;
+  readonly fetch?: typeof fetch | undefined;
 }
 
 const MAX_RESPONSE_BYTES = 1 << 20;

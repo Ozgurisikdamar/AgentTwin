@@ -78,7 +78,7 @@ export function parseManifest(doc: unknown): AgentManifest {
 
 export interface LoadManifestOptions {
   /** A YAML parser for `.yaml`/`.yml` files (e.g. `parse` of the `yaml` package). */
-  readonly parseYaml?: (text: string) => unknown;
+  readonly parseYaml?: ((text: string) => unknown) | undefined;
 }
 
 /** Loads a manifest file (`.json`; `.yaml`/`.yml` with `parseYaml`). */

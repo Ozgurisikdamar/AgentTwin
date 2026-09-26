@@ -23,8 +23,8 @@ export const STRATEGIES: readonly Strategy[] = ["mask", "hash", "drop"];
 export interface Rule {
   readonly kind: string;
   readonly pattern: RegExp;
-  readonly group?: number;
-  readonly valid?: (match: string) => boolean;
+  readonly group?: number | undefined;
+  readonly valid?: ((match: string) => boolean) | undefined;
 }
 
 const WS = "[\\t\\n\\f\\r ]"; // Go RE2 \s
@@ -100,16 +100,16 @@ const MAX_ROUNDS = 8;
 /** What the SDK redacts before any content leaves the process. */
 export interface RedactionConfig {
   /** `mask` (default), `hash` or `drop`. */
-  readonly strategy?: Strategy;
+  readonly strategy?: Strategy | undefined;
   /** Email, card and phone detection (secrets are always detected). Default true. */
-  readonly pii?: boolean;
+  readonly pii?: boolean | undefined;
   /** Extra regular expressions (JavaScript syntax), reported as kind `custom`. */
-  readonly customPatterns?: readonly string[];
+  readonly customPatterns?: readonly string[] | undefined;
   /**
    * Whole fields of structured values (tool arguments, results) to redact,
    * e.g. `$.customer.email` or `$.items[*].card_number`.
    */
-  readonly jsonPaths?: readonly string[];
+  readonly jsonPaths?: readonly string[] | undefined;
 }
 
 /** Custom patterns as rules (kind `custom`); throws SyntaxError on a bad pattern. */

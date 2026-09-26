@@ -57,7 +57,7 @@ def lookup_order(order_id: str) -> dict:
     return {"order_id": order_id, "status": "delivered", "total": 140.0}
 
 
-@tool_span(risk="WRITE_IRREVERSIBLE")  # the idempotency_key argument is recorded as a hash
+@tool_span(risk="WRITE_IRREVERSIBLE")  # the idempotency_key is recorded as a hash (see below)
 def refund_payment(order_id: str, amount: float, idempotency_key: str) -> dict:
     return {"refund_id": "RF-1", "status": "succeeded"}
 
@@ -101,6 +101,14 @@ with at.agent_run("support-refund-agent", "1.3.0", input=user_message, session_i
         call.set_result(result)
     run.outcome("SUCCESS", claimed="SUCCESS", business_outcome="REFUND_COMPLETED")
 ```
+
+### Idempotency keys
+
+A tool call records its idempotency key as a short hash
+(`agenttwin.tool.idempotency_key_hash`). With content capture on
+(`redacted` or `full`) the arguments are recorded too, and a key that is
+one of them travels with them; mask it there with a JSON path, e.g.
+`AGENTTWIN_REDACTION_JSON_PATHS=$.idempotency_key`.
 
 ### Outcomes: claimed vs verified
 

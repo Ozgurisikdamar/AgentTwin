@@ -155,6 +155,7 @@ describe("resilience", () => {
     };
     const c = client({ maxExportBatchSize: 4, scheduleDelayMs: 60_000 }, { exporter });
     emitRuns(c, 2, 1); // 4 spans: one full batch, no timer needed
+    expect(batches).toEqual([]); // never exported inside the application's end()
     await new Promise((r) => setTimeout(r, 20));
     expect(batches).toEqual([4]);
     emitRuns(c, 1, 0); // 1 span waits for the (long) schedule...
@@ -162,6 +163,9 @@ describe("resilience", () => {
     expect(batches).toEqual([4]);
     expect(await c.flush()).toBe(true); // ...or a flush
     expect(batches).toEqual([4, 1]);
+    emitRuns(c, 2, 1); // every later full batch leaves at once too
+    await new Promise((r) => setTimeout(r, 20));
+    expect(batches).toEqual([4, 1, 4]);
 
     const timed: number[] = [];
     const t = client(

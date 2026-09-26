@@ -157,33 +157,33 @@ function isPromiseLike(v: unknown): v is PromiseLike<unknown> {
 
 export interface AgentTwinOptions {
   /** Where spans go instead of the OTLP/HTTP exporter (tests, custom sinks). */
-  readonly exporter?: SpanExporter;
+  readonly exporter?: SpanExporter | undefined;
 }
 
 export interface AgentRunOptions {
   readonly agent: string;
-  readonly version?: string;
+  readonly version?: string | undefined;
   /** Informational: the API key determines the project server-side. */
-  readonly project?: string;
+  readonly project?: string | undefined;
   /** The user input; content, recorded only when the content mode allows (redacted). */
-  readonly input?: string;
+  readonly input?: string | undefined;
   /**
    * The request context the run acts in (tenant, customer, ...): content,
    * recorded only when the content mode allows and redacted like the input.
    * A production failure's scenario draft replays it (ADR-0032).
    */
-  readonly inputContext?: Readonly<Record<string, unknown>>;
-  readonly sessionId?: string;
-  readonly environment?: string;
-  readonly source?: Source;
-  readonly releaseId?: string;
-  readonly commitSha?: string;
-  readonly simulationRunId?: string;
-  readonly scenarioId?: string;
-  readonly agentId?: string;
+  readonly inputContext?: Readonly<Record<string, unknown>> | undefined;
+  readonly sessionId?: string | undefined;
+  readonly environment?: string | undefined;
+  readonly source?: Source | undefined;
+  readonly releaseId?: string | undefined;
+  readonly commitSha?: string | undefined;
+  readonly simulationRunId?: string | undefined;
+  readonly scenarioId?: string | undefined;
+  readonly agentId?: string | undefined;
   readonly attributes?: Readonly<Record<string, AttributeValue | null | undefined>>;
   /** A W3C `traceparent` to join (a request from an upstream service). */
-  readonly traceparent?: string;
+  readonly traceparent?: string | undefined;
 }
 
 /**
@@ -537,45 +537,45 @@ function childParent(owner: Span): ParentContext {
 }
 
 export interface ModelCallOptions {
-  readonly inputMessages?: readonly Readonly<Record<string, unknown>>[];
-  readonly systemInstructions?: string;
-  readonly temperature?: number;
-  readonly maxTokens?: number;
-  readonly promptHash?: string;
-  readonly promptVersion?: string;
+  readonly inputMessages?: readonly Readonly<Record<string, unknown>>[] | undefined;
+  readonly systemInstructions?: string | undefined;
+  readonly temperature?: number | undefined;
+  readonly maxTokens?: number | undefined;
+  readonly promptHash?: string | undefined;
+  readonly promptVersion?: string | undefined;
 }
 
 export interface ToolCallOptions {
-  readonly args?: Readonly<Record<string, unknown>>;
-  readonly risk?: RiskLevel | Lowercase<RiskLevel>;
-  readonly version?: string;
+  readonly args?: Readonly<Record<string, unknown>> | undefined;
+  readonly risk?: RiskLevel | Lowercase<RiskLevel> | undefined;
+  readonly version?: string | undefined;
   /** Recorded only as a short hash. */
-  readonly idempotencyKey?: string;
-  readonly attempt?: number;
-  readonly callId?: string;
+  readonly idempotencyKey?: string | undefined;
+  readonly attempt?: number | undefined;
+  readonly callId?: string | undefined;
 }
 
 export interface RetrievalOptions {
-  readonly query?: string;
+  readonly query?: string | undefined;
 }
 
 export interface PolicyDecisionOptions {
-  readonly policy?: string;
-  readonly version?: string;
-  readonly rule?: string;
-  readonly tool?: string;
-  readonly reason?: string;
+  readonly policy?: string | undefined;
+  readonly version?: string | undefined;
+  readonly rule?: string | undefined;
+  readonly tool?: string | undefined;
+  readonly reason?: string | undefined;
   /** The runtime gateway's record of the decision (ADR-0033). */
-  readonly decisionId?: string;
-  readonly approvalId?: string;
+  readonly decisionId?: string | undefined;
+  readonly approvalId?: string | undefined;
 }
 
 export interface OutcomeOptions {
-  readonly businessOutcome?: string;
-  readonly claimed?: OutcomeStatus;
-  readonly verified?: boolean;
-  readonly verificationSource?: VerificationSource;
-  readonly stateDiff?: Readonly<Record<string, unknown>>;
+  readonly businessOutcome?: string | undefined;
+  readonly claimed?: OutcomeStatus | undefined;
+  readonly verified?: boolean | undefined;
+  readonly verificationSource?: VerificationSource | undefined;
+  readonly stateDiff?: Readonly<Record<string, unknown>> | undefined;
 }
 
 type Callback<S, T> = (span: S) => T;
@@ -782,12 +782,12 @@ export class ModelCall extends Span {
   }
 
   recordResponse(response: {
-    readonly outputMessages?: readonly Readonly<Record<string, unknown>>[];
-    readonly inputTokens?: number;
-    readonly outputTokens?: number;
-    readonly finishReasons?: readonly string[];
-    readonly responseModel?: string;
-    readonly costUsd?: number;
+    readonly outputMessages?: readonly Readonly<Record<string, unknown>>[] | undefined;
+    readonly inputTokens?: number | undefined;
+    readonly outputTokens?: number | undefined;
+    readonly finishReasons?: readonly string[] | undefined;
+    readonly responseModel?: string | undefined;
+    readonly costUsd?: number | undefined;
   }): void {
     if (response.inputTokens !== undefined)
       this.setAttribute(A.GENAI_USAGE_INPUT_TOKENS, Math.trunc(response.inputTokens));
@@ -877,7 +877,7 @@ export class ToolCall extends Span {
   setError(
     status: Exclude<ToolResultStatus, "ok">,
     errorType?: string,
-    options: { httpStatus?: number } = {},
+    options: { readonly httpStatus?: number | undefined } = {},
   ): void {
     if ((status as string) === "ok" || !TOOL_RESULT_STATUSES.includes(status)) {
       throw new RangeError("setError requires a failure status");
@@ -976,20 +976,20 @@ export function outcome(status: OutcomeStatus, options: OutcomeOptions = {}): vo
 
 export interface ToolSpanOptions {
   /** The tool name; the function's name by default. */
-  readonly name?: string;
-  readonly risk?: RiskLevel | Lowercase<RiskLevel>;
-  readonly version?: string;
+  readonly name?: string | undefined;
+  readonly risk?: RiskLevel | Lowercase<RiskLevel> | undefined;
+  readonly version?: string | undefined;
   /**
    * Names for positional arguments, so they are recorded as
    * `{name: value}`. Without it, a single plain-object argument is recorded
    * as the arguments, and anything else as `{args: [...]}`.
    */
-  readonly argNames?: readonly string[];
+  readonly argNames?: readonly string[] | undefined;
   /** The argument holding the idempotency key (recorded as a hash only);
    * `idempotencyKey` or `idempotency_key` by default, null for none. */
-  readonly idempotencyKeyArg?: string | null;
+  readonly idempotencyKeyArg?: string | null | undefined;
   /** The client; the default client at call time otherwise. */
-  readonly client?: AgentTwin;
+  readonly client?: AgentTwin | undefined;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any function

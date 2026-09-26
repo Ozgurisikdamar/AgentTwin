@@ -13,7 +13,7 @@ tested software and is committed separately. Status is updated as work lands.
 | 5 | Release, gate rules, immutable evidence, CLI CI output, release UI | bad candidate BLOCKED | done |
 | 6 | Regression miner: features, embeddings, grouping, taxonomy, inbox, promotion | demo failure → regression case → auto-included in next gate | done |
 | 7 | Runtime gateway: CEL policies, approvals, idempotency, SSRF-safe proxy, audit | over-limit refund requires approval; tampered args rejected | done |
-| 8 | Tenant isolation, SSRF, redaction, chaos, load, security, E2E, docs, screenshots | Definition of Done checklist | pending |
+| 8 | Tenant isolation, SSRF, redaction, chaos, load, security, E2E, docs, screenshots | Definition of Done checklist | in progress |
 
 ## Phase 1 evidence (2026-09-24)
 
@@ -418,6 +418,37 @@ Found on the way:
   not: a used approval still counting down to its expiry, a sub-millisecond
   run shown as "0.00 ms", and `/decisions` filtered by a trace it did not
   show. All fixed, each with a test.
+
+## Phase 8 progress (2026-09-26)
+
+### TypeScript SDK (`packages/sdk-typescript`)
+
+The spec's "equivalent ergonomic API" for Node.js 20+, without runtime
+dependencies. Each piece with its tests and the mutations they catch:
+
+| Piece | Tests | Mutations caught |
+|---|---|---|
+| Configuration (the Python SDK's variables), canonical JSON and redaction (the gokit rules, strategies, custom patterns, JSON paths, truncation) | 65, and parity with the Go services: the shared fixtures plus 3,000 random texts in each of the four modes and 3,000 random JSON values run through the Go reference, byte for byte | canonical JSON 8 of 9 (the one left is equivalent), redaction 11 of 11 |
+| Tracing: agent runs, model calls, tool calls, retrievals, policy decisions and outcomes, wrapper and explicit styles, `start…` spans with `using`, context across `await`s (`AsyncLocalStorage`), W3C `traceparent` in and out, head sampling that follows the parent, the content policy, the attribute cap; attribute keys the same as the Python SDK's | 15 | 13 of 13, content policy 3 of 3 |
+| Export: a bounded queue, batches in the background (never inside the application's `end()`), one request in flight, retries on 429/502–504 and network errors, `flush`/`shutdown`, a flush when the process exits on its own, every span counted (`exported`, `failed`, `dropped`) | 10 (an exploding exporter, an unreachable collector, a stalled one, the wire format against a local HTTP server, the exit flush in a real process) | 7 of 7; three survivors over two rounds pointed at redundant code (a flush counter, a timer and an immediate cleared at shutdown that cannot be pending), now removed |
+| Delayed outcomes (`reportOutcome`, the trace-service's `RecordOutcomeRequest`, errors without the key) and the manifest helper (the prompt hash the control plane records, tool risks) | 7 (outcome enums and body held to the OpenAPI document; every demo manifest) | — |
+| End to end (`make test-sdk-ts-live`): a run through the collector, read back from the API — six spans in their hierarchy, the summary, the prompt hash equal to what the control plane registered for 1.2.4, content redacted, an idempotency key masked by a JSON path — then a verified outcome that contradicts the agent's claim, flagged | 1, against the running stack | — |
+| Overhead (`docs/benchmarks/sdk-overhead.md`): a tool span costs ≈ 15 µs at the median with content off, ≈ 30 µs redacted; a batch of 512 spans encodes in ≈ 3 ms off the calling path; a 50 ms collector never shows in a step's latency | 1 (bounds, and every span exported or counted as dropped) | — |
+
+Found on the way:
+
+* **A full batch was encoded inside the span's `end()`**, on the
+  application's path. It now starts on the next turn of the event loop; a
+  test checks nothing is exported before `end()` returns.
+* **The documented `promptHash: manifest.promptHash` did not compile** in a
+  project with `exactOptionalPropertyTypes` (the hash is `string |
+  undefined`). Every optional option now accepts `undefined`; the live test,
+  which type-checks with that setting, pins it.
+* **With content capture on, an idempotency key is one of the arguments**
+  and travels with them; both READMEs now say so and show the JSON path that
+  masks it (`$.idempotency_key`).
+* The Python manifest helper read only inline instructions; a manifest with
+  `promptRef` now gives its hash in both SDKs.
 
 ## Definition of Done tracking
 

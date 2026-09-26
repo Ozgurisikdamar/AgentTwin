@@ -484,6 +484,8 @@ make e2e        # Playwright tests against the running stack
 make test       # unit + integration (real PostgreSQL + RabbitMQ) + frontend tests
 make test-security  # every security test of spec §63, item by item (scripts/security-tests.yaml)
 make test-chaos     # every failure of spec §64 injected, item by item (scripts/chaos-tests.yaml)
+make chaos-drill    # breaks the running stack (RabbitMQ, PostgreSQL, the worker) and checks it recovers
+make load-test      # the k6 load test of spec §65, with end-to-end checks (docs/benchmarks/load-baseline.md)
 make lint       # formatters, linters and type checkers for Go, Python and TypeScript
 make down       # stop (keeps data) · make reset: wipe data and start again
 ```

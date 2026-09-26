@@ -121,11 +121,15 @@ services:
       - "127.0.0.1:${RABBITMQ_HOST_PORT:-5672}:5672"
       - "127.0.0.1:${RABBITMQ_UI_HOST_PORT:-15672}:15672"
     volumes: [rabbitmq:/var/lib/rabbitmq]
+    # Each check starts an Erlang VM (about 1 CPU second): every 2 s while
+    # the broker starts, then every 30 s (docs/benchmarks/load-baseline.md).
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
-      interval: 5s
+      start_period: 90s
+      start_interval: 2s
+      interval: 30s
       timeout: 10s
-      retries: 30
+      retries: 3
     restart: unless-stopped
 
   otel-collector:
@@ -308,11 +312,14 @@ services:
       # Production is not perfect: a small share of refunds time out after
       # the payment was applied (spec §52 "timeout after mutation").
       DEMO_TOOLS_FAULTS: ${DEMO_TOOLS_FAULTS:-refund_payment:timeout_after_mutation:0.08}
+    # A bare socket: urllib would import ssl and email on every check.
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=3)"]
-      interval: 3s
+      test: ["CMD", "python", "-c", "import socket, sys; s = socket.create_connection(('127.0.0.1', 8091), 3); s.sendall(b'GET /healthz HTTP/1.0\\r\\n\\r\\n'); sys.exit(s.recv(12)[9:12] != b'200')"]
+      start_period: 30s
+      start_interval: 1s
+      interval: 10s
       timeout: 4s
-      retries: 30
+      retries: 6
     <<: *hardening
 
   demo-agent:
@@ -332,11 +339,14 @@ services:
     depends_on:
       demo-tools: {condition: service_healthy}
       otel-collector: {condition: service_started}
+    # A bare socket: urllib would import ssl and email on every check.
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
-      interval: 3s
+      test: ["CMD", "python", "-c", "import socket, sys; s = socket.create_connection(('127.0.0.1', 8090), 3); s.sendall(b'GET /healthz HTTP/1.0\\r\\n\\r\\n'); sys.exit(s.recv(12)[9:12] != b'200')"]
+      start_period: 30s
+      start_interval: 1s
+      interval: 10s
       timeout: 4s
-      retries: 30
+      retries: 6
     <<: *hardening
 
   # `make seed` — registers the demo agent manifests, imports the tool

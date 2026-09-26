@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import aio_pika
+import aiormq
 import pytest
 
 from agenttwin_core.db import Migrator, connect, load_migrations, transaction
@@ -67,12 +68,18 @@ async def queue_depth(url: str, name: str) -> int:
 
 
 async def purge(url: str, *names: str) -> None:
+    """Empties the queues. One the broker does not have yet (a fresh broker,
+    before any consumer declared it) has nothing in it to purge."""
     conn = await aio_pika.connect(url)
     try:
-        ch = await conn.channel()
         for n in names:
-            q = await ch.get_queue(n, ensure=False)
+            ch = await conn.channel()
+            try:
+                q = await ch.declare_queue(n, passive=True)
+            except aiormq.exceptions.ChannelNotFoundEntity:
+                continue  # the broker closed that channel
             await q.purge()
+            await ch.close()
     finally:
         await conn.close()
 

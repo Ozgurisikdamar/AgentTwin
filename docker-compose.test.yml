@@ -12,4 +12,12 @@ services:
     image: rabbitmq:3.13-management-alpine
     environment: {RABBITMQ_DEFAULT_USER: agenttwin, RABBITMQ_DEFAULT_PASS: agenttwin-test}
     ports: ["127.0.0.1:5673:5672"]
-    healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"], interval: 3s, retries: 40}
+    # Each check starts an Erlang VM (about 1 CPU second): often while the
+    # broker starts, rarely after (docs/benchmarks/load-baseline.md).
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      start_period: 120s
+      start_interval: 2s
+      interval: 60s
+      timeout: 10s
+      retries: 3

@@ -16,8 +16,6 @@ import asyncio
 import contextlib
 import os
 import sys
-import urllib.error
-import urllib.request
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +29,7 @@ from agenttwin_core.config import ConfigError, Environment, Loader
 from agenttwin_core.db import Migrator, Pool, connect, load_migrations
 from agenttwin_core.events import Broker, OutboxRelay, outbox_backlog
 from agenttwin_core.logx import Log, get_logger, setup_logging
+from agenttwin_core.probe import healthcheck
 from agenttwin_core.telemetry import Metrics, setup_metrics, setup_tracing
 from agenttwin_core.web import Health, build_app
 
@@ -230,30 +229,6 @@ async def _migrate(spec: Spec, cfg: ServiceConfig, log: Log, args: Sequence[str]
             raise ValueError(f"unknown migrate action {action!r} (up | down N | status)")
     finally:
         await pool.close()
-
-
-def healthcheck(port_env: str | None, default_port: int, args: Sequence[str]) -> int:
-    """Probes the local process (readiness by default); returns the exit code."""
-    port = default_port
-    if port_env:
-        if not port_env.isdigit() or not 1 <= int(port_env) <= 65535:
-            print(f"healthcheck: invalid PORT {port_env!r}", file=sys.stderr)  # noqa: T201
-            return 2
-        port = int(port_env)
-    path = "/health/ready"
-    if args:
-        if args[0] == "live":
-            path = "/health/live"
-        elif args[0] != "ready":
-            print("usage: healthcheck [live|ready]", file=sys.stderr)  # noqa: T201
-            return 2
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # never via a proxy
-    try:
-        with opener.open(f"http://127.0.0.1:{port}{path}", timeout=3) as resp:
-            return 0 if resp.status == 200 else 1
-    except (urllib.error.URLError, OSError) as err:
-        print(f"healthcheck: {err}", file=sys.stderr)  # noqa: T201
-        return 1
 
 
 def main(spec: Spec, argv: Sequence[str] | None = None) -> int:

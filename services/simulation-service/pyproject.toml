@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
-simulation-service = "agenttwin_simulation.main:main"
+simulation-service = "agenttwin_simulation.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]

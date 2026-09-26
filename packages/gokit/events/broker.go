@@ -39,6 +39,18 @@ func LoadTopology() (Topology, error) {
 // attemptHeader counts deliveries of a message to its consumer queue.
 const attemptHeader = "x-agenttwin-attempt"
 
+// dialTimeout bounds one connection attempt, handshake included. amqp091's
+// default is 30 s: during a network partition a readiness probe or a publish
+// would wait that long for an answer that is not coming.
+const dialTimeout = 5 * time.Second
+
+// Consumers reconnect after this long, doubling up to consumeBackoffMax while
+// RabbitMQ stays unreachable.
+const (
+	consumeBackoffMin = 500 * time.Millisecond
+	consumeBackoffMax = 10 * time.Second
+)
+
 // Broker owns one AMQP connection with a confirm-mode publishing channel and
 // reconnects when the connection drops.
 type Broker struct {
@@ -47,7 +59,12 @@ type Broker struct {
 	topology Topology
 	validate *Validator
 
-	mu     sync.Mutex
+	// dialing admits one reconnect at a time: concurrent callers (publishes,
+	// readiness probes) wait for it instead of each opening a connection that
+	// the last one to finish would orphan.
+	dialing chan struct{}
+
+	mu     sync.Mutex // guards conn, pubCh and closed; never held on the network
 	conn   *amqp.Connection
 	pubCh  *amqp.Channel
 	closed bool
@@ -65,10 +82,13 @@ func Dial(ctx context.Context, url string, log *slog.Logger) (*Broker, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &Broker{url: url, log: log, topology: topo, validate: v}
+	b := &Broker{url: url, log: log, topology: topo, validate: v, dialing: make(chan struct{}, 1)}
 	backoff := 250 * time.Millisecond
 	for attempt := 1; ; attempt++ {
-		if err = b.connect(); err == nil {
+		var conn *amqp.Connection
+		var ch *amqp.Channel
+		if conn, ch, err = b.open(ctx); err == nil {
+			b.conn, b.pubCh = conn, ch
 			return b, nil
 		}
 		if attempt >= 15 {
@@ -88,28 +108,46 @@ func Dial(ctx context.Context, url string, log *slog.Logger) (*Broker, error) {
 	}
 }
 
-func (b *Broker) connect() error {
-	conn, err := amqp.DialConfig(b.url, amqp.Config{Heartbeat: 10 * time.Second, Properties: amqp.Table{"connection_name": "agenttwin"}})
+// dialAMQP opens a connection, giving up after dialTimeout or when ctx's
+// deadline passes, whichever comes first.
+func dialAMQP(ctx context.Context, url string) (*amqp.Connection, error) {
+	timeout := dialTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = min(timeout, time.Until(deadline))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if timeout <= 0 {
+		return nil, context.DeadlineExceeded
+	}
+	return amqp.DialConfig(url, amqp.Config{
+		Heartbeat:  10 * time.Second,
+		Dial:       amqp.DefaultDial(timeout),
+		Properties: amqp.Table{"connection_name": "agenttwin"},
+	})
+}
+
+// open connects, declares the topology and returns a confirm-mode channel.
+func (b *Broker) open(ctx context.Context) (*amqp.Connection, *amqp.Channel, error) {
+	conn, err := dialAMQP(ctx, b.url)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	ch, err := conn.Channel()
 	if err != nil {
 		_ = conn.Close()
-		return err
+		return nil, nil, err
 	}
 	if err := DeclareTopology(ch, b.topology); err != nil {
 		_ = conn.Close()
-		return err
+		return nil, nil, err
 	}
 	if err := ch.Confirm(false); err != nil {
 		_ = conn.Close()
-		return fmt.Errorf("enable confirms: %w", err)
+		return nil, nil, fmt.Errorf("enable confirms: %w", err)
 	}
-	b.mu.Lock()
-	b.conn, b.pubCh = conn, ch
-	b.mu.Unlock()
-	return nil
+	return conn, ch, nil
 }
 
 // DeclareTopology declares the exchange, every consumer queue, its retry queue
@@ -148,21 +186,50 @@ func DeclareTopology(ch *amqp.Channel, t Topology) error {
 	return nil
 }
 
-func (b *Broker) channel() (*amqp.Channel, error) {
+// errClosed is returned once Close has been called.
+var errClosed = errors.New("broker closed")
+
+// current returns the publishing channel when it is usable, errClosed after
+// Close, and nil, nil when the connection must be reopened.
+func (b *Broker) current() (*amqp.Channel, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return nil, errors.New("broker closed")
+		return nil, errClosed
 	}
 	if b.conn == nil || b.conn.IsClosed() || b.pubCh == nil || b.pubCh.IsClosed() {
-		b.mu.Unlock()
-		err := b.connect()
-		b.mu.Lock()
-		if err != nil {
-			return nil, fmt.Errorf("reconnect rabbitmq: %w", err)
-		}
+		return nil, nil
 	}
 	return b.pubCh, nil
+}
+
+// channel returns a usable publishing channel, reconnecting if the connection
+// dropped. It waits no longer than ctx allows.
+func (b *Broker) channel(ctx context.Context) (*amqp.Channel, error) {
+	if ch, err := b.current(); ch != nil || err != nil {
+		return ch, err
+	}
+	select {
+	case b.dialing <- struct{}{}:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("reconnect rabbitmq: %w", ctx.Err())
+	}
+	defer func() { <-b.dialing }()
+	if ch, err := b.current(); ch != nil || err != nil {
+		return ch, err // reconnected by the caller we waited for
+	}
+	conn, ch, err := b.open(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("reconnect rabbitmq: %w", err)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		_ = conn.Close()
+		return nil, errClosed
+	}
+	b.conn, b.pubCh = conn, ch
+	return ch, nil
 }
 
 // Publish validates env and publishes it persistently, waiting for the broker
@@ -179,12 +246,12 @@ func (b *Broker) Publish(ctx context.Context, env Envelope) error {
 }
 
 func (b *Broker) publishRaw(ctx context.Context, exchange, key, msgID string, body []byte, headers amqp.Table) error {
-	ch, err := b.channel()
+	ch, err := b.channel(ctx)
 	if err != nil {
 		return err
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	// A channel serializes its own publishes and numbers their confirms;
+	// waiting for one confirm does not hold up the others.
 	dc, err := ch.PublishWithDeferredConfirmWithContext(ctx, exchange, key, false, false, amqp.Publishing{
 		ContentType:  "application/json",
 		DeliveryMode: amqp.Persistent,
@@ -208,9 +275,10 @@ func (b *Broker) publishRaw(ctx context.Context, exchange, key, msgID string, bo
 	return nil
 }
 
-// Ping reports whether the connection is usable (readiness).
-func (b *Broker) Ping(context.Context) error {
-	_, err := b.channel()
+// Ping reports whether the connection is usable (readiness), reconnecting
+// within ctx if it dropped.
+func (b *Broker) Ping(ctx context.Context) error {
+	_, err := b.channel(ctx)
 	return err
 }
 
@@ -250,45 +318,56 @@ func (b *Broker) Consume(ctx context.Context, cfg ConsumerConfig, handler Handle
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 60 * time.Second
 	}
-	backoff := 500 * time.Millisecond
+	backoff := consumeBackoffMin
 	for {
-		err := b.consumeOnce(ctx, cfg, handler)
+		consumed, err := b.consumeOnce(ctx, cfg, handler)
 		if ctx.Err() != nil {
 			return nil
 		}
+		var wait time.Duration
+		wait, backoff = reconnectDelay(backoff, consumed)
 		if b.log != nil {
-			b.log.Warn("consumer stopped; reconnecting", "queue", cfg.Queue, "error", fmt.Sprint(err))
+			b.log.Warn("consumer stopped; reconnecting", "queue", cfg.Queue, "in", wait.String(), "error", fmt.Sprint(err))
 		}
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(backoff):
-		}
-		if backoff < 10*time.Second {
-			backoff *= 2
+		case <-time.After(wait):
 		}
 	}
 }
 
-func (b *Broker) consumeOnce(ctx context.Context, cfg ConsumerConfig, handler Handler) error {
-	conn, err := amqp.Dial(b.url)
+// reconnectDelay returns how long a consumer waits before reconnecting and
+// the delay after that. A consumer that was consuming starts over from the
+// minimum: an outage last week must not slow the recovery from this one.
+func reconnectDelay(backoff time.Duration, consumed bool) (wait, next time.Duration) {
+	if consumed {
+		backoff = consumeBackoffMin
+	}
+	return backoff, min(backoff*2, consumeBackoffMax)
+}
+
+// consumeOnce consumes until the connection drops or ctx ends. consumed
+// reports whether it got as far as consuming.
+func (b *Broker) consumeOnce(ctx context.Context, cfg ConsumerConfig, handler Handler) (consumed bool, err error) {
+	conn, err := dialAMQP(ctx, b.url)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = conn.Close() }()
 	ch, err := conn.Channel()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := DeclareTopology(ch, b.topology); err != nil {
-		return err
+		return false, err
 	}
 	if err := ch.Qos(cfg.Concurrency, 0, false); err != nil {
-		return err
+		return false, err
 	}
 	deliveries, err := ch.ConsumeWithContext(ctx, cfg.Queue, "", false, false, false, false, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	closed := conn.NotifyClose(make(chan *amqp.Error, 1))
 	sem := make(chan struct{}, cfg.Concurrency)
@@ -297,12 +376,12 @@ func (b *Broker) consumeOnce(ctx context.Context, cfg ConsumerConfig, handler Ha
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return true, nil
 		case e := <-closed:
-			return fmt.Errorf("connection closed: %w", e)
+			return true, fmt.Errorf("connection closed: %w", e)
 		case d, ok := <-deliveries:
 			if !ok {
-				return errors.New("delivery channel closed")
+				return true, errors.New("delivery channel closed")
 			}
 			sem <- struct{}{}
 			wg.Add(1)

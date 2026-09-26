@@ -41,8 +41,9 @@ const attemptHeader = "x-agenttwin-attempt"
 
 // dialTimeout bounds one connection attempt, handshake included. amqp091's
 // default is 30 s: during a network partition a readiness probe or a publish
-// would wait that long for an answer that is not coming.
-const dialTimeout = 5 * time.Second
+// would wait that long for an answer that is not coming. A variable so chaos
+// tests can shorten it.
+var dialTimeout = 5 * time.Second
 
 // Consumers reconnect after this long, doubling up to consumeBackoffMax while
 // RabbitMQ stays unreachable.

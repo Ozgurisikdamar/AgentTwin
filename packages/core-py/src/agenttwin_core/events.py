@@ -42,6 +42,10 @@ __all__ = [
 ]
 
 ATTEMPT_HEADER = "x-agenttwin-attempt"
+# Bounds one connection attempt, handshake included. Without it a consumer
+# reconnecting during a network partition waits forever on a connection that
+# was accepted but is never answered (gokit's dialTimeout).
+CONNECT_TIMEOUT_S = 5.0
 _log = get_logger("agenttwin.events")
 
 
@@ -267,7 +271,9 @@ class Broker:
         for attempt in range(1, attempts + 1):
             try:
                 self._conn = await aio_pika.connect_robust(
-                    self.url, client_properties={"connection_name": self.connection_name}, timeout=10
+                    self.url,
+                    client_properties={"connection_name": self.connection_name},
+                    timeout=CONNECT_TIMEOUT_S,
                 )
                 self._channel = await self._conn.channel(publisher_confirms=True)
                 await declare_topology(self._channel, self.topology)
@@ -349,7 +355,9 @@ class Broker:
         self, queue: str, handler: Handler, concurrency: int, timeout_s: float, stop: asyncio.Event
     ) -> None:
         conn = await aio_pika.connect(
-            self.url, client_properties={"connection_name": self.connection_name + "-consumer"}
+            self.url,
+            client_properties={"connection_name": self.connection_name + "-consumer"},
+            timeout=CONNECT_TIMEOUT_S,
         )
         try:
             channel = await conn.channel()

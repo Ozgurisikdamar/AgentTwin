@@ -311,3 +311,53 @@ func TestAClosedBrokerStaysClosed(t *testing.T) {
 		t.Fatalf("a closed broker dialed RabbitMQ %d times", n)
 	}
 }
+
+func TestAConsumerKeepsTryingThroughAPartition(t *testing.T) {
+	amqpURL := testutil.AMQPURL(t)
+	proxy := testutil.NewCutProxy(t, hostPort(t, amqpURL))
+	saved := dialTimeout
+	dialTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { dialTimeout = saved })
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	const q = "simulation-service.events"
+	purge(t, amqpURL, q, q+".retry", q+".dlq")
+
+	// Consume only, through the proxy: every dial it sees is the consumer's.
+	topo, err := LoadTopology()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := DefaultValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumer := &Broker{url: proxy.URL(t, amqpURL), topology: topo, validate: v, dialing: make(chan struct{}, 1)}
+	got := &received{seen: map[string]int{}}
+	cctx, stop := context.WithCancel(ctx)
+	consumed := make(chan struct{})
+	go func() {
+		defer close(consumed)
+		_ = consumer.Consume(cctx, ConsumerConfig{Queue: q, Concurrency: 2, Timeout: 5 * time.Second}, got.handle)
+	}()
+	defer func() { stop(); <-consumed }()
+	eventually(t, 10*time.Second, "the consumer to connect", func() bool { return proxy.Open() == 1 })
+
+	// A partition accepts connections and never answers them: each attempt
+	// gives up and the next one follows, instead of the first waiting forever.
+	proxy.Silence()
+	dials := proxy.Accepted()
+	eventually(t, 10*time.Second, "the consumer to retry through the partition", func() bool { return proxy.Accepted() >= dials+3 })
+
+	proxy.Restore()
+	publisher, err := Dial(ctx, amqpURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = publisher.Close() }()
+	env, _ := New("simulation.run_requested.v1", "chaos", orgID, "", "c", "", map[string]any{"run_id": ids.New()})
+	if err := publisher.Publish(ctx, env); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 30*time.Second, "the event published after the partition", func() bool { return got.count(env.ID) == 1 })
+}

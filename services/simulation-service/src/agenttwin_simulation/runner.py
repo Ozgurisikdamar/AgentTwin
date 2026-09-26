@@ -26,7 +26,7 @@ import time
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from agenttwin_core.db import Conn, transaction
+from agenttwin_core.db import Conn, is_unavailable, transaction
 from agenttwin_core.evaluators import EvaluationResult, Registry, case_verdict, evaluate_all, skip_all
 from agenttwin_core.events import Envelope, claim_event, write_outbox
 from agenttwin_core.ids import new_id
@@ -305,6 +305,13 @@ class Worker:
         try:
             await self._execute(run, lost)
         except Exception as err:
+            if is_unavailable(err):
+                # Not the run's fault, and nothing can be recorded now: the
+                # run keeps its state, its lease expires, and the janitor puts
+                # it back in the queue once the database answers (at most
+                # max_run_attempts times).
+                self.log.warn("simulation run interrupted: the database is unavailable", run_id=run_id)
+                return
             self.log.exception("simulation run failed", run_id=run_id, error=str(err))
             await self._finish_run(run_id, JobStatus.FAILED, f"internal error ({type(err).__name__})")
         finally:

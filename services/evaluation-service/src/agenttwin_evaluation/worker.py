@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from agenttwin_core.db import Conn, transaction
+from agenttwin_core.db import Conn, is_unavailable, transaction
 from agenttwin_core.evaluators import ToolCall
 from agenttwin_core.events import Envelope, Permanent, write_outbox
 from agenttwin_core.ids import new_id, valid_uuid
@@ -385,6 +385,19 @@ class EvalWorker:
         except UpstreamError as err:
             # The lease expires and the run is retried from the queue.
             self.log.warn("evaluation interrupted", eval_run_id=run_id, error=str(err))
+        except Exception as err:
+            if is_unavailable(err):
+                # Nothing was recorded; the lease expires and the run is
+                # evaluated again once the database answers.
+                self.log.warn("evaluation interrupted: the database is unavailable", eval_run_id=run_id)
+            else:
+                # A fault in the evaluation itself does not go away when
+                # retried; retrying would spend judge calls and hold the
+                # release gate for nothing. The run fails now and says why.
+                self.log.exception("evaluation failed", eval_run_id=run_id, error=type(err).__name__)
+                await self.finish(
+                    taken, JobStatus.FAILED, f"internal error ({type(err).__name__})", held=True
+                )
         finally:
             renewing.cancel()
             with suppress(asyncio.CancelledError):

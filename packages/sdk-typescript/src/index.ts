@@ -69,3 +69,11 @@ export {
   type VerificationSource,
 } from "./tracing.js";
 export { SDK_VERSION } from "./version.js";
+export {
+  loadManifest,
+  MANIFEST_API_VERSION,
+  parseManifest,
+  type AgentManifest,
+  type LoadManifestOptions,
+} from "./manifest.js";
+export { APIError, OutcomeReportError, reportOutcome, type ReportOutcomeOptions } from "./outcomes.js";

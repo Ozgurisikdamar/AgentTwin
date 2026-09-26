@@ -31,11 +31,16 @@ class AgentManifest:
     model_name: str | None
     tool_risks: Mapping[str, str] = field(default_factory=dict)
     raw: Mapping[str, Any] = field(default_factory=dict)
+    #: ``spec.promptRef.sha256``: the prompt lives outside the manifest.
+    prompt_ref_sha256: str | None = None
 
     @property
-    def prompt_hash(self) -> str:
-        """SHA-256 of the instruction text (same as the control plane)."""
-        return sha256_hex(self.instructions)
+    def prompt_hash(self) -> str | None:
+        """SHA-256 of the instruction text, or the ``promptRef`` hash when the
+        prompt lives elsewhere: what the control plane records."""
+        if self.instructions:
+            return sha256_hex(self.instructions)
+        return self.prompt_ref_sha256
 
     def risk_of(self, tool: str) -> str | None:
         return self.tool_risks.get(tool)
@@ -77,6 +82,8 @@ def parse_manifest(doc: Any) -> AgentManifest:
         if isinstance(level, str):
             risks[tool["name"]] = level.upper()
     model = spec.get("model") or {}
+    ref = spec.get("promptRef")
+    ref_sha = ref.get("sha256") if isinstance(ref, Mapping) else None
     return AgentManifest(
         name=name,
         version=version,
@@ -85,4 +92,5 @@ def parse_manifest(doc: Any) -> AgentManifest:
         model_name=model.get("name"),
         tool_risks=risks,
         raw=doc,
+        prompt_ref_sha256=ref_sha if isinstance(ref_sha, str) else None,
     )

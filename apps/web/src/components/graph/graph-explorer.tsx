@@ -101,7 +101,7 @@ function RelationshipTable({ view }: { view: GraphView }) {
       <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900">
         All {rows.length} relationships shown, as a table
       </summary>
-      <div className="overflow-x-auto border-t border-slate-100">
+      <div className="relative overflow-x-auto border-t border-slate-100">
         <table className="w-full min-w-[40rem] text-left text-sm" data-testid="relationship-table">
           <caption className="sr-only">Relationships between the shown components</caption>
           <thead className="text-xs uppercase tracking-wide text-slate-500">
@@ -460,7 +460,7 @@ export function GraphExplorer() {
                     checked={kinds.includes(k)}
                     onChange={(e) => toggleKind(k, e.target.checked)}
                   />
-                  {kindLabel(k)} <span className="text-slate-400">{totals?.components[k] ?? 0}</span>
+                  {kindLabel(k)} <span className="text-slate-500">{totals?.components[k] ?? 0}</span>
                 </label>
               ))}
             </div>
@@ -504,7 +504,7 @@ export function GraphExplorer() {
               depth.
             </p>
           ) : null}
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div
               className="h-[36rem] overflow-hidden rounded-lg border border-slate-200 bg-white xl:col-span-2"
               data-testid="graph-canvas"

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta, tzinfo
 from types import SimpleNamespace
 from typing import Any
 
@@ -11,13 +13,16 @@ import pytest
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from agenttwin import AgentTwin, Config
+from support_refund_agent import world as world_module
 from support_refund_agent.agent import Agent, ManifestStore, RunRequest, scripted_model_factory
 from support_refund_agent.anthropic_model import AnthropicModel, to_anthropic_messages
 from support_refund_agent.models import ToolCallRequest, ToolSpec
 from support_refund_agent.server import AgentServer
 from support_refund_agent.tools_server import Fault, ToolsServer
 from support_refund_agent.traffic import TrafficGenerator
-from support_refund_agent.world import INTERNAL_API_KEY
+from support_refund_agent.world import INTERNAL_API_KEY, default_world
+
+ORDER_ID = re.compile(r"ORD-\d{3,}")
 
 
 @pytest.fixture
@@ -184,6 +189,37 @@ def test_tools_admin_endpoints_require_token(stack: Any) -> None:
         token="admin-secret",
     )
     assert code == 400
+
+
+class _Clock(datetime):
+    """``datetime`` with a clock the test moves."""
+
+    current = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
+
+    @classmethod
+    def now(cls, tz: tzinfo | None = None) -> datetime:  # type: ignore[override]
+        return cls.current
+
+
+def test_orders_created_after_a_restart_get_new_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The runtime gateway remembers refunds by order number, in PostgreSQL;
+    a restarted tools server handing out an earlier number turned a new refund
+    into a replay of an old one."""
+    monkeypatch.setattr(world_module, "datetime", _Clock)
+    before = default_world()
+    earlier = [before.create_order("demo-co", "CUS-100", 150.0)["order_id"] for _ in range(5)]
+    assert len(set(earlier)) == 5
+
+    _Clock.current += timedelta(seconds=1)
+    after = default_world()
+    later = after.create_order("demo-co", "CUS-100", 150.0)["order_id"]
+    assert all(int(later[4:]) > int(e[4:]) for e in earlier)
+    # Still an order number the agent reads from a message, and short.
+    assert ORDER_ID.fullmatch(later) and len(later[4:]) <= 10
+
+    # A number is never one the world already has.
+    after.orders[f"ORD-{int(later[4:]) + 1}"] = dict(after.orders[later])
+    assert after.create_order("demo-co", "CUS-100", 1.0)["order_id"] == f"ORD-{int(later[4:]) + 2}"
 
 
 def test_orders_can_be_exempted_from_injected_faults() -> None:

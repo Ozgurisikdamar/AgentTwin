@@ -207,7 +207,7 @@ export function NewEvaluation() {
       {loading ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <Card>
             <CardHeader>
               <CardTitle>Versions</CardTitle>
@@ -353,7 +353,7 @@ export function NewEvaluation() {
                   .
                 </EmptyState>
               ) : (
-                <CardContent className="grid gap-3 sm:grid-cols-2">
+                <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <Label htmlFor="eval-new-dataset">Dataset</Label>
                     <Select

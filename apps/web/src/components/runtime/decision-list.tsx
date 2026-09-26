@@ -215,7 +215,7 @@ export function DecisionList() {
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[64rem] text-left text-sm">
                 <caption className="sr-only">Gateway decisions, newest first</caption>
                 <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">

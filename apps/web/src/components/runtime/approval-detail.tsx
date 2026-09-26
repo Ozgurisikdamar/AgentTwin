@@ -128,26 +128,28 @@ function ExactAction({ approval: a }: { approval: Approval }) {
         {rows.length === 0 ? (
           <p className="text-sm text-slate-600">No arguments.</p>
         ) : (
-          <table className="w-full text-left text-sm" aria-label="Arguments">
-            <thead className="text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th scope="col" className="py-1 pr-4 font-medium">
-                  Argument
-                </th>
-                <th scope="col" className="py-1 font-medium">
-                  Value
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((r) => (
-                <tr key={r.path} data-testid="argument-row">
-                  <td className="py-1.5 pr-4 font-mono text-xs text-slate-700">{r.path}</td>
-                  <td className="py-1.5 font-mono text-xs text-slate-900">{r.value}</td>
+          <div className="relative overflow-x-auto">
+            <table className="w-full text-left text-sm" aria-label="Arguments">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th scope="col" className="py-1 pr-4 font-medium">
+                    Argument
+                  </th>
+                  <th scope="col" className="py-1 font-medium">
+                    Value
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r) => (
+                  <tr key={r.path} data-testid="argument-row">
+                    <td className="py-1.5 pr-4 font-mono text-xs text-slate-700">{r.path}</td>
+                    <td className="py-1.5 font-mono text-xs text-slate-900">{r.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <KeyValue
           className="text-xs"
@@ -308,7 +310,7 @@ function Attempts({ detail }: { detail: ApprovalDetailData }) {
           Once approved, the agent claims a single-use token and repeats this exact action with it.
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[48rem] text-left text-sm">
             <caption className="sr-only">Uses of the approval, oldest first</caption>
             <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -448,12 +450,12 @@ export function ApprovalDetail({ approvalId }: { approvalId: string }) {
           Your role cannot decide approval requests.
         </div>
       ) : null}
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ExactAction approval={a} />
         <Why approval={a} policyId={policyId} />
       </div>
       <Attempts detail={a} />
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {a.decision ? <DecisionCard title="The decision that asked" decision={a.decision} /> : null}
         {a.used_decision ? <DecisionCard title="The approved run" decision={a.used_decision} /> : null}
       </div>

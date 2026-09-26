@@ -27,6 +27,7 @@ import {
 } from "@/lib/graph";
 import { humanize } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/shell/theme";
 
 type ComponentNodeData = {
   component: GraphComponent;
@@ -97,7 +98,7 @@ function ComponentNodeView({ data }: NodeProps<ComponentNode>) {
         className={handle}
         isConnectable={false}
       />
-      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500">
+      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-600">
         {kindLabel(c.kind)}
         {risk ? (
           <span
@@ -119,7 +120,12 @@ function ComponentNodeView({ data }: NodeProps<ComponentNode>) {
 
 const NODE_TYPES = { component: ComponentNodeView };
 
-const EDGE_STROKE = { observed: "#059669", declared: "#64748b", inferred: "#d97706" } as const;
+// Palette variables, so the edges follow the theme (palette.css).
+const EDGE_STROKE = {
+  observed: "var(--color-emerald-600)",
+  declared: "var(--color-slate-500)",
+  inferred: "var(--color-amber-600)",
+} as const;
 
 export interface GraphCanvasProps {
   view: GraphView;
@@ -203,11 +209,13 @@ export function toFlow(
  */
 export default function GraphCanvas({ view, selectedId, onSelect, impact }: GraphCanvasProps) {
   const { nodes, edges } = useMemo(() => toFlow(view, selectedId, impact), [view, selectedId, impact]);
+  const { resolved } = useTheme();
 
   return (
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      colorMode={resolved}
       nodeTypes={NODE_TYPES}
       onNodeClick={(_e, node) => onSelect(node.id)}
       nodesDraggable={false}

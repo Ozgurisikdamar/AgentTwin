@@ -44,7 +44,7 @@ function SummaryCard({ trace }: { trace: Trace }) {
           )}
         </div>
       </CardHeader>
-      <CardContent className="grid gap-6 lg:grid-cols-2">
+      <CardContent className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <KeyValue
           items={[
             {
@@ -133,7 +133,7 @@ function SpanList({
 }) {
   if (spans.length === 0) return <p className="px-1 py-3 text-sm text-slate-500">{empty}</p>;
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead className="text-xs uppercase tracking-wide text-slate-500">
           <tr>
@@ -270,7 +270,7 @@ export function TraceDetail({ traceId, projectId }: { traceId: string; projectId
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <OutcomeCard trace={trace} outcome={outcome} spans={spans} />
         <SummaryCard trace={trace} />
       </div>
@@ -282,8 +282,8 @@ export function TraceDetail({ traceId, projectId }: { traceId: string; projectId
             {spans.length} spans over {formatDuration(waterfall.totalMs)}
           </span>
         </CardHeader>
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="min-w-0 overflow-x-auto border-slate-100 xl:border-r">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="min-w-0 relative overflow-x-auto border-slate-100 xl:border-r">
             <WaterfallView
               waterfall={waterfall}
               selected={selected?.span.span_id ?? null}

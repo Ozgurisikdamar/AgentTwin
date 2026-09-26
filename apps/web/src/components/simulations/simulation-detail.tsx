@@ -46,7 +46,7 @@ function useTicker(active: boolean): Date {
 function CasesTable({ run, cases }: { run: SimulationRun; cases: SimulationCase[] }) {
   if (cases.length === 0) return <EmptyState title="This run has no scenarios" />;
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[52rem] text-left text-sm">
         <caption className="sr-only">Scenarios of this run, failures first</caption>
         <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -245,7 +245,7 @@ export function SimulationDetail({ runId }: { runId: string }) {
         <ErrorState error={{ message: `The run did not finish: ${r.error}`, code: "RUN_FAILED" }} />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader>
             <CardTitle>Result</CardTitle>

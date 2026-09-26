@@ -49,7 +49,7 @@ function ChangeSetRow({ cs, now, meUserId }: { cs: ChangeSetSummary; now: Date; 
           <Badge tone="brand">v{cs.candidate.version}</Badge>
         </div>
       </td>
-      <td className="px-3 py-2.5 text-slate-800">{cs.title || <span className="text-slate-400">—</span>}</td>
+      <td className="px-3 py-2.5 text-slate-800">{cs.title || <span className="text-slate-500">—</span>}</td>
       <td className="px-3 py-2.5">
         <span className="text-slate-800">{changeCountsLine(cs.summary)}</span>
         {cs.summary.breaking > 0 ? (
@@ -343,7 +343,7 @@ export function ChangeSetList() {
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[48rem] text-left text-sm">
                 <caption className="sr-only">Change sets, newest first</caption>
                 <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">

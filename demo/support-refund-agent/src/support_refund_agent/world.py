@@ -36,6 +36,24 @@ class ToolError(Exception):
         self.retry_after = retry_after
 
 
+_ORDER_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def _order_number_base() -> int:
+    """Where this process starts numbering the orders it creates.
+
+    The world lives in memory, but what the agent did with an order outlives
+    it: the runtime gateway keeps idempotency records in PostgreSQL, keyed by
+    what the agent sends (``refund-ORD-3002-150.00``). An order number reused
+    after a restart made a new refund look like a retry of an old one, which
+    the gateway rightly replayed instead of running. Counting tenths of a
+    second since 2026 puts every restart past the numbers of the earlier ones
+    (unless a process created more than ten orders a second over its whole
+    life) and keeps the numbers short enough to read.
+    """
+    return int((datetime.now(UTC) - _ORDER_EPOCH).total_seconds() * 10)
+
+
 @dataclass
 class World:
     """In-memory state. Thread-safe; ``snapshot`` returns a deep copy."""
@@ -48,7 +66,7 @@ class World:
     escalations: list[dict[str, Any]] = field(default_factory=list)
     kb: list[dict[str, str]] = field(default_factory=list)
     _idempotency: dict[str, dict[str, Any]] = field(default_factory=dict)
-    _order_seq: int = 3000
+    _order_seq: int = field(default_factory=_order_number_base)
     _lock: threading.RLock = field(default_factory=threading.RLock)
 
     # -- helpers ------------------------------------------------------------
@@ -196,6 +214,8 @@ class World:
         with self._lock:
             self._customer(tenant, customer_id)
             self._order_seq += 1
+            while f"ORD-{self._order_seq}" in self.orders:
+                self._order_seq += 1
             oid = f"ORD-{self._order_seq}"
             self.orders[oid] = {
                 "order_id": oid,

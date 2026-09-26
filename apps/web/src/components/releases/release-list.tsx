@@ -34,7 +34,7 @@ import { Delta, GateOutcomeBadge } from "./gate-badge";
 const PAGE_SIZE = 25;
 
 function Dash() {
-  return <span className="text-slate-400">—</span>;
+  return <span className="text-slate-500">—</span>;
 }
 
 /** One release as the list shows it (spec §41.2). */
@@ -387,7 +387,7 @@ export function ReleaseList() {
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[72rem] text-left text-sm">
                 <caption className="sr-only">Releases, newest first</caption>
                 <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">

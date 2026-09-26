@@ -123,7 +123,7 @@ export function WhySection({ gate, onShowEvidence }: { gate: ReleaseGate; onShow
                     </p>
                   ) : null}
                 </div>
-                <code className="text-[11px] text-slate-400">{w.rule}</code>
+                <code className="text-[11px] text-slate-500">{w.rule}</code>
               </li>
             ))}
           </ol>
@@ -309,7 +309,7 @@ export function SummarySection({ gate, meUserId }: { gate: ReleaseGate; meUserId
   const coverage = coverageRows(d?.coverage);
   const factors = riskContributions(d?.risk_index);
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Revision {gate.revision}</CardTitle>
@@ -365,7 +365,7 @@ export function SummarySection({ gate, meUserId }: { gate: ReleaseGate; meUserId
                 {factors.map((f) => (
                   <li key={f.name} className="flex justify-between gap-3">
                     <span className="text-slate-700">
-                      {f.name} <span className="text-slate-400">× {f.count}</span>
+                      {f.name} <span className="text-slate-500">× {f.count}</span>
                     </span>
                     <span className="tabular-nums text-slate-900">+{f.contribution}</span>
                   </li>
@@ -383,7 +383,7 @@ export function SummarySection({ gate, meUserId }: { gate: ReleaseGate; meUserId
           <CardHeader>
             <CardTitle>Coverage</CardTitle>
           </CardHeader>
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">What the evaluation covered</caption>
               <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -459,7 +459,7 @@ function EvidenceItem({ ev, gate, projectId }: { ev: GateEvidence; gate: Release
             {ev.observed.map((o, i) => (
               <li key={`${o.ref ?? ""}-${i}`}>
                 {o.detail}
-                {o.ref ? <span className="text-slate-400"> ({o.ref})</span> : null}
+                {o.ref ? <span className="text-slate-500"> ({o.ref})</span> : null}
               </li>
             ))}
           </ul>
@@ -503,7 +503,7 @@ export function EvidenceByRule({ gate, projectId }: { gate: ReleaseGate; project
               <Badge tone={r.outcome === "BLOCK" ? "danger" : "warning"}>{r.outcome}</Badge>
               {r.title}
             </CardTitle>
-            <code className="text-xs text-slate-400">{r.rule}</code>
+            <code className="text-xs text-slate-500">{r.rule}</code>
           </CardHeader>
           <CardContent className="space-y-2 p-0">
             <p className="px-4 pt-3 text-sm text-slate-700">
@@ -600,7 +600,7 @@ export function SuiteSection({ gate }: { gate: ReleaseGate }) {
         {gate.suite.length === 0 ? (
           <EmptyState title="The change required no scenario" />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[40rem] text-left text-sm">
               <caption className="sr-only">Scenarios the release required</caption>
               <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -683,7 +683,7 @@ function downloadEvidence(release: Release, gate: ReleaseGate) {
 export function EvidenceSection({ release, gate }: { release: Release; gate: ReleaseGate }) {
   const p = gate.policy;
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Immutable evidence</CardTitle>
@@ -802,7 +802,7 @@ export function AuditSection({ releaseId }: { releaseId: string }) {
             {auditFacts(e).length ? (
               <p className="text-xs text-slate-600">{auditFacts(e).join(" · ")}</p>
             ) : null}
-            <p className="font-mono text-[11px] text-slate-400">entry {shortId(e.entry_hash, 16)}</p>
+            <p className="font-mono text-[11px] text-slate-500">entry {shortId(e.entry_hash, 16)}</p>
           </li>
         ))}
       </ol>

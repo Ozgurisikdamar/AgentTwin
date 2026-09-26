@@ -12,7 +12,7 @@ export function traceHref(t: Pick<Trace, "trace_id" | "project_id">): string {
 }
 
 function Signals({ signals }: { signals: string[] | null }) {
-  if (!signals?.length) return <span className="text-xs text-slate-400">none</span>;
+  if (!signals?.length) return <span className="text-xs text-slate-500">none</span>;
   const shown = signals.slice(0, 3);
   return (
     <span className="flex flex-wrap gap-1">
@@ -31,7 +31,7 @@ function Signals({ signals }: { signals: string[] | null }) {
 export function TraceTable({ traces, now }: { traces: Trace[]; now: Date }) {
   const router = useRouter();
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[960px] text-left text-sm">
         <caption className="sr-only">Traces, newest first</caption>
         <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -96,7 +96,7 @@ export function TraceTable({ traces, now }: { traces: Trace[]; now: Date }) {
                 </td>
                 <td className="px-3 py-2">
                   <StatusBadge status={t.status} />
-                  {!t.finalized ? <span className="ml-1 text-xs text-slate-400">settling…</span> : null}
+                  {!t.finalized ? <span className="ml-1 text-xs text-slate-500">settling…</span> : null}
                 </td>
                 <td className="px-3 py-2">
                   <OutcomeBadge status={t.outcome_status} verified={t.outcome_verified} />

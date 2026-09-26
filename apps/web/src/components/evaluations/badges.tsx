@@ -69,7 +69,7 @@ const METRIC: Record<MetricDelta["change"], string> = {
   worse: "text-rose-700",
   changed: "text-sky-800",
   same: "text-slate-500",
-  unknown: "text-slate-400",
+  unknown: "text-slate-500",
 };
 
 /** The colour of a metric difference: better, worse, merely different, or unknown. */

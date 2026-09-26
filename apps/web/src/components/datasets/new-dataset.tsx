@@ -93,7 +93,7 @@ export function NewDataset() {
       />
       {projects.isError ? <ErrorState error={projects.error} /> : null}
       {create.isError ? <ErrorState error={create.error} /> : null}
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Dataset</CardTitle>

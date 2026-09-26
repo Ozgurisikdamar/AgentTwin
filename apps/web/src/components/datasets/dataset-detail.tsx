@@ -289,7 +289,7 @@ export function DatasetDetailView({ datasetId }: { datasetId: string }) {
         />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
         <Card className="xl:col-span-3">
           <CardHeader>
             <CardTitle>Cases</CardTitle>
@@ -300,7 +300,7 @@ export function DatasetDetailView({ datasetId }: { datasetId: string }) {
           {v.cases.length === 0 ? (
             <EmptyState title="This version has no cases" />
           ) : (
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[52rem] text-left text-sm">
                 <caption className="sr-only">Cases of version {v.version}</caption>
                 <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">

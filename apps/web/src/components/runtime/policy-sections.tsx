@@ -98,7 +98,7 @@ export function RulesTable({ shape }: { shape: PolicyShape }) {
     return <p className="text-sm text-slate-600">No rules: every call gets the default.</p>;
   }
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[40rem] text-left text-sm" aria-label="Rules">
         <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
           <tr>
@@ -140,7 +140,7 @@ export function TestsTable({ shape }: { shape: PolicyShape }) {
     return <p className="text-sm text-slate-600">No tests. A version without tests cannot be activated.</p>;
   }
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[40rem] text-left text-sm" aria-label="Tests">
         <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
           <tr>
@@ -209,7 +209,7 @@ export function TestReportView({ report }: { report: PolicyTestReport }) {
         </p>
         <ProblemList problems={report.activation_problems} title="Why it cannot be activated" />
         {report.results.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[44rem] text-left text-sm" aria-label="Test results">
               <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
                 <tr>

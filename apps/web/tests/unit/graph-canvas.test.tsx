@@ -1,8 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import GraphCanvas, { toFlow } from "@/components/graph/graph-canvas";
+import { ThemeProvider } from "@/components/shell/theme";
 import type { GraphView } from "@/lib/api/graph";
 import { filterView } from "@/lib/graph";
+import type { Theme } from "@/lib/theme";
 import { livePromptNeighbourhood } from "./graph-fixtures";
 
 // React Flow measures the DOM; jsdom has no layout (the setup React Flow's
@@ -50,12 +52,14 @@ beforeAll(() => {
 const view = livePromptNeighbourhood as GraphView;
 const id = (kind: string, key: string) => view.nodes.find((n) => n.kind === kind && n.key === key)!.id;
 
-function renderCanvas(props: Partial<Parameters<typeof GraphCanvas>[0]> = {}) {
+function renderCanvas(props: Partial<Parameters<typeof GraphCanvas>[0]> = {}, theme: Theme = "light") {
   const onSelect = vi.fn();
   render(
-    <div style={{ width: 1200, height: 800 }}>
-      <GraphCanvas view={view} selectedId={null} onSelect={onSelect} {...props} />
-    </div>,
+    <ThemeProvider initial={theme}>
+      <div style={{ width: 1200, height: 800 }}>
+        <GraphCanvas view={view} selectedId={null} onSelect={onSelect} {...props} />
+      </div>
+    </ThemeProvider>,
   );
   return onSelect;
 }
@@ -70,6 +74,12 @@ describe("GraphCanvas", () => {
     const refund = nodes.find((n) => n.getAttribute("data-key") === "refund_payment")!;
     expect(refund).toHaveTextContent("Write irreversible");
     expect(screen.getByRole("button", { name: /Tool refund_payment/ })).toBeInTheDocument();
+  });
+
+  it("draws in the page's theme", async () => {
+    renderCanvas({}, "dark");
+    await screen.findAllByTestId("graph-node");
+    expect(document.querySelector(".react-flow")).toHaveClass("dark");
   });
 
   it("names every edge the way it reads, with how it is known", () => {
@@ -88,14 +98,14 @@ describe("GraphCanvas", () => {
     const usesPrompt = edges.find((e) => e.ariaLabel?.startsWith("support-refund-agent@1.3.0 uses prompt"))!;
     expect([usesPrompt.sourceHandle, usesPrompt.targetHandle]).toEqual(["out-left", "in-right"]);
     const observed = edges.find((e) => e.ariaLabel?.endsWith("(observed)"))!;
-    expect(observed.style).toMatchObject({ stroke: "#059669", strokeDasharray: undefined });
+    expect(observed.style).toMatchObject({ stroke: "var(--color-emerald-600)", strokeDasharray: undefined });
   });
 
   it("dashes what is only inferred and fades what the selection does not touch", () => {
     const inferred = structuredClone(view);
     inferred.edges[0] = { ...inferred.edges[0]!, sources: ["INFERRED"], certain: false };
     const { edges, nodes } = toFlow(inferred, id("TOOL", "refund_payment"));
-    expect(edges[0]!.style).toMatchObject({ strokeDasharray: "5 4", stroke: "#d97706" });
+    expect(edges[0]!.style).toMatchObject({ strokeDasharray: "5 4", stroke: "var(--color-amber-600)" });
     expect(edges[0]!.ariaLabel).toMatch(/\(inferred\)$/);
     const touching = edges.filter(
       (e) => e.source === id("TOOL", "refund_payment") || e.target === id("TOOL", "refund_payment"),

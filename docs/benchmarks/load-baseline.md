@@ -132,7 +132,10 @@ in `ssl` and `email`. The fix (the same commit as this page):
   port, and that every other command still runs the service.
 * RabbitMQ's check (an Erlang VM per call) runs every 2 s while the broker
   starts (`start_interval`) and every 30 s after; the test broker likewise.
-* The demo containers probe with a bare socket every 10 s.
+* The demo containers probe with a bare socket every 10 s. (The probe
+  reads the whole response before closing: closing after the status line
+  reset the connection under the server's body write and filled the demo
+  agent's log with a traceback every 10 s.)
 
 Idle CPU of the whole stack, measured from the containers' cgroup counters:
 **about 133 % of a core before, 28 % after** (the Python services 22-23 %

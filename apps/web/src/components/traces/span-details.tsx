@@ -213,7 +213,7 @@ export function SpanDetails({
                 <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-slate-700">
                   {f.label}
                 </summary>
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words border-t border-slate-100 bg-slate-50 p-2 font-mono text-xs text-slate-800">
+                <pre className="max-h-64 relative overflow-auto whitespace-pre-wrap break-words border-t border-slate-100 bg-slate-50 p-2 font-mono text-xs text-slate-800">
                   {prettyContent(content?.[f.key] ?? "")}
                 </pre>
               </details>

@@ -426,7 +426,13 @@ Track live build status and the evidence of each phase: [docs/plan/implementatio
   promotion of its drafted scenario; the approvals inbox with the exact
   action, why it needs a person, its expiry and every use of the approval;
   policies with their versions, rules, tests, boundaries and activation;
-  and the gateway's decisions.
+  and the gateway's decisions. Light, dark or the system's theme (a
+  cookie, rendered by the server: no flash); a menu on phones, where no
+  page scrolls sideways; every page checked with axe (WCAG 2.1 AA) in
+  both themes, and every colour pair the components use held to AA by a
+  unit test ([dark](docs/screenshots/ux-dark-overview.png),
+  [phone](docs/screenshots/ux-phone-releases.png),
+  [phone menu](docs/screenshots/ux-phone-menu.png)).
 * **Demo**: *Demo Co*'s support-refund agent with production-like tools,
   driven by a deterministic scripted planner (or Anthropic Claude when
   `DEMO_AGENT_MODEL=anthropic` and a key are set). Version 1.2.4 is good,
@@ -486,7 +492,7 @@ make help
 make demo       # one more refund conversation through the demo agent; prints the trace link
 make demo-contained  # an over-limit refund through the runtime gateway: approve it in /approvals
 make doctor     # checks Docker, env, ports, PostgreSQL, RabbitMQ, OTel, migrations, services
-make e2e        # Playwright tests against the running stack
+make e2e        # Playwright tests against the running stack (with axe on every page, both themes and a phone)
 make test       # unit + integration (real PostgreSQL + RabbitMQ) + frontend tests
 make test-security  # every security test of spec §63, item by item (scripts/security-tests.yaml)
 make test-sdk-ts-live  # TS SDK end to end against the running stack: trace, prompt hash, redaction, outcome

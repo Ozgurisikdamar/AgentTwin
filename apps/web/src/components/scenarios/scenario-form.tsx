@@ -149,7 +149,7 @@ export function ScenarioForm(props: ScenarioFormProps) {
   return (
     <div className="space-y-4" data-testid="scenario-form">
       <Section title="Scenario">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field
             id="f-name"
             label="Name"
@@ -221,7 +221,7 @@ export function ScenarioForm(props: ScenarioFormProps) {
       </Section>
 
       <Section title="Agent and input">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field id="f-agent" label="Agent">
             <Select
               id="f-agent"
@@ -264,7 +264,7 @@ export function ScenarioForm(props: ScenarioFormProps) {
             onChange={(e) => edit(["spec", "input", "message"], e.target.value)}
           />
         </Field>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field id="f-customer" label="Customer id (context)">
             <Input
               id="f-customer"
@@ -314,7 +314,7 @@ export function ScenarioForm(props: ScenarioFormProps) {
           return (
             <div
               key={i}
-              className="grid items-end gap-2 rounded border border-slate-100 p-2 md:grid-cols-[1fr_1fr_8rem_auto]"
+              className="grid grid-cols-1 items-end gap-2 rounded border border-slate-100 p-2 md:grid-cols-[1fr_1fr_8rem_auto]"
               data-testid="fault-editor"
             >
               <Field id={`f-fault-${i}-target`} label="Tool">
@@ -409,7 +409,7 @@ export function ScenarioForm(props: ScenarioFormProps) {
               className="space-y-2 rounded border border-slate-100 p-2"
               data-testid="expectation-editor"
             >
-              <div className="grid items-end gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <Field id={`f-exp-${i}-id`} label="Id">
                   <Input
                     id={`f-exp-${i}-id`}

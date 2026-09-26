@@ -31,13 +31,13 @@ function PromptDiffView({ item }: { item: ChangeItem }) {
     <div className="space-y-2">
       {diff.lines.length ? (
         <pre
-          className="overflow-x-auto rounded-md border border-slate-200 text-xs leading-5"
+          className="relative overflow-x-auto rounded-md border border-slate-200 text-xs leading-5"
           aria-label="Prompt diff (secrets and personal data masked)"
           data-testid="prompt-diff"
         >
           {diff.lines.map((l, i) => (
             <div key={i} className={`flex px-2 ${DIFF_LINE[l.op]}`} data-op={l.op}>
-              <span className="w-4 shrink-0 select-none text-slate-400" aria-hidden="true">
+              <span className="w-4 shrink-0 select-none text-slate-500" aria-hidden="true">
                 {l.op}
               </span>
               <span className="sr-only">{DIFF_WORD[l.op]}: </span>
@@ -65,7 +65,7 @@ function SchemaChangesView({ item }: { item: ChangeItem }) {
   const changes = schemaChanges(item);
   if (!changes.length) return null;
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full text-left text-xs" data-testid="schema-changes">
         <caption className="sr-only">Input schema changes of {item.subject}</caption>
         <thead className="text-slate-500">

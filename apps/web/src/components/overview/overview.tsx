@@ -106,7 +106,7 @@ export function Overview() {
     <div className="space-y-4">
       <PageHeader title="Overview" description="Production health of your agents over the last 7 days." />
       {stats.isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }, (_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
@@ -122,7 +122,7 @@ export function Overview() {
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Agent runs" value={formatNumber(stats.data.stats.total)} href="/traces" />
             <Metric
               label="Failure rate"
@@ -142,7 +142,7 @@ export function Overview() {
               href="/traces?signal=contradiction"
             />
           </div>
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
             <Breakdown
               title="Outcomes"
               data={stats.data.stats.by_outcome}

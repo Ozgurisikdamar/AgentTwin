@@ -206,7 +206,7 @@ export function NewSimulation() {
       {loading ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <Card>
             <CardHeader>
               <CardTitle>Agent</CardTitle>

@@ -64,7 +64,7 @@ function VersionsCard({
         <CardTitle>Versions</CardTitle>
         <span className="text-xs text-slate-500">Versions are immutable; one is active at a time.</span>
       </CardHeader>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[40rem] text-left text-sm">
           <caption className="sr-only">Versions, newest first</caption>
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -392,7 +392,7 @@ function VersionView({ version: v }: { version: PolicyVersionDetail }) {
         </div>
         <details className="rounded-md border border-slate-200">
           <summary className="cursor-pointer px-3 py-2 text-sm text-slate-700">The document</summary>
-          <pre className="overflow-x-auto border-t border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800">
+          <pre className="relative overflow-x-auto border-t border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-800">
             {v.document}
           </pre>
           <p className="px-3 pb-2 text-xs text-slate-500">

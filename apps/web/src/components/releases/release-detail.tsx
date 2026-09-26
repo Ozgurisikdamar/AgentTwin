@@ -110,7 +110,9 @@ function BlastRadiusTab({ gate }: { gate: ReleaseGate }) {
       </Card>
       <div
         className={
-          impact.graph?.policies.length || impact.graph?.evaluators.length ? "grid gap-4 xl:grid-cols-2" : ""
+          impact.graph?.policies.length || impact.graph?.evaluators.length
+            ? "grid grid-cols-1 gap-4 xl:grid-cols-2"
+            : ""
         }
       >
         <RiskyChanges impact={impact} />
@@ -278,7 +280,7 @@ export function ReleaseDetail({ releaseId }: { releaseId: string }) {
           <span className="flex flex-wrap items-center gap-2" data-testid="release-header">
             {release.agent.name}
             <Badge>v{release.baseline.version}</Badge>
-            <span aria-hidden="true" className="text-slate-400">
+            <span aria-hidden="true" className="text-slate-500">
               →
             </span>
             <span className="sr-only">to</span>
@@ -391,7 +393,7 @@ export function ReleaseDetail({ releaseId }: { releaseId: string }) {
               The project&apos;s gate policy does not let reviewers override; an owner or administrator can.
             </p>
           ) : null}
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
               {g.decision ? (
                 <WhySection gate={g} onShowEvidence={() => update({ tab: "evals" })} />
@@ -502,7 +504,7 @@ function RevisionHistory({
           Each evaluation is a revision; decisions are never rewritten.
         </span>
       </CardHeader>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[40rem] text-left text-sm">
           <caption className="sr-only">Revisions, newest first</caption>
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -557,7 +559,7 @@ function RevisionHistory({
                 <td className="px-3 py-2 text-slate-700">
                   {formatDateTime(r.decided_at)}
                   {r.eval_run_id ? (
-                    <span className="ml-1 text-xs text-slate-400">run {shortId(r.eval_run_id)}</span>
+                    <span className="ml-1 text-xs text-slate-500">run {shortId(r.eval_run_id)}</span>
                   ) : null}
                 </td>
               </tr>

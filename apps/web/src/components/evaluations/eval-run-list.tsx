@@ -262,7 +262,7 @@ export function EvalRunList() {
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[60rem] text-left text-sm">
                 <caption className="sr-only">Evaluation runs, newest first</caption>
                 <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">

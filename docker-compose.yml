@@ -314,7 +314,7 @@ services:
       DEMO_TOOLS_FAULTS: ${DEMO_TOOLS_FAULTS:-refund_payment:timeout_after_mutation:0.08}
     # A bare socket: urllib would import ssl and email on every check.
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket, sys; s = socket.create_connection(('127.0.0.1', 8091), 3); s.sendall(b'GET /healthz HTTP/1.0\\r\\n\\r\\n'); sys.exit(s.recv(12)[9:12] != b'200')"]
+      test: ["CMD", "python", "-c", "import socket, sys; s = socket.create_connection(('127.0.0.1', 8091), 3); s.sendall(b'GET /healthz HTTP/1.0\\r\\n\\r\\n'); sys.exit(s.makefile('rb').read()[9:12] != b'200')"]
       start_period: 30s
       start_interval: 1s
       interval: 10s
@@ -341,7 +341,7 @@ services:
       otel-collector: {condition: service_started}
     # A bare socket: urllib would import ssl and email on every check.
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket, sys; s = socket.create_connection(('127.0.0.1', 8090), 3); s.sendall(b'GET /healthz HTTP/1.0\\r\\n\\r\\n'); sys.exit(s.recv(12)[9:12] != b'200')"]
+      test: ["CMD", "python", "-c", "import socket, sys; s = socket.create_connection(('127.0.0.1', 8090), 3); s.sendall(b'GET /healthz HTTP/1.0\\r\\n\\r\\n'); sys.exit(s.makefile('rb').read()[9:12] != b'200')"]
       start_period: 30s
       start_interval: 1s
       interval: 10s

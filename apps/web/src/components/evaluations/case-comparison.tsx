@@ -67,7 +67,7 @@ function ResultCell({ status }: { status: string | null }) {
 }
 
 function StepLine({ step }: { step: TrajectoryStep | null }) {
-  if (!step) return <span className="text-xs text-slate-400">—</span>;
+  if (!step) return <span className="text-xs text-slate-500">—</span>;
   return (
     <div className="space-y-1">
       <div className="flex items-baseline gap-2">
@@ -102,7 +102,7 @@ function DivergenceCard({ divergence, versions }: { divergence: Divergence; vers
             {divergence.impact}
           </p>
         ) : null}
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <p className="mb-1 text-xs font-medium text-slate-500">Baseline v{versions[0]}</p>
             <StepLine step={divergence.baseline} />
@@ -146,7 +146,7 @@ function ExpectationsTable({
     detail.results[SIDE_KEY[side]].find((r) => r.expectation.id === id);
   if (changes.length === 0) return <EmptyState title="No expectation was compared" />;
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[56rem] text-left text-sm">
         <caption className="sr-only">Expectations on both sides</caption>
         <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -345,43 +345,45 @@ function ReviewForm({
 
 function MetricsTable({ comparison }: { comparison: CaseComparison }) {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Metrics of both sides</caption>
-      <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
-        <tr>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Metric
-          </th>
-          <th scope="col" className="px-3 py-2 text-right font-medium">
-            Baseline
-          </th>
-          <th scope="col" className="px-3 py-2 text-right font-medium">
-            Candidate
-          </th>
-          <th scope="col" className="px-3 py-2 text-right font-medium">
-            Δ
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {METRICS.map((m) => {
-          const d = comparison.metrics[m.name];
-          if (!d) return null;
-          return (
-            <tr key={m.name} data-testid="metric" data-metric={m.name} data-change={d.change}>
-              <th scope="row" className="px-3 py-1.5 font-normal text-slate-700">
-                {m.label}
-              </th>
-              <td className="px-3 py-1.5 text-right tabular-nums">{formatMetric(m.name, d.baseline)}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{formatMetric(m.name, d.candidate)}</td>
-              <td className={cn("px-3 py-1.5 text-right tabular-nums", metricTone(d.change))}>
-                {formatDelta(m.name, d.delta)}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="relative overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <caption className="sr-only">Metrics of both sides</caption>
+        <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th scope="col" className="px-3 py-2 font-medium">
+              Metric
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Baseline
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Candidate
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Δ
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {METRICS.map((m) => {
+            const d = comparison.metrics[m.name];
+            if (!d) return null;
+            return (
+              <tr key={m.name} data-testid="metric" data-metric={m.name} data-change={d.change}>
+                <th scope="row" className="px-3 py-1.5 font-normal text-slate-700">
+                  {m.label}
+                </th>
+                <td className="px-3 py-1.5 text-right tabular-nums">{formatMetric(m.name, d.baseline)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{formatMetric(m.name, d.candidate)}</td>
+                <td className={cn("px-3 py-1.5 text-right tabular-nums", metricTone(d.change))}>
+                  {formatDelta(m.name, d.delta)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -411,7 +413,7 @@ function AlignedTrajectories({
   const rows = alignSteps(comparison.trajectories);
   if (rows.length === 0) return <EmptyState title="Neither side called a tool" />;
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[48rem] text-left text-sm">
         <caption className="sr-only">Both trajectories, step by step as aligned</caption>
         <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -492,7 +494,7 @@ function StateChanges({ comparison }: { comparison: CaseComparison }) {
             <li key={c.path} className="py-1.5" data-path={c.path} data-change={c.change}>
               <code className="text-xs font-medium text-slate-900">{c.path}</code>{" "}
               <span className="text-xs text-slate-500">{c.change}</span>
-              <div className="mt-0.5 grid gap-1 text-xs md:grid-cols-2">
+              <div className="mt-0.5 grid grid-cols-1 gap-1 text-xs md:grid-cols-2">
                 <code className="break-all text-slate-600">
                   {"baseline" in c ? formatValue(c.baseline) : "—"}
                 </code>
@@ -700,7 +702,7 @@ export function EvalCaseView({ runId, scenario }: { runId: string; scenario: str
       ) : null}
 
       <Card>
-        <CardContent className="grid gap-4 pt-4 md:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 pt-4 md:grid-cols-2">
           <SideLinks label="Baseline" version={versions[0]} side={c.baseline} runId={r?.baseline_run_id} />
           <SideLinks label="Candidate" version={versions[1]} side={c.candidate} runId={r?.candidate_run_id} />
         </CardContent>
@@ -739,7 +741,7 @@ export function EvalCaseView({ runId, scenario }: { runId: string; scenario: str
         />
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Metrics</CardTitle>
@@ -783,7 +785,7 @@ export function EvalCaseView({ runId, scenario }: { runId: string; scenario: str
               Judge calibration
             </Link>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
+          <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Verdicts verdicts={d.verdicts.baseline} side={`Baseline v${versions[0]}`} />
             <Verdicts verdicts={d.verdicts.candidate} side={`Candidate v${versions[1]}`} />
           </CardContent>

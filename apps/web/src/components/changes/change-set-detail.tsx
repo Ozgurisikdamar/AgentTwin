@@ -135,7 +135,7 @@ export function ChangeSetDetail({ changeSetId }: { changeSetId: string }) {
           <span className="flex flex-wrap items-center gap-2">
             {cs.agent_name}
             <Badge>v{cs.base.version}</Badge>
-            <span aria-hidden="true" className="text-slate-400">
+            <span aria-hidden="true" className="text-slate-500">
               →
             </span>
             <span className="sr-only">to</span>
@@ -156,7 +156,7 @@ export function ChangeSetDetail({ changeSetId }: { changeSetId: string }) {
           ) : null
         }
       />
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Change set</CardTitle>
@@ -235,7 +235,9 @@ export function ChangeSetDetail({ changeSetId }: { changeSetId: string }) {
           <RequiredScenarios impact={data} />
           <div
             className={
-              data.graph?.policies.length || data.graph?.evaluators.length ? "grid gap-4 xl:grid-cols-2" : ""
+              data.graph?.policies.length || data.graph?.evaluators.length
+                ? "grid grid-cols-1 gap-4 xl:grid-cols-2"
+                : ""
             }
           >
             <RiskyChanges impact={data} />

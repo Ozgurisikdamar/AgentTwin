@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./palette.css";
 
 @theme {
   --font-sans:
@@ -6,8 +7,17 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
+/* The theme (ADR-0035): data-theme on <html> comes from the theme cookie;
+   "system" follows the operating system. Every colour variable holds both
+   halves (palette.css), so the color-scheme alone switches the page. */
 :root {
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
   color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 html,
@@ -34,4 +44,18 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* React Flow (the dependency graph) draws with the palette in both themes
+   instead of its own greys; `html` outranks its `.react-flow.dark`. */
+html .react-flow,
+html .react-flow.dark {
+  --xy-background-color-default: var(--color-white);
+  --xy-background-pattern-dots-color-default: var(--color-slate-300);
+  --xy-edge-stroke-default: var(--color-slate-400);
+  --xy-controls-button-background-color-default: var(--color-white);
+  --xy-controls-button-background-color-hover-default: var(--color-slate-100);
+  --xy-controls-button-color-default: var(--color-slate-700);
+  --xy-controls-button-color-hover-default: var(--color-slate-900);
+  --xy-controls-button-border-color-default: var(--color-slate-200);
 }

@@ -26,58 +26,60 @@ export function StateComparison({
   const keys = [...new Set([...Object.keys(expected ?? {}), ...Object.keys(actual ?? {})])].sort();
   if (keys.length === 0) return null;
   return (
-    <table className="mt-3 w-full text-left text-xs">
-      <caption className="mb-1 text-left text-xs font-medium text-slate-600">State verification</caption>
-      <thead className="text-slate-500">
-        <tr>
-          <th scope="col" className="py-1 pr-2 font-medium">
-            Field
-          </th>
-          <th scope="col" className="py-1 pr-2 font-medium">
-            Expected
-          </th>
-          <th scope="col" className="py-1 pr-2 font-medium">
-            Actual
-          </th>
-          <th scope="col" className="py-1 font-medium">
-            Result
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100 font-mono">
-        {keys.map((k) => {
-          const e = expected?.[k];
-          const a = actual?.[k];
-          const comparable = e !== undefined && e !== null;
-          const match = comparable && JSON.stringify(e) === JSON.stringify(a);
-          return (
-            <tr key={k}>
-              <td className="py-1 pr-2">{k}</td>
-              <td className="py-1 pr-2">{renderValue(e)}</td>
-              <td className="py-1 pr-2">{renderValue(a)}</td>
-              <td className="py-1 font-sans">
-                {!comparable ? (
-                  <span className="inline-flex items-center gap-1 text-slate-500">
-                    <MinusCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    not asserted
-                  </span>
-                ) : match ? (
-                  <span className="inline-flex items-center gap-1 text-emerald-800">
-                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    match
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-rose-800">
-                    <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    mismatch
-                  </span>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="relative overflow-x-auto">
+      <table className="mt-3 w-full text-left text-xs">
+        <caption className="mb-1 text-left text-xs font-medium text-slate-600">State verification</caption>
+        <thead className="text-slate-500">
+          <tr>
+            <th scope="col" className="py-1 pr-2 font-medium">
+              Field
+            </th>
+            <th scope="col" className="py-1 pr-2 font-medium">
+              Expected
+            </th>
+            <th scope="col" className="py-1 pr-2 font-medium">
+              Actual
+            </th>
+            <th scope="col" className="py-1 font-medium">
+              Result
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 font-mono">
+          {keys.map((k) => {
+            const e = expected?.[k];
+            const a = actual?.[k];
+            const comparable = e !== undefined && e !== null;
+            const match = comparable && JSON.stringify(e) === JSON.stringify(a);
+            return (
+              <tr key={k}>
+                <td className="py-1 pr-2">{k}</td>
+                <td className="py-1 pr-2">{renderValue(e)}</td>
+                <td className="py-1 pr-2">{renderValue(a)}</td>
+                <td className="py-1 font-sans">
+                  {!comparable ? (
+                    <span className="inline-flex items-center gap-1 text-slate-500">
+                      <MinusCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                      not asserted
+                    </span>
+                  ) : match ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-800">
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      match
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-rose-800">
+                      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                      mismatch
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

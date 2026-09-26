@@ -61,7 +61,7 @@ export function OutcomeBadge({
   status: OutcomeStatus | null | undefined;
   verified: boolean | null | undefined;
 }) {
-  if (!status) return <span className="text-xs text-slate-400">No outcome</span>;
+  if (!status) return <span className="text-xs text-slate-500">No outcome</span>;
   const tone = OUTCOME_TONE[status] ?? "neutral";
   return (
     <span className="inline-flex items-center gap-1">

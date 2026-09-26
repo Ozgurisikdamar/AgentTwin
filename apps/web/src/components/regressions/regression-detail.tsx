@@ -305,7 +305,7 @@ export function RegressionDetail({ regressionId }: { regressionId: string }) {
         <StatusForm key={panel} regression={r} action={panel} onDone={close} />
       ) : null}
       {panel === "merge" ? <MergeForm regression={r} onDone={close} /> : null}
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <WhatWentWrong regression={r} />
         </div>

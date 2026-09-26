@@ -102,9 +102,9 @@ function CountTiles({
             data-classification={c}
             className={cn(
               "rounded-md border px-3 py-2 text-left transition-shadow hover:shadow-sm focus-visible:outline-2 focus-visible:outline-indigo-600",
-              TILE_STYLE[c],
+              // An empty class is neutral, not faded: its label stays readable.
+              counts[c] === 0 ? "border-slate-200 bg-white text-slate-600" : TILE_STYLE[c],
               on && "ring-2 ring-indigo-500",
-              counts[c] === 0 && "opacity-60",
             )}
           >
             <span className="block text-2xl font-semibold tabular-nums">{counts[c]}</span>
@@ -192,40 +192,42 @@ const CHANGE_TEXT = {
 
 function SideTotalsTable({ run, summary }: { run: EvalRun; summary: EvalRunSummary }) {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Totals of each side</caption>
-      <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
-        <tr>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Metric
-          </th>
-          <th scope="col" className="px-3 py-2 text-right font-medium">
-            Baseline v{run.baseline_version}
-          </th>
-          <th scope="col" className="px-3 py-2 text-right font-medium">
-            Candidate v{run.candidate_version}
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {SIDE_TOTALS.map((t) => {
-          const change = totalChange(t.name, summary.baseline, summary.candidate);
-          return (
-            <tr key={t.name} data-testid="side-total" data-metric={t.name} data-change={change}>
-              <th scope="row" className="px-3 py-1.5 font-normal text-slate-700">
-                {t.label}
-              </th>
-              <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">
-                {formatTotal(summary.baseline, t.name)}
-              </td>
-              <td className={cn("px-3 py-1.5 text-right tabular-nums", CHANGE_TEXT[change])}>
-                {formatTotal(summary.candidate, t.name)}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="relative overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <caption className="sr-only">Totals of each side</caption>
+        <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th scope="col" className="px-3 py-2 font-medium">
+              Metric
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Baseline v{run.baseline_version}
+            </th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">
+              Candidate v{run.candidate_version}
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {SIDE_TOTALS.map((t) => {
+            const change = totalChange(t.name, summary.baseline, summary.candidate);
+            return (
+              <tr key={t.name} data-testid="side-total" data-metric={t.name} data-change={change}>
+                <th scope="row" className="px-3 py-1.5 font-normal text-slate-700">
+                  {t.label}
+                </th>
+                <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">
+                  {formatTotal(summary.baseline, t.name)}
+                </td>
+                <td className={cn("px-3 py-1.5 text-right tabular-nums", CHANGE_TEXT[change])}>
+                  {formatTotal(summary.candidate, t.name)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -253,38 +255,40 @@ function Slices({ summary }: { summary: EvalRunSummary }) {
   return (
     <div className="space-y-4">
       {rows.length ? (
-        <table className="w-full text-left text-sm">
-          <caption className="sr-only">Slices with a changed case</caption>
-          <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th scope="col" className="px-3 py-2 font-medium">
-                Slice
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                Cases
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((r) => (
-              <tr key={`${r.kind}:${r.key}`} data-testid="slice" data-slice={`${r.kind}:${r.key}`}>
-                <th scope="row" className="px-3 py-1.5 font-normal">
-                  <span className="text-xs text-slate-500">{SLICE_TITLES[r.kind]}</span>{" "}
-                  <span className="font-medium text-slate-900">{r.key}</span>
+        <div className="relative overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Slices with a changed case</caption>
+            <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Slice
                 </th>
-                <td className="px-3 py-1.5">
-                  <div className="flex flex-wrap gap-1">
-                    {CLASSIFICATIONS.filter((c) => r.counts[c] > 0).map((c) => (
-                      <span key={c} className="text-xs text-slate-700">
-                        <ClassificationBadge classification={c} /> {r.counts[c]}
-                      </span>
-                    ))}
-                  </div>
-                </td>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Cases
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r) => (
+                <tr key={`${r.kind}:${r.key}`} data-testid="slice" data-slice={`${r.kind}:${r.key}`}>
+                  <th scope="row" className="px-3 py-1.5 font-normal">
+                    <span className="text-xs text-slate-500">{SLICE_TITLES[r.kind]}</span>{" "}
+                    <span className="font-medium text-slate-900">{r.key}</span>
+                  </th>
+                  <td className="px-3 py-1.5">
+                    <div className="flex flex-wrap gap-1">
+                      {CLASSIFICATIONS.filter((c) => r.counts[c] > 0).map((c) => (
+                        <span key={c} className="text-xs text-slate-700">
+                          <ClassificationBadge classification={c} /> {r.counts[c]}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
       {failures.length ? (
         <div>
@@ -309,7 +313,7 @@ function Slices({ summary }: { summary: EvalRunSummary }) {
 function CasesTable({ run, cases }: { run: EvalRun; cases: EvalCaseSummary[] }) {
   if (cases.length === 0) return <EmptyState title="No case matches" />;
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full min-w-[56rem] text-left text-sm">
         <caption className="sr-only">Compared cases, worst first</caption>
         <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -480,7 +484,7 @@ export function EvalRunDetailView({ runId }: { runId: string }) {
             <Badge tone="neutral" title="Baseline">
               v{r.baseline_version}
             </Badge>
-            <span aria-hidden="true" className="text-slate-400">
+            <span aria-hidden="true" className="text-slate-500">
               →
             </span>
             <Badge tone="brand" title="Candidate">
@@ -544,7 +548,7 @@ export function EvalRunDetailView({ runId }: { runId: string }) {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader>
             <CardTitle>Result</CardTitle>
@@ -634,7 +638,7 @@ export function EvalRunDetailView({ runId }: { runId: string }) {
       </div>
 
       {summary ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>Side by side</CardTitle>

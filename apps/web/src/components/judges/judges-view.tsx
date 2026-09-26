@@ -80,35 +80,37 @@ function Disagreements({ id }: { id: string }) {
   const rows = detail.data.calibration.disagreements ?? [];
   if (rows.length === 0) return <p className="text-xs text-slate-600">The judge agreed with every label.</p>;
   return (
-    <table className="w-full text-left text-xs" data-testid="disagreements">
-      <caption className="sr-only">Examples the judge labeled differently</caption>
-      <thead className="text-slate-500">
-        <tr>
-          <th scope="col" className="py-1 font-medium">
-            Example
-          </th>
-          <th scope="col" className="py-1 font-medium">
-            Person
-          </th>
-          <th scope="col" className="py-1 font-medium">
-            Judge
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {rows.map((d) => (
-          <tr key={d.id}>
-            <td className="py-1 font-mono">{d.id}</td>
-            <td className="py-1">{d.human}</td>
-            <td className="py-1">
-              {d.judge ?? "no verdict"}
-              {d.score !== undefined ? ` (${d.score.toFixed(2)})` : ""}
-              {d.error ? <span className="block text-rose-800">{d.error}</span> : null}
-            </td>
+    <div className="relative overflow-x-auto">
+      <table className="w-full text-left text-xs" data-testid="disagreements">
+        <caption className="sr-only">Examples the judge labeled differently</caption>
+        <thead className="text-slate-500">
+          <tr>
+            <th scope="col" className="py-1 font-medium">
+              Example
+            </th>
+            <th scope="col" className="py-1 font-medium">
+              Person
+            </th>
+            <th scope="col" className="py-1 font-medium">
+              Judge
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((d) => (
+            <tr key={d.id}>
+              <td className="py-1 font-mono">{d.id}</td>
+              <td className="py-1">{d.human}</td>
+              <td className="py-1">
+                {d.judge ?? "no verdict"}
+                {d.score !== undefined ? ` (${d.score.toFixed(2)})` : ""}
+                {d.error ? <span className="block text-rose-800">{d.error}</span> : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -302,7 +304,7 @@ export function JudgesView() {
           ) : null
         }
       />
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card data-testid="judge-identity">
           <CardHeader>
             <CardTitle>Judge</CardTitle>
@@ -342,33 +344,35 @@ export function JudgesView() {
             <CardTitle>Criteria</CardTitle>
             <span className="text-xs text-slate-500">the latest completed calibration counts</span>
           </CardHeader>
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Calibration of each criterion</caption>
-            <tbody className="divide-y divide-slate-100">
-              {j.criteria.map((c) => (
-                <tr
-                  key={c.criterion}
-                  data-testid="criterion"
-                  data-criterion={c.criterion}
-                  data-calibrated={c.calibrated}
-                >
-                  <th scope="row" className="px-3 py-2 font-medium text-slate-900">
-                    {humanize(c.criterion)}
-                  </th>
-                  <td className="px-3 py-2">
-                    <CalibratedBadge calibrated={c.calibrated} />
-                  </td>
-                  <td className="px-3 py-2">
-                    {c.calibration ? (
-                      <CalibrationResult c={c.calibration} />
-                    ) : (
-                      <span className="text-xs text-slate-500">never calibrated</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="relative overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Calibration of each criterion</caption>
+              <tbody className="divide-y divide-slate-100">
+                {j.criteria.map((c) => (
+                  <tr
+                    key={c.criterion}
+                    data-testid="criterion"
+                    data-criterion={c.criterion}
+                    data-calibrated={c.calibrated}
+                  >
+                    <th scope="row" className="px-3 py-2 font-medium text-slate-900">
+                      {humanize(c.criterion)}
+                    </th>
+                    <td className="px-3 py-2">
+                      <CalibratedBadge calibrated={c.calibrated} />
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.calibration ? (
+                        <CalibrationResult c={c.calibration} />
+                      ) : (
+                        <span className="text-xs text-slate-500">never calibrated</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
 

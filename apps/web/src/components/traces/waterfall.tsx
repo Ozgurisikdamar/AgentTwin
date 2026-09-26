@@ -114,7 +114,7 @@ export function WaterfallView({
                     onClick={() => toggle(span.span_id)}
                     aria-expanded={!isCollapsed}
                     aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${span.name}`}
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-600 hover:bg-slate-200"
                   >
                     {isCollapsed ? (
                       <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -132,7 +132,7 @@ export function WaterfallView({
                   aria-label={label}
                   className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm"
                 >
-                  <span className={cn("shrink-0", isError ? "text-rose-600" : "text-slate-500")}>
+                  <span className={cn("shrink-0", isError ? "text-rose-700" : "text-slate-500")}>
                     <KindIcon kind={span.kind} />
                   </span>
                   <span
@@ -141,6 +141,12 @@ export function WaterfallView({
                   >
                     {displayName(span)}
                   </span>
+                  {isError ? (
+                    // Said in words, not only in red (spec §42).
+                    <span className="shrink-0 rounded bg-rose-100 px-1 text-[10px] font-medium uppercase text-rose-800">
+                      error
+                    </span>
+                  ) : null}
                   <RiskMarker risk={span.tool_risk} />
                 </button>
               </div>

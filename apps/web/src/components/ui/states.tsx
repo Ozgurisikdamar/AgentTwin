@@ -14,7 +14,7 @@ export function EmptyState({
 }) {
   return (
     <div className={cn("flex flex-col items-center gap-2 px-6 py-10 text-center", className)}>
-      <Inbox className="h-8 w-8 text-slate-400" aria-hidden="true" />
+      <Inbox className="h-8 w-8 text-slate-500" aria-hidden="true" />
       <p className="text-sm font-medium text-slate-800">{title}</p>
       {children ? <div className="max-w-md text-sm text-slate-600">{children}</div> : null}
     </div>

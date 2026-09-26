@@ -99,7 +99,7 @@ export function FailuresSection({ detail }: { detail: RegressionDetail }) {
             : `${r.occurrence_count} ${r.occurrence_count === 1 ? "failure" : "failures"}`}
         </span>
       </CardHeader>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[56rem] text-left text-sm">
           <caption className="sr-only">Failures of this regression, newest first</caption>
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
@@ -641,7 +641,7 @@ function DraftAndPromote({
             </ul>
           ) : null}
           {d.mappings.length ? (
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[36rem] text-left text-sm">
                 <caption className="text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                   Production records and the twin records that stand for them
@@ -762,7 +762,7 @@ function DraftAndPromote({
             </form>
           ) : (
             <pre
-              className="max-h-[32rem] overflow-auto rounded-md bg-slate-50 p-3 text-xs"
+              className="max-h-[32rem] relative overflow-auto rounded-md bg-slate-50 p-3 text-xs"
               aria-label="Scenario YAML"
             >
               {d.yaml}

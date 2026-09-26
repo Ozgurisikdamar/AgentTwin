@@ -450,6 +450,45 @@ Found on the way:
 * The Python manifest helper read only inline instructions; a manifest with
   `promptRef` now gives its hash in both SDKs.
 
+### Web: themes, small screens, accessibility
+
+Light, dark and system themes from one palette (ADR-0035), a menu on
+phones, and every page checked by axe. Each piece with its tests and the
+mutations they catch:
+
+| Piece | Tests | Mutations caught |
+|---|---|---|
+| Palette: every Tailwind colour as `light-dark(light, dark)`, generated from Tailwind's own colours (`scripts/theme-palette.ts`), inside `@supports` so an older browser keeps the light colours | 2: the committed file is the generator's output (and guarded); every family mirrored in order, the dark surface between the page and a panel | 8 of 8, each regenerated before the tests ran; the `@supports` guard needed a stronger test first |
+| Contrast held in the source: every text/background pair the components write in one class string (per state), AA in the light theme and, in the dark one, AA or at least the light ratio | 2, over the 50+ pairs in use | the dark mappings that would break it (secondary text not lightened, a panel as dark as a card, …) are among the 8 above |
+| Theme choice: a cookie the root layout reads (no script before the first paint, nothing under the nonce CSP), a switcher of three toggle buttons, "system" following the OS as it changes, the graph canvas in the page's theme | 6 | provider and switcher 7 of 7, cookie and resolution 3 of 3 |
+| Shell on phones: a menu button (`aria-expanded`, `aria-controls`) opening the navigation, closed by a link or Escape with the focus returned | 2 | — |
+| Layout rules: every scroll container positioned, every table in one, every responsive grid with a shrinkable column | 3 | 2 of 2 |
+| End to end (`e2e/ux.spec.ts`, against the running stack): axe (WCAG 2.1 A/AA) on all 33 pages — every list and form, a detail of each, two case pages — in the light and the dark theme, the sign-in page in both, three pages on a phone; no page wider than a 390 px screen; the theme rendered by the server, remembered, and following the OS; screenshots `ux-dark-overview.png`, `ux-phone-*.png` | 7; the whole suite 38 of 38 | — |
+
+Found on the way:
+
+* **Real contrast failures in the light theme**, before any dark theme
+  existed: `text-slate-400` (2.6:1) was used for text in 21 places ("No
+  outcome", "settling…", counts, rule names), zero-count classification
+  tiles were faded to about 3.3:1, and the graph's node labels were 4.3:1
+  on a selected node. All raised to AA; the unit test now keeps them there.
+* **Pages scrolled sideways on a phone** (7 of 33, up to 974 px): the
+  screen-reader-only text inside table cells is absolutely positioned and
+  escaped the tables' scroll containers, which were not positioned; grids
+  without a base column grew to their widest table; two tables had no
+  scroll container at all; action bars and tab lists did not wrap.
+* **Status by colour alone**: a failed span in the trace waterfall was only
+  red. It now says "error" too.
+* **The approvals inbox opens on what is pending**, which can be nothing:
+  the audit reads `?status=all` to reach a detail page.
+* **A restarted demo tools server reused order numbers** (`ORD-3001`
+  again), and the runtime gateway, which keeps idempotency records in
+  PostgreSQL keyed by `refund-<order>-<amount>`, rightly replayed an old
+  refund instead of holding the new one for approval — the full end-to-end
+  run failed Phase 7 after an unrelated restart. Orders are now numbered
+  from tenths of a second since 2026 and never take a number the world
+  already has (one test, 3 of 3 mutations caught).
+
 ## Definition of Done tracking
 
 See the final delivery report in `docs/delivery-report.md` (written at the end;

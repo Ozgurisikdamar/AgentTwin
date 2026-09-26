@@ -11,7 +11,7 @@ export function JsonBlock({ value, label }: { value: unknown; label: string }) {
   return (
     <pre
       aria-label={label}
-      className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded border border-slate-100 bg-slate-50 p-2 font-mono text-xs text-slate-800"
+      className="max-h-72 relative overflow-auto whitespace-pre-wrap break-words rounded border border-slate-100 bg-slate-50 p-2 font-mono text-xs text-slate-800"
     >
       {JSON.stringify(value, null, 2) ?? "—"}
     </pre>
@@ -113,7 +113,7 @@ function StepRow({ step }: { step: CaseStep }) {
       <details className="group" open={Boolean(r.fault)}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-2.5 hover:bg-slate-50">
           <ChevronRight
-            className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+            className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-90 motion-reduce:transition-none"
             aria-hidden="true"
           />
           <span className="w-6 shrink-0 text-right font-mono text-xs text-slate-500">{step.seq}</span>
@@ -126,7 +126,7 @@ function StepRow({ step }: { step: CaseStep }) {
             </Badge>
           ))}
         </summary>
-        <div className="grid gap-3 border-t border-slate-100 bg-white px-4 py-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 border-t border-slate-100 bg-white px-4 py-3 lg:grid-cols-2">
           {isTool ? (
             <>
               <div>
@@ -254,7 +254,7 @@ export function StateDiffTable({ changes, caption }: { changes: StateChange[]; c
     return <p className="text-sm text-slate-600">No state changed.</p>;
   }
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full text-left text-xs">
         <caption className="sr-only">{caption}</caption>
         <thead className="text-slate-500">

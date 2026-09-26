@@ -213,7 +213,7 @@ export function ScenarioList() {
           </EmptyState>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full min-w-[56rem] text-left text-sm">
                 <caption className="sr-only">Scenarios by name</caption>
                 <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">

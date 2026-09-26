@@ -27,7 +27,7 @@ export function RunProgress({ run, className }: { run: SimulationRun; className?
       </div>
       <span className="text-xs text-slate-600" aria-hidden="true">
         {summary}
-        <span className="text-slate-400"> · {p.total} total</span>
+        <span className="text-slate-500"> · {p.total} total</span>
       </span>
     </div>
   );

@@ -105,7 +105,7 @@ export function CaseDetail({ runId, caseId }: { runId: string; caseId: string })
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2" data-testid="conversation">
           <CardHeader>
             <CardTitle>Conversation</CardTitle>
@@ -197,7 +197,7 @@ export function CaseDetail({ runId, caseId }: { runId: string; caseId: string })
         <ExpectationResults results={c.results} />
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-3">
           <CardHeader>
             <CardTitle>Trajectory</CardTitle>
@@ -222,7 +222,7 @@ export function CaseDetail({ runId, caseId }: { runId: string; caseId: string })
         </CardHeader>
         <CardContent className="space-y-3">
           <StateDiff changes={c.state_diff} />
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <details className="rounded border border-slate-200">
               <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-slate-700">
                 Initial state

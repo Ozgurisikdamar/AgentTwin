@@ -22,81 +22,83 @@ function Versions({ agent }: { agent: Agent }) {
   if (versions.isPending) return <Skeleton className="h-16" />;
   if (versions.isError) return <ErrorState error={versions.error} />;
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Versions of {agent.name}</caption>
-      <thead className="text-xs uppercase tracking-wide text-slate-500">
-        <tr>
-          <th scope="col" className="py-1.5 pr-3 font-medium">
-            Version
-          </th>
-          <th scope="col" className="py-1.5 pr-3 font-medium">
-            Model
-          </th>
-          <th scope="col" className="py-1.5 pr-3 font-medium">
-            Prompt
-          </th>
-          <th scope="col" className="py-1.5 pr-3 font-medium">
-            Tools
-          </th>
-          <th scope="col" className="py-1.5 pr-3 font-medium">
-            Registered
-          </th>
-          <th scope="col" className="py-1.5 font-medium">
-            Traces
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {versions.data.items.map((v) => (
-          <tr key={v.id} className="align-top">
-            <td className="py-2 pr-3">
-              <Badge tone="brand">v{v.version}</Badge>
-            </td>
-            <td className="py-2 pr-3 text-slate-700">{v.model_name ?? "—"}</td>
-            <td className="py-2 pr-3">
-              <code className="text-xs" title={v.prompt_sha256 ?? undefined}>
-                {shortId(v.prompt_sha256, 10)}
-              </code>
-            </td>
-            <td className="py-2 pr-3">
-              <button
-                type="button"
-                className="text-indigo-700 hover:underline"
-                aria-expanded={open === v.id}
-                onClick={() => setOpen(open === v.id ? null : v.id)}
-              >
-                {v.manifest.tools?.length ?? 0} tools
-              </button>
-              {open === v.id ? (
-                <ul className="mt-1 space-y-1">
-                  {(v.manifest.tools ?? []).map((t) => (
-                    <li key={t.name} className="flex flex-wrap items-center gap-1 text-xs">
-                      <code>{t.name}</code>
-                      <RiskBadge risk={t.risk} />
-                      {t.approval_required_when ? (
-                        <span className="text-slate-500">approval when {t.approval_required_when}</span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </td>
-            <td className="py-2 pr-3 text-slate-600">
-              <time dateTime={v.created_at}>{formatDateTime(v.created_at)}</time>
-              <div className="text-xs text-slate-500">{v.created_by}</div>
-            </td>
-            <td className="py-2">
-              <Link
-                href={`/traces?project_id=${v.project_id}&agent=${encodeURIComponent(agent.name)}&agent_version=${encodeURIComponent(v.version)}`}
-                className="text-indigo-700 hover:underline"
-              >
-                View traces
-              </Link>
-            </td>
+    <div className="relative overflow-x-auto">
+      <table className="w-full min-w-[36rem] text-left text-sm">
+        <caption className="sr-only">Versions of {agent.name}</caption>
+        <thead className="text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th scope="col" className="py-1.5 pr-3 font-medium">
+              Version
+            </th>
+            <th scope="col" className="py-1.5 pr-3 font-medium">
+              Model
+            </th>
+            <th scope="col" className="py-1.5 pr-3 font-medium">
+              Prompt
+            </th>
+            <th scope="col" className="py-1.5 pr-3 font-medium">
+              Tools
+            </th>
+            <th scope="col" className="py-1.5 pr-3 font-medium">
+              Registered
+            </th>
+            <th scope="col" className="py-1.5 font-medium">
+              Traces
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {versions.data.items.map((v) => (
+            <tr key={v.id} className="align-top">
+              <td className="py-2 pr-3">
+                <Badge tone="brand">v{v.version}</Badge>
+              </td>
+              <td className="py-2 pr-3 text-slate-700">{v.model_name ?? "—"}</td>
+              <td className="py-2 pr-3">
+                <code className="text-xs" title={v.prompt_sha256 ?? undefined}>
+                  {shortId(v.prompt_sha256, 10)}
+                </code>
+              </td>
+              <td className="py-2 pr-3">
+                <button
+                  type="button"
+                  className="text-indigo-700 hover:underline"
+                  aria-expanded={open === v.id}
+                  onClick={() => setOpen(open === v.id ? null : v.id)}
+                >
+                  {v.manifest.tools?.length ?? 0} tools
+                </button>
+                {open === v.id ? (
+                  <ul className="mt-1 space-y-1">
+                    {(v.manifest.tools ?? []).map((t) => (
+                      <li key={t.name} className="flex flex-wrap items-center gap-1 text-xs">
+                        <code>{t.name}</code>
+                        <RiskBadge risk={t.risk} />
+                        {t.approval_required_when ? (
+                          <span className="text-slate-500">approval when {t.approval_required_when}</span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </td>
+              <td className="py-2 pr-3 text-slate-600">
+                <time dateTime={v.created_at}>{formatDateTime(v.created_at)}</time>
+                <div className="text-xs text-slate-500">{v.created_by}</div>
+              </td>
+              <td className="py-2">
+                <Link
+                  href={`/traces?project_id=${v.project_id}&agent=${encodeURIComponent(agent.name)}&agent_version=${encodeURIComponent(v.version)}`}
+                  className="text-indigo-700 hover:underline"
+                >
+                  View traces
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

@@ -147,6 +147,10 @@ fuzz: ## Run Go fuzz targets for 20s each
 e2e: env ## Playwright end-to-end tests against the running stack (make dev first)
 	$(LOAD_ENV); cd apps/web && $(PNPM) exec playwright test
 
+.PHONY: golden-path
+golden-path: env ## The spec's golden path (§137) as one end-to-end story against the running stack
+	$(LOAD_ENV); cd apps/web && $(PNPM) exec playwright test e2e/golden-path.spec.ts
+
 .PHONY: contracts-check
 contracts-check: ## Detect breaking changes in event schemas and API documents; check generated API types
 	$(UV) run python scripts/contracts_check.py

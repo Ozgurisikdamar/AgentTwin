@@ -484,7 +484,7 @@ export const liveBlockedGate = {
         outcome: "BLOCK",
         rule: "duplicate_side_effect",
         statement: "An irreversible action must not take effect more than once.",
-        title: "An action took effect twice",
+        title: "Duplicate irreversible action",
       },
       {
         evidence: [
@@ -677,7 +677,7 @@ export const liveBlockedGate = {
     ],
     rules_version: "1.0.0",
     summary:
-      "Blocked: an action took effect twice (1); success the final state disproves (1); a new policy violation (1); a critical expectation fails (3); a non-critical expectation newly fails (3); costlier than the baseline (1); answers judged worse (1).",
+      "Blocked: duplicate irreversible action (1); success the final state disproves (1); a new policy violation (1); a critical expectation fails (3); a non-critical expectation newly fails (3); costlier than the baseline (1); answers judged worse (1).",
   },
   effective_outcome: "BLOCK",
   eval_run_id: "01a0d90c-2fda-7d51-8173-316a7a5aee47",
@@ -1623,7 +1623,7 @@ export const liveOverriddenGate = {
         outcome: "BLOCK",
         rule: "duplicate_side_effect",
         statement: "An irreversible action must not take effect more than once.",
-        title: "An action took effect twice",
+        title: "Duplicate irreversible action",
       },
       {
         evidence: [
@@ -1816,7 +1816,7 @@ export const liveOverriddenGate = {
     ],
     rules_version: "1.0.0",
     summary:
-      "Blocked: an action took effect twice (1); success the final state disproves (1); a new policy violation (1); a critical expectation fails (3); a non-critical expectation newly fails (3); costlier than the baseline (1); answers judged worse (1).",
+      "Blocked: duplicate irreversible action (1); success the final state disproves (1); a new policy violation (1); a critical expectation fails (3); a non-critical expectation newly fails (3); costlier than the baseline (1); answers judged worse (1).",
   },
   effective_outcome: "OVERRIDDEN",
   eval_run_id: "01a0d90c-3177-7d6f-a82d-b012cfaabf2c",

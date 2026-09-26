@@ -39,13 +39,13 @@ AgentTwin release gate
 Release      support-refund-agent 1.2.4 → 1.3.0 · revision 1
 Commit       4e5f6a7b
 Gate         BLOCK
-             Blocked: an action took effect twice (1); success the final state
-             disproves (1); …
+             Blocked: duplicate irreversible action (1); success the final
+             state disproves (1); …
 
 Required scenarios passed                    6/9   missing: refund-happy-path, …
 Irreversible actions in reach tested         1/1
 
-BLOCK  An action took effect twice (duplicate_side_effect)
+BLOCK  Duplicate irreversible action (duplicate_side_effect)
        An irreversible action must not take effect more than once.
        • refund-timeout-after-mutation (no-double-refund): The side effect refund:ORD-1001 was applied 2 times.
          first divergence: At step 2 the baseline called get_refund_policy(order_id=ORD-1001); the candidate called refund_payment(…).

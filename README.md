@@ -493,6 +493,7 @@ make demo       # one more refund conversation through the demo agent; prints th
 make demo-contained  # an over-limit refund through the runtime gateway: approve it in /approvals
 make doctor     # checks Docker, env, ports, PostgreSQL, RabbitMQ, OTel, migrations, services
 make e2e        # Playwright tests against the running stack (with axe on every page, both themes and a phone)
+make golden-path  # the spec's golden path (§137, steps 2–14) as one story against the running stack
 make test       # unit + integration (real PostgreSQL + RabbitMQ) + frontend tests
 make test-security  # every security test of spec §63, item by item (scripts/security-tests.yaml)
 make test-sdk-ts-live  # TS SDK end to end against the running stack: trace, prompt hash, redaction, outcome

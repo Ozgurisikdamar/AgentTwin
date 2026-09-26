@@ -67,7 +67,7 @@ describe("what a decision says", () => {
     expect(why[0]).toEqual({
       rule: "duplicate_side_effect",
       outcome: "BLOCK",
-      title: "An action took effect twice",
+      title: "Duplicate irreversible action",
       statement: "An irreversible action must not take effect more than once.",
       scenarios: ["refund-timeout-after-mutation"],
       preExisting: 0,

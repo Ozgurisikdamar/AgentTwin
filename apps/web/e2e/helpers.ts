@@ -17,12 +17,23 @@ export interface DemoRun {
   tool_calls: { name: string; status: string }[];
 }
 
+/** A fault an order carries: it fires on that order's calls only (`times` times). */
+export interface OrderFault {
+  tool: string;
+  kind: string;
+  times?: number;
+}
+
 /**
  * Creates a fresh delivered order in the demo tools (admin API). The order is
  * exempt from the stack's probabilistic fault injection so the agent's path
- * is deterministic.
+ * is deterministic; `faults` are the only ones it meets.
  */
-export async function createOrder(total: number, customerId = "CUS-100"): Promise<string> {
+export async function createOrder(
+  total: number,
+  customerId = "CUS-100",
+  faults: OrderFault[] = [],
+): Promise<string> {
   const res = await fetch(`${env.toolsURL}/admin/orders`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.toolsAdminToken}` },
@@ -32,6 +43,7 @@ export async function createOrder(total: number, customerId = "CUS-100"): Promis
       status: "delivered",
       age_days: 3,
       inject_faults: false,
+      ...(faults.length ? { faults } : {}),
     }),
   });
   expect(res.status, "demo tools admin API (set DEMO_TOOLS_ADMIN_TOKEN)").toBe(201);
@@ -161,6 +173,51 @@ export async function refundCount(orderId: string): Promise<number> {
   expect(res.status).toBe(200);
   const state = (await res.json()) as { orders: Record<string, { refund_count: number }> };
   return state.orders[orderId]?.refund_count ?? 0;
+}
+
+/**
+ * Reports what the payment ledger says a refund conversation did, verified
+ * against the demo tools' state, as the production traffic generator does:
+ * SUCCESS for exactly one refund of the amount, FAILURE otherwise. Retries
+ * while the trace is still being ingested (404).
+ */
+export async function reportLedgerOutcome(
+  run: DemoRun,
+  orderId: string,
+  amount: number,
+): Promise<{ status: "SUCCESS" | "FAILURE"; refunds: number }> {
+  const res = await fetch(`${env.toolsURL}/state`, {
+    headers: { Authorization: `Bearer ${env.toolsAdminToken}` },
+  });
+  expect(res.status).toBe(200);
+  const state = (await res.json()) as {
+    orders: Record<string, { refund_count: number; refunded_amount: number }>;
+  };
+  const order = state.orders[orderId]!;
+  const ok = order.refund_count === 1 && Math.abs(order.refunded_amount - amount) < 0.005;
+  const status = ok ? "SUCCESS" : "FAILURE";
+  const body = {
+    status,
+    verified: true,
+    verification_source: "state_assertion",
+    business_outcome: ok ? "REFUND_COMPLETED" : "REFUND_INCORRECT",
+    ...(run.claimed_outcome ? { claimed_status: run.claimed_outcome } : {}),
+    expected_state: { refund_count: 1, refunded_amount: amount },
+    actual_state: { refund_count: order.refund_count, refunded_amount: order.refunded_amount },
+    notes: ok ? "Exactly one refund recorded in the payment ledger." : "Duplicate refund.",
+  };
+  await expect(async () => {
+    const reported = await fetch(`${controlPlaneURL}/api/v1/traces/${run.trace_id}/outcome`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-AgentTwin-Api-Key": process.env.AGENTTWIN_DEMO_API_KEY ?? "",
+      },
+      body: JSON.stringify(body),
+    });
+    expect(reported.status, "the trace's outcome (404 while it is ingested)").toBeLessThan(300);
+  }).toPass({ timeout: 60_000 });
+  return { status, refunds: order.refund_count };
 }
 
 /** A W3C traceparent with a fresh trace id. */

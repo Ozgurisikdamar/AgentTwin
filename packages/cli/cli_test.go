@@ -215,11 +215,11 @@ func TestABadCandidateFailsCIWithTheEvidence(t *testing.T) {
 	for _, want := range []string{
 		"Gate         BLOCK",
 		"Required scenarios passed                    6/9   missing: refund-happy-path",
-		"BLOCK  An action took effect twice (duplicate_side_effect)",
+		"BLOCK  Duplicate irreversible action (duplicate_side_effect)",
 		"• refund-timeout-after-mutation (no-double-refund): The side effect refund:ORD-1001 was applied 2 times.",
 		"first divergence: At step 2 the baseline called get_refund_policy",
 		"trace: 4ad026574fb37d447a7a79f1eecf00ac",
-		"             Blocked: an action took effect twice (1); success the final state disproves (1); a new\n",
+		"             Blocked: duplicate irreversible action (1); success the final state disproves (1); a\n",
 		"WARN   Costlier than the baseline (cost_regression)",
 		"(verified)",
 		"Details      https://agenttwin.example.com/releases/",

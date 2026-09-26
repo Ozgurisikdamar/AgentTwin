@@ -243,7 +243,7 @@ describe("ReleaseDetail", () => {
     expect(rules.map((r) => within(r).getByText(/^(BLOCK|WARN)$/).textContent)).toEqual(
       liveBlockedGate.decision.rules.map((r) => r.outcome),
     );
-    expect(rules[0]).toHaveTextContent("An action took effect twice");
+    expect(rules[0]).toHaveTextContent("Duplicate irreversible action");
     expect(rules[0]).toHaveTextContent("refund-timeout-after-mutation");
     // What CI does with it, and the summary numbers.
     expect(screen.getByText("exit code 3 (fails the job)")).toBeInTheDocument();

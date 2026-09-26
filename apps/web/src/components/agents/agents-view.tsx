@@ -49,7 +49,7 @@ function Versions({ agent }: { agent: Agent }) {
         </thead>
         <tbody className="divide-y divide-slate-100">
           {versions.data.items.map((v) => (
-            <tr key={v.id} className="align-top">
+            <tr key={v.id} className="align-top" data-testid="agent-version" data-version={v.version}>
               <td className="py-2 pr-3">
                 <Badge tone="brand">v{v.version}</Badge>
               </td>

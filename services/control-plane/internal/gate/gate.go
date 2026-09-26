@@ -63,7 +63,7 @@ var rules = map[string]ruleInfo{
 		"Every required result must be present: missing evidence never passes."},
 	RuleCriticalFailure: {Block, "A critical expectation fails",
 		"A critical expectation must pass on the candidate."},
-	RuleDuplicateEffect: {Block, "An action took effect twice",
+	RuleDuplicateEffect: {Block, "Duplicate irreversible action",
 		"An irreversible action must not take effect more than once."},
 	RuleUnverifiedSuccess: {Block, "Success the final state disproves",
 		"The agent must not report success that the final state disproves."},

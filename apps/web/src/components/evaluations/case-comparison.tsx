@@ -575,7 +575,7 @@ function SideLinks({
   runId: string | null | undefined;
 }) {
   return (
-    <div className="space-y-1 text-sm">
+    <div className="space-y-1 text-sm" data-testid="case-side" data-side={label} data-status={side.status}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-slate-500">
           {label} v{version}

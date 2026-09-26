@@ -489,6 +489,36 @@ Found on the way:
   from tenths of a second since 2026 and never take a number the world
   already has (one test, 3 of 3 mutations caught).
 
+### Golden path (spec §137) as one story
+
+`e2e/golden-path.spec.ts` (`make golden-path`) runs steps 2–14 as one test,
+each step a named `test.step`, against the running stack; step 1 is
+`cp .env.example .env && make dev`. The demo's critical scenario of step 6 is
+`refund-timeout-after-mutation` (the spec's example names it
+`refund-timeout-idempotency`).
+
+| Step | What the test does and checks |
+|---|---|
+| 2 | Signs in; the header names *Demo Co* |
+| 3–4 | `/agents` lists support-refund-agent 1.2.4 and 1.3.0 with different prompt hashes and the same tools |
+| 5 | Compares 1.2.4 → 1.3.0 in the UI: the prompt diff (policy lookup removed, "issue eligible refunds immediately", "simply retry the refund right away"), the path prompt → support-refund-agent@1.3.0 → refund_payment → payments-api, `refund-timeout-after-mutation` required as linked to the change |
+| 6–9 | Creates the release in the UI and waits for its gate: **BLOCK**, rule "Duplicate irreversible action" on the critical scenario, exit code 3; the evidence says the refund was applied 2 times and shows the first divergence; on the compared case the fault is a timeout after mutation, the baseline **PASSED** with one refund followed by `lookup_order`, the candidate **FAILED** with two refunds, `refund_count` 1 → 2 |
+| 10 | A 1.3.0 canary in production on an order carrying the same fault: two refunds, the verified outcome reported from the ledger; a reviewer finds the regression by that very trace and promotes it into `production-regressions` |
+| 11 | 1.3.1 is registered; its diff from 1.3.0 restores the policy lookup and verifies the order before any retry |
+| 12 | The release of 1.3.1: **PASS**, exit code 0, the promoted scenario in the suite as a known regression; the regression is *Fixed in v1.3.1*; 1.3.0's release stays BLOCK |
+| 13–14 | A 150 USD refund through the runtime gateway: `APPROVAL_REQUIRED`; the approvals page receives it; a reviewer approves; a modified request (200 USD) with the token is refused (`APPROVAL_MISMATCH`, no refund); the exact one runs once, a retry replays, the approval is spent |
+
+Evidence, from nothing (2026-09-26): `.env` recreated from `.env.example`
+(plus this sandbox's build proxy and host ports), `make reset` (all volumes
+destroyed) **exit 0 in 1 min 51 s**, the seed's canary incident a regression
+*candidate*; then `make e2e`: **39 of 39 in 7.3 min**, the golden path first
+(41 s) — the regression's history shows it promoted once, by the reviewer,
+and fixed by the 1.3.1 evaluation. Screenshots `golden-path-*.png`.
+
+The gate rule's title is now the spec's words, "Duplicate irreversible
+action" (was "An action took effect twice"); decisions already stored keep
+their text, since decisions are immutable and hashed.
+
 ## Definition of Done tracking
 
 See the final delivery report in `docs/delivery-report.md` (written at the end;

@@ -39,6 +39,7 @@ import httpx
 
 from agenttwin.hashing import canonical_json
 from agenttwin_core.jsonschema_safe import validation_errors
+from agenttwin_core.retry import retry_after_seconds
 
 __all__ = [
     "CRITERIA",
@@ -489,11 +490,7 @@ class _HTTPJudge:
 
 
 def _retry_after(resp: httpx.Response, attempt: int) -> float:
-    try:
-        wait = float(resp.headers.get("retry-after", ""))
-    except ValueError:
-        wait = 2.0 ** (attempt - 1)
-    return max(0.0, min(wait, MAX_RETRY_AFTER_S))
+    return retry_after_seconds(resp.headers.get("retry-after"), 2.0 ** (attempt - 1), MAX_RETRY_AFTER_S)
 
 
 class AnthropicJudge(_HTTPJudge):

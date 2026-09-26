@@ -5,7 +5,9 @@ and errors that never become a score, and the deterministic fake."""
 from __future__ import annotations
 
 import asyncio
+import email.utils
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -224,6 +226,56 @@ def test_anthropic_answers_that_are_not_verdicts(answer: Any, kind: str) -> None
     with pytest.raises(JudgeError) as err:
         run(judge.judge(REQUEST))
     assert err.value.kind == kind
+
+
+def test_the_openai_compatible_judge_waits_out_rate_limits_and_timeouts() -> None:
+    body = {"error": {"type": "rate_limit_exceeded", "message": "Rate limit reached"}}
+    slept: list[float] = []
+
+    async def sleep(s: float) -> None:
+        slept.append(s)
+
+    # A rate limit with its Retry-After, then a timeout (its own backoff), then a verdict.
+    replay = Replay((429, body, {"retry-after": "2"}), httpx.ReadTimeout("slow"), (200, openai_body(VERDICT)))
+    judge = OpenAICompatibleJudge(
+        settings(provider="openai"), transport=httpx.MockTransport(replay), sleep=sleep
+    )
+    assert run(judge.judge(REQUEST)).label == "pass"
+    assert slept == [2.0, 2.0] and len(replay.requests) == 3
+    # Retry-After as an HTTP date (RFC 9110) is honored too, capped at 10 s.
+    slept.clear()
+    later = email.utils.format_datetime(datetime.now(UTC) + timedelta(seconds=60), usegmt=True)
+    replay = Replay((429, body, {"retry-after": later}), (200, openai_body(VERDICT)))
+    judge = OpenAICompatibleJudge(
+        settings(provider="openai"), transport=httpx.MockTransport(replay), sleep=sleep
+    )
+    assert run(judge.judge(REQUEST)).label == "pass"
+    assert slept == [10.0]
+    # Still limited on every attempt: bounded, and the error says so.
+    replay = Replay((429, body), (429, body), (429, body), (429, body))
+    judge = OpenAICompatibleJudge(
+        settings(provider="openai"), transport=httpx.MockTransport(replay), sleep=no_sleep
+    )
+    with pytest.raises(JudgeError) as err:
+        run(judge.judge(REQUEST))
+    assert (err.value.kind, err.value.retryable, len(replay.requests)) == ("rate_limited", True, 3)
+    # A judge that never answers in time: three attempts, then a timeout error.
+    replay = Replay(httpx.ReadTimeout("slow"), httpx.ReadTimeout("slow"), httpx.ReadTimeout("slow"))
+    judge = OpenAICompatibleJudge(
+        settings(provider="openai"), transport=httpx.MockTransport(replay), sleep=no_sleep
+    )
+    with pytest.raises(JudgeError) as err:
+        run(judge.judge(REQUEST))
+    assert (err.value.kind, err.value.retryable, len(replay.requests)) == ("timeout", True, 3)
+    # A gateway page instead of JSON is not retried and never becomes a verdict.
+    replay = Replay((200, b"<html>502 Bad Gateway</html>"))
+    judge = OpenAICompatibleJudge(
+        settings(provider="openai"), transport=httpx.MockTransport(replay), sleep=no_sleep
+    )
+    with pytest.raises(JudgeError) as err:
+        run(judge.judge(REQUEST))
+    assert (err.value.kind, err.value.retryable, len(replay.requests)) == ("malformed", False, 1)
+    assert "not JSON" in str(err.value)
 
 
 def test_timeouts_and_unreachable_providers() -> None:

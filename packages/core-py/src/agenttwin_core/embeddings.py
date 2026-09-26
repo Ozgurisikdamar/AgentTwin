@@ -31,6 +31,7 @@ from urllib.parse import urlparse
 import httpx
 
 from agenttwin_core.config import Loader
+from agenttwin_core.retry import retry_after_seconds
 
 __all__ = [
     "HASHING_DIMS",
@@ -376,13 +377,7 @@ def _vector(raw: Any, dims: int) -> list[float]:
 
 
 def _retry_after(resp: httpx.Response, attempt: int) -> float:
-    try:
-        wait = float(resp.headers.get("retry-after", ""))
-    except ValueError:
-        wait = 2.0 ** (attempt - 1)
-    if not math.isfinite(wait):
-        wait = 2.0 ** (attempt - 1)
-    return max(0.0, min(wait, MAX_RETRY_AFTER_S))
+    return retry_after_seconds(resp.headers.get("retry-after"), 2.0 ** (attempt - 1), MAX_RETRY_AFTER_S)
 
 
 def build_embedder(

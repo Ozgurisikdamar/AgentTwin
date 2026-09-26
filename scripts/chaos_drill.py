@@ -53,7 +53,7 @@ PROMETHEUS_URL = f"http://127.0.0.1:{os.environ.get('PROMETHEUS_HOST_PORT', '909
 PROJECT = os.environ.get("AGENTTWIN_PROJECT", "support")
 AGENT, VERSION = "support-refund-agent", "1.3.1"
 # Local calls never go through an outbound proxy.
-_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 class DrillFailed(Exception):
@@ -92,18 +92,23 @@ def until(what: str, check: Callable[[], Any], timeout_s: float, interval_s: flo
 
 def prometheus(query: str) -> float:
     url = f"{PROMETHEUS_URL}/api/v1/query?" + urllib.parse.urlencode({"query": query})
-    with _OPENER.open(url, timeout=5) as resp:
+    with OPENER.open(url, timeout=5) as resp:
         body = json.loads(resp.read())
     result = body["data"]["result"]
     return sum(float(r["value"][1]) for r in result)
 
 
-def dead_letters() -> int:
-    """Messages in the dead-letter queues, from the broker itself."""
-    out = compose("exec", "-T", "rabbitmq", "rabbitmqctl", "-q", "list_queues", "name", "messages")
-    return sum(
-        int(n) for q, n in (line.split() for line in out.splitlines() if line.strip()) if q.endswith(".dlq")
+def queue_depths() -> dict[str, int]:
+    """Messages waiting in each queue, from the broker itself."""
+    out = compose(
+        "exec", "-T", "rabbitmq", "rabbitmqctl", "-q", "list_queues", "--no-table-headers", "name", "messages"
     )
+    return {q: int(n) for q, n in (line.split() for line in out.splitlines() if line.strip())}
+
+
+def dead_letters() -> int:
+    """Messages in the dead-letter queues."""
+    return sum(n for q, n in queue_depths().items() if q.endswith(".dlq"))
 
 
 def raw_get(path: str, api_key: str) -> tuple[int, dict[str, str], float]:
@@ -111,7 +116,7 @@ def raw_get(path: str, api_key: str) -> tuple[int, dict[str, str], float]:
     req = urllib.request.Request(API_URL + path, headers={"X-AgentTwin-Api-Key": api_key})  # noqa: S310
     started = time.monotonic()
     try:
-        with _OPENER.open(req, timeout=30) as resp:
+        with OPENER.open(req, timeout=30) as resp:
             return resp.status, dict(resp.headers), time.monotonic() - started
     except urllib.error.HTTPError as err:
         return err.code, dict(err.headers), time.monotonic() - started

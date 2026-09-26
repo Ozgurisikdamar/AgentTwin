@@ -59,6 +59,9 @@ files = [
   "services/evaluation-service/src",
   "demo/support-refund-agent/src",
   "scripts/contracts_check.py",
+  "scripts/spec_tests.py",
+  "scripts/chaos_drill.py",
+  "scripts/load_test.py",
 ]
 
 [[tool.mypy.overrides]]

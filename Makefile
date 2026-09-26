@@ -127,6 +127,10 @@ test-chaos: ## Chaos tests of spec §64, item by item (outages injected in front
 chaos-drill: env ## Break the running stack (RabbitMQ, PostgreSQL, the simulation worker) and check it fails safe and recovers (make dev first)
 	$(LOAD_ENV); $(UV) run python scripts/chaos_drill.py
 
+.PHONY: load-test
+load-test: env ## Load test of spec §65 (k6) against the running stack, with end-to-end checks (make dev first)
+	$(LOAD_ENV); $(UV) run python scripts/load_test.py $(LOAD_ARGS)
+
 .PHONY: fuzz
 fuzz: ## Run Go fuzz targets for 20s each
 	./scripts/fuzz.sh 20s

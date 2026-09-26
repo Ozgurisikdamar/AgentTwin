@@ -1,9 +1,14 @@
 @import "tailwindcss";
 
-@theme {
+/* Inter and JetBrains Mono come from next/font (app/layout.tsx), which defines
+   --font-inter and --font-jetbrains-mono on <html>; `inline` makes the utilities
+   read those variables where they are used. */
+@theme inline {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 :root {

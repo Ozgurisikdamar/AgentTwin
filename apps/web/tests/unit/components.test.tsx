@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { OutcomeCard } from "@/components/traces/outcome-card";
+import { ToolSequence } from "@/components/traces/tool-sequence";
 import { WaterfallView } from "@/components/traces/waterfall";
 import { buildWaterfall } from "@/lib/spans";
 import type { Outcome, Trace } from "@/lib/types";
@@ -77,5 +78,16 @@ describe("OutcomeCard", () => {
     expect(within(card).getByText("claimed")).toBeInTheDocument();
     expect(within(card).getByText("None — self-reported only")).toBeInTheDocument();
     expect(within(card).queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("ToolSequence", () => {
+  it("offers a line break after each step only, keeping the text intact", () => {
+    render(<ToolSequence sketch="lookup_order>refund_payment x2>send_email" />);
+    const code = screen.getByTestId("tool-sequence");
+    expect(code).toHaveTextContent("lookup_order>refund_payment x2>send_email");
+    // One break opportunity per ">", none inside a tool name.
+    expect(code.querySelectorAll("wbr")).toHaveLength(2);
+    expect(code.innerHTML).toBe("lookup_order&gt;<wbr>refund_payment x2&gt;<wbr>send_email");
   });
 });

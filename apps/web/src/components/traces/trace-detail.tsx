@@ -19,6 +19,7 @@ import type { Span, Trace, TraceDetail as TraceDetailData } from "@/lib/types";
 import { OutcomeBadge, RiskBadge, SignalBadge, StatusBadge } from "./badges";
 import { OutcomeCard } from "./outcome-card";
 import { SpanDetails } from "./span-details";
+import { ToolSequence } from "./tool-sequence";
 import { WaterfallView } from "./waterfall";
 
 /** Trace sources: live traffic vs. runs AgentTwin started itself (simulation, replay, evaluation). */
@@ -49,9 +50,7 @@ function SummaryCard({ trace }: { trace: Trace }) {
           items={[
             {
               label: "Tool sequence",
-              value: s?.tool_sequence_sketch ? (
-                <code className="text-xs">{s.tool_sequence_sketch}</code>
-              ) : null,
+              value: s?.tool_sequence_sketch ? <ToolSequence sketch={s.tool_sequence_sketch} /> : null,
             },
             {
               label: "Steps",

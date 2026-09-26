@@ -519,6 +519,25 @@ The gate rule's title is now the spec's words, "Duplicate irreversible
 action" (was "An action took effect twice"); decisions already stored keep
 their text, since decisions are immutable and hashed.
 
+### Supply chain (spec §109) and CI (spec §70)
+
+`make secret-scan`, `make vuln-scan`, `make image-scan`, `make sbom` and
+`make supply-chain` (scripts/supply_chain.py; pinned gitleaks, govulncheck,
+pip-audit, trivy). Policy, results, exceptions and the upgrade notes:
+[docs/security/supply-chain.md](../security/supply-chain.md).
+
+| What | Evidence (2026-09-26) |
+|---|---|
+| Secrets | gitleaks over all commits: 0 findings; 321 raw matches of the default rules, each explained by a narrow allowlist or fingerprint. A GitHub token committed in a scratch clone is caught (exit 3). A missing config no longer passes as "found" (gitleaks exits 1 for both; the scan asks for 3) |
+| Dependencies | govulncheck, pip-audit (every locked package, with hashes), pnpm audit: nothing. gRPC v1.83.1 → v1.83.2 (GO-2026-6443; reported by govulncheck as imported-not-called, by the image scan as a fixable HIGH in every Go image) |
+| Images | 14 scanned, 0 policy violations. Our images: no fixable HIGH/CRITICAL (web: npm, corepack, yarn removed; Python: pip removed; PostgreSQL: own image, Debian updates at build, gosu removed, non-root). Third-party: no CRITICAL after RabbitMQ 4.3.6, OTel collector 0.161.0, Prometheus v3.15.0, Grafana 12.4.11, k6 2.3.0 (before: 24 CRITICAL, 312 HIGH across these five) |
+| Exception | CVE-2026-6653 (libxml2, no Debian fix) in `.trivyignore.yaml`, expires 2026-12-31; with the date in the past the scan fails (exit 2) |
+| SBOM | 11 CycloneDX documents: 9 images, the Go + JS lockfiles, the locked Python environment (trivy cannot read a multi-root uv workspace lock, so it reads `uv export`) |
+| Found on the way | RabbitMQ's node name was the container id: every recreated container started empty and left queued events and dead letters in the volume. Fixed hostname; a dead letter now survives a recreate. The published pgvector image left the build's `apt-get update` failing silently ("0 upgraded"); the build now fails on any index error |
+| Upgrade in place | the old PostgreSQL volume starts on the new image as `postgres`; collation warning until `make db-upgrade` (reindex, refresh, pgvector 0.8.0 → 0.8.6; idempotent, 4 s); `make doctor` warns until then. RabbitMQ 3.13 volume upgrades in place |
+| Tests on the new infra | `make test-integration` on PostgreSQL 16.15 / pgvector 0.8.6 / RabbitMQ 4.3.6: Go packages ok, 1047 Python tests passed (6.9 min); `make lint` clean |
+| CI | `.github/workflows/ci.yml`: lint, unit, contract, integration (+ chaos tests), frontend, security, build (image scan, SBOM artifacts), e2e; nightly: live security, TS SDK live, chaos drill, load test. Every step a make target; actions pinned by SHA; checked with actionlint 1.7.7 and the workflow/action JSON schemas. Dependabot for Go, uv, npm, Dockerfiles, compose images and actions, with a 5-day cooldown |
+
 ## Definition of Done tracking
 
 See the final delivery report in `docs/delivery-report.md` (written at the end;

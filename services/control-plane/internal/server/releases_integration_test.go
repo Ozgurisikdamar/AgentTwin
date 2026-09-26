@@ -517,6 +517,28 @@ func TestABadCandidateIsBlocked(t *testing.T) {
 	if first := fx.gate(fx.eng, releaseID, 1); first.Body["effective_outcome"] != "BLOCK" || first.Body["evidence_sha256"] != g["evidence_sha256"] {
 		t.Fatalf("revision 1 = %s", first.Raw)
 	}
+	// Revision 1's completion delivered late, after the rerun began, and the
+	// same envelope twice (spec §64): it decides nothing for revision 2 and
+	// changes nothing for revision 1.
+	late, err := events.New("evaluation.run_completed.v1", "evaluation-service", fx.org, fx.pid, "", "",
+		map[string]any{"eval_run_id": runID, "release_evaluation_id": evalID, "status": "COMPLETED", "error": nil})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := h.s.App.HandleEvaluationCompleted(context.Background(), late); err != nil {
+			t.Fatalf("a late completion: %v", err)
+		}
+	}
+	if n := h.count(`SELECT count(*) FROM control.gate_decision WHERE release_id = $1`, releaseID); n != 1 {
+		t.Fatalf("decisions = %d after a late completion, want 1", n)
+	}
+	if second := fx.gate(fx.eng, releaseID, 2); second.Body["effective_outcome"] != "PENDING" {
+		t.Fatalf("revision 2 after revision 1's late completion = %s", second.Raw)
+	}
+	if first := fx.gate(fx.eng, releaseID, 1); first.Body["evidence_sha256"] != g["evidence_sha256"] {
+		t.Fatalf("revision 1 changed: %s", first.Raw)
+	}
 
 	// Every step is audited.
 	for _, action := range []string{"release.created", "release.evaluate", "release.gate_decided"} {

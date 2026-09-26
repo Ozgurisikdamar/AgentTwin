@@ -16,13 +16,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Ozgurisikdamar/AgentTwin/packages/contracts"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/authn"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/config"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/db"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/events"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/httpx"
+	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/ids"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/openapicheck"
 	"github.com/Ozgurisikdamar/AgentTwin/packages/gokit/testutil"
 	"github.com/Ozgurisikdamar/AgentTwin/services/control-plane/internal/auth"
@@ -458,6 +461,99 @@ func TestAuditChainDetectsTampering(t *testing.T) {
 	v = h.request("GET", "/api/v1/audit/verify", nil, bearer(admin))
 	if v.Body["valid"] != false || v.Body["broken_at_seq"] == nil {
 		t.Fatalf("tampered chain must fail verification: %s", v.Raw)
+	}
+}
+
+// Audit events from other services arrive at least once and in any order
+// (spec §64): each is recorded once, keeps the time it happened, and the chain
+// stays whole, also when deliveries of one event race.
+func TestAuditEventsFromOtherServicesAreRecordedOnceWhateverTheDelivery(t *testing.T) {
+	h := newHarness(t, nil)
+	org, pid := h.s.Demo.OrganizationID, h.s.Demo.ProjectID
+	admin := h.login("admin@demo.agenttwin.dev")
+	at := time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC)
+	event := func(action string, when time.Time) events.Envelope {
+		env, err := events.New("audit.recorded.v1", "runtime-gateway", org, pid, "", "", map[string]any{
+			"actor": "user:approver", "action": action, "resource_type": "approval", "resource_id": ids.New(),
+			"timestamp": when.Format(time.RFC3339Nano), "metadata": map[string]any{"decision": "approved"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return env
+	}
+	handle := func(env events.Envelope) {
+		t.Helper()
+		if err := h.s.App.HandleAuditEvent(context.Background(), env); err != nil {
+			t.Fatalf("handle %s: %v", env.ID, err)
+		}
+	}
+	later, earlier := event("approval.approved", at.Add(time.Minute)), event("approval.requested", at)
+	handle(later)
+	handle(later)   // redelivered
+	handle(earlier) // delayed: it happened first but arrives last
+	handle(later)
+	// Racing deliveries of one event (several consumers, a retry overtaking
+	// the original), next to other events handled at the same moment.
+	racing := event("approval.denied", at.Add(2*time.Minute))
+	concurrent := make([]events.Envelope, 8)
+	for i := range concurrent {
+		concurrent[i] = event("policy.tested", at.Add(3*time.Minute))
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 16)
+	for i := range 8 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			errs <- h.s.App.HandleAuditEvent(context.Background(), racing)
+		}()
+		go func() {
+			defer wg.Done()
+			errs <- h.s.App.HandleAuditEvent(context.Background(), concurrent[i])
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("a racing delivery failed: %v", err)
+		}
+	}
+
+	rows, err := h.pool.Query(context.Background(), `SELECT action, occurred_at FROM control.audit_event
+		WHERE source_service = 'runtime-gateway' AND action <> 'policy.tested' ORDER BY seq`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type row struct {
+		action string
+		at     time.Time
+	}
+	got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var x row
+		return x, r.Scan(&x.action, &x.at)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []row{{"approval.approved", at.Add(time.Minute)}, {"approval.requested", at}, {"approval.denied", at.Add(2 * time.Minute)}}
+	if len(got) != len(want) {
+		t.Fatalf("recorded %v, want each event once: %v", got, want)
+	}
+	for i := range want {
+		if got[i].action != want[i].action || !got[i].at.Equal(want[i].at) {
+			t.Errorf("entry %d = %v, want %v (arrival order, with the time each happened)", i, got[i], want[i])
+		}
+	}
+	var tested int
+	if err := h.pool.QueryRow(context.Background(), `SELECT count(*) FROM control.audit_event WHERE action = 'policy.tested'`).Scan(&tested); err != nil || tested != 8 {
+		t.Errorf("%d concurrent events recorded (%v), want 8", tested, err)
+	}
+	// One chain, no fork: every entry links to the one before it.
+	v := h.request("GET", "/api/v1/audit/verify", nil, bearer(admin))
+	if v.Body["valid"] != true {
+		t.Fatalf("the chain must verify after duplicate and racing deliveries: %s", v.Raw)
 	}
 }
 
